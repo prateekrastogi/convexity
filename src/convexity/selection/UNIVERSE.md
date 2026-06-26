@@ -42,9 +42,18 @@ one, and crypto is mostly one risk-on/off factor. The optimiser will hold ~15–
 | Commodities (7) | Dukascopy underlying 1-min, 5 yr | Binance TradFi perp 1-min | ratio-adjust at the seam |
 | Equities (30) | Dukascopy underlying 1-min (US-session), 5 yr | Binance TradFi perp 1-min | ratio-adjust at the seam |
 
-The Dukascopy instrument codes below are **best-guess pending live verification**; the backfill job
-resolves/validates them before pulling. Equity proxies are session-only (no overnight gaps) — accepted
-as indicator-grade.
+Dukascopy codes below are **live-verified** (probed 200/404 on the datafeed). Notes:
+- US stocks use the `{TICKER}USUSD` pattern; **META is the legacy `FBUSUSD`**; platinum/palladium are
+  `XPT/XPDCMDUSD` (not `…USD`); QQQ/IWM/XLE exist as real ETF CFDs (`{TICKER}USUSD`).
+- **SONY and NVO have NO Dukascopy USD proxy** (only Tokyo-JPY / Copenhagen-DKK) → `source: binance`,
+  Binance-only short history, no synthetic backfill.
+- **Stock splits are NOT adjusted in the Dukascopy CFD feed** — NVDA (2021-07 4:1, 2024-06 10:1),
+  AVGO (2024-07 10:1), TSLA (2020-08 5:1, 2022-08 3:1), WMT (2024-02 3:1). The backfill back-adjusts
+  pre-split bars by the cumulative split factor before stitching, else a split looks like a −90% crash.
+- History floors: metals ~2003, commodities ~2011–12, equity CFDs ~2017 (UBER/PLTR ~2020-10) — the
+  full 5-yr window (from 2021-06) is covered for every proxied name.
+- Equity proxies are **US-session-only** (no overnight/weekend bars) — accepted as indicator-grade;
+  the real 24/7 behaviour exists only in the post-listing Binance perp era.
 
 ## Crypto (50) — by sector
 - **L1 majors (13):** BTC, ETH, BNB, SOL, XRP, ADA, AVAX, TRX, DOT, NEAR, APT, SUI, ATOM
@@ -155,14 +164,14 @@ The block below is the machine-readable source of truth. `symbol` = Binance USDT
     {"symbol": "CRMUSDT", "sector": "software", "source": "dukascopy+binance", "dukascopy": "CRMUSUSD"},
     {"symbol": "ADBEUSDT", "sector": "software", "source": "dukascopy+binance", "dukascopy": "ADBEUSUSD"},
     {"symbol": "GOOGLUSDT", "sector": "internet", "source": "dukascopy+binance", "dukascopy": "GOOGLUSUSD"},
-    {"symbol": "METAUSDT", "sector": "internet", "source": "dukascopy+binance", "dukascopy": "METAUSUSD"},
+    {"symbol": "METAUSDT", "sector": "internet", "source": "dukascopy+binance", "dukascopy": "FBUSUSD"},
     {"symbol": "NFLXUSDT", "sector": "media", "source": "dukascopy+binance", "dukascopy": "NFLXUSUSD"},
     {"symbol": "DISUSDT", "sector": "media", "source": "dukascopy+binance", "dukascopy": "DISUSUSD"},
     {"symbol": "NVDAUSDT", "sector": "semis", "source": "dukascopy+binance", "dukascopy": "NVDAUSUSD"},
     {"symbol": "TSMUSDT", "sector": "semis", "source": "dukascopy+binance", "dukascopy": "TSMUSUSD"},
     {"symbol": "AVGOUSDT", "sector": "semis", "source": "dukascopy+binance", "dukascopy": "AVGOUSUSD"},
     {"symbol": "AAPLUSDT", "sector": "hardware", "source": "dukascopy+binance", "dukascopy": "AAPLUSUSD"},
-    {"symbol": "SONYUSDT", "sector": "hardware", "source": "dukascopy+binance", "dukascopy": "SONYUSUSD"},
+    {"symbol": "SONYUSDT", "sector": "hardware", "source": "binance", "dukascopy": null, "note": "no Dukascopy USD proxy (only Tokyo 6758JPJPY) -> Binance-only, no synthetic history"},
     {"symbol": "AMZNUSDT", "sector": "consumer-disc", "source": "dukascopy+binance", "dukascopy": "AMZNUSUSD"},
     {"symbol": "TSLAUSDT", "sector": "consumer-disc", "source": "dukascopy+binance", "dukascopy": "TSLAUSUSD"},
     {"symbol": "HDUSDT", "sector": "consumer-disc", "source": "dukascopy+binance", "dukascopy": "HDUSUSD"},
@@ -172,20 +181,20 @@ The block below is the machine-readable source of truth. `symbol` = Binance USDT
     {"symbol": "VUSDT", "sector": "financials", "source": "dukascopy+binance", "dukascopy": "VUSUSD"},
     {"symbol": "BRKBUSDT", "sector": "financials", "source": "dukascopy+binance", "dukascopy": "BRKBUSUSD"},
     {"symbol": "LLYUSDT", "sector": "healthcare", "source": "dukascopy+binance", "dukascopy": "LLYUSUSD"},
-    {"symbol": "NVOUSDT", "sector": "healthcare", "source": "dukascopy+binance", "dukascopy": "NVOUSUSD"},
+    {"symbol": "NVOUSDT", "sector": "healthcare", "source": "binance", "dukascopy": null, "note": "no Dukascopy USD proxy (only Copenhagen NOVOBDKDKK) -> Binance-only, no synthetic history"},
     {"symbol": "UBERUSDT", "sector": "mobility", "source": "dukascopy+binance", "dukascopy": "UBERUSUSD"},
     {"symbol": "PLTRUSDT", "sector": "data-ai", "source": "dukascopy+binance", "dukascopy": "PLTRUSUSD"},
     {"symbol": "XLEUSDT", "sector": "energy-etf", "source": "dukascopy+binance", "dukascopy": "XLEUSUSD"},
     {"symbol": "BABAUSDT", "sector": "china", "source": "dukascopy+binance", "dukascopy": "BABAUSUSD"},
     {"symbol": "IBMUSDT", "sector": "it-services", "source": "dukascopy+binance", "dukascopy": "IBMUSUSD"},
-    {"symbol": "QQQUSDT", "sector": "index-largetech", "source": "dukascopy+binance", "dukascopy": "USATECHIDXUSD"},
-    {"symbol": "IWMUSDT", "sector": "index-smallcap", "source": "dukascopy+binance", "dukascopy": "USSC2000IDXUSD"}
+    {"symbol": "QQQUSDT", "sector": "index-largetech", "source": "dukascopy+binance", "dukascopy": "QQQUSUSD"},
+    {"symbol": "IWMUSDT", "sector": "index-smallcap", "source": "dukascopy+binance", "dukascopy": "IWMUSUSD"}
   ],
   "commodities": [
     {"symbol": "XAUUSDT", "sector": "precious-metal", "source": "dukascopy+binance", "dukascopy": "XAUUSD"},
     {"symbol": "XAGUSDT", "sector": "precious-metal", "source": "dukascopy+binance", "dukascopy": "XAGUSD"},
-    {"symbol": "XPTUSDT", "sector": "precious-metal", "source": "dukascopy+binance", "dukascopy": "XPTUSD"},
-    {"symbol": "XPDUSDT", "sector": "precious-metal", "source": "dukascopy+binance", "dukascopy": "XPDUSD"},
+    {"symbol": "XPTUSDT", "sector": "precious-metal", "source": "dukascopy+binance", "dukascopy": "XPTCMDUSD"},
+    {"symbol": "XPDUSDT", "sector": "precious-metal", "source": "dukascopy+binance", "dukascopy": "XPDCMDUSD"},
     {"symbol": "COPPERUSDT", "sector": "industrial-metal", "source": "dukascopy+binance", "dukascopy": "COPPERCMDUSD"},
     {"symbol": "CLUSDT", "sector": "energy", "source": "dukascopy+binance", "dukascopy": "LIGHTCMDUSD"},
     {"symbol": "NATGASUSDT", "sector": "energy", "source": "dukascopy+binance", "dukascopy": "GASCMDUSD"}
