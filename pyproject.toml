@@ -1,0 +1,38 @@
+[project]
+name = "convexity"
+version = "0.1.0"
+description = "Directional convex breakout on Binance USDT-M perpetual futures — hedged; exploration + paper + live (NautilusTrader)."
+readme = "README.md"
+requires-python = ">=3.12,<3.15"
+dependencies = [
+    "nautilus_trader>=1.229,<1.230",  # engine: paper(demo/testnet)+live+parity-backtest. Native Binance USDT-M adapter is bundled in the core wheel — there is NO `binance` extra. LGPL-3.0; cp312 manylinux_2_35 aarch64 wheel (needs glibc>=2.35).
+    "pandas>=2.3.3",                  # exploration dataframes + feeds Nautilus BarDataWrangler. (nautilus_trader 1.229 pins >=2.3.3,<4)
+    "numpy>=1.26.4",                  # vectorized numerics for the lean explore layer. (nautilus transitive)
+    "pyarrow>=24.0.0",                # parquet lake + Nautilus ParquetDataCatalog. (nautilus_trader 1.229 pins >=24)
+    "httpx>=0.27",                    # resumable downloader for data.binance.vision bulk ZIP dumps (klines + fundingRate). PRIMARY historical path.
+    "ccxt>=4.4",                      # SECONDARY only: patch the recent unpublished tail + ad-hoc metadata. NEVER multi-year backfill.
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.6",
+    "ipykernel>=6.29",  # notebooks only — never in the paper/live runtime env
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/convexity"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.uv]
+# Pin all versions in uv.lock (commit it). Run with `uv run --no-sync`.

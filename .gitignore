@@ -1,0 +1,16 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+*.secret
+secrets.*
+/data/
+/catalog/
+*.parquet
+.DS_Store
+.ipynb_checkpoints/
+# keep: uv.lock (committed for reproducibility)
+logs/
+.pytest_cache/
+.ruff_cache/
+._*
