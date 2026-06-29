@@ -1,7 +1,7 @@
 [project]
 name = "convexity"
 version = "0.1.0"
-description = "Directional convex breakout on Binance USDT-M perpetual futures — hedged; exploration + paper + live (NautilusTrader)."
+description = "Directional convex breakout on Binance USDT-M perpetual futures — multi-pair, not hedged; exploration + paper + live (NautilusTrader)."
 readme = "README.md"
 requires-python = ">=3.12,<3.15"
 dependencies = [
@@ -9,6 +9,7 @@ dependencies = [
     "pandas>=2.3.3",                  # exploration dataframes + feeds Nautilus BarDataWrangler. (nautilus_trader 1.229 pins >=2.3.3,<4)
     "numpy>=1.26.4",                  # vectorized numerics for the lean explore layer. (nautilus transitive)
     "pyarrow>=24.0.0",                # parquet lake + Nautilus ParquetDataCatalog. (nautilus_trader 1.229 pins >=24)
+    "scipy>=1.13",                    # closed-form (NOT ML): Ledoit-Wolf shrinkage + Mahalanobis (regime/measures), PSR/DSR + KM/Weibull + CUSUM-ARL (validate/). numpy-adjacent measure/validation math, per ARCHITECTURE §5.8.
     "httpx>=0.27",                    # resumable downloader for data.binance.vision bulk ZIP dumps (klines + fundingRate). PRIMARY historical path.
     "ccxt>=4.4",                      # SECONDARY only: patch the recent unpublished tail + ad-hoc metadata. NEVER multi-year backfill.
 ]
@@ -17,7 +18,6 @@ dependencies = [
 dev = [
     "pytest>=8.0",
     "ruff>=0.6",
-    "ipykernel>=6.29",  # notebooks only — never in the paper/live runtime env
 ]
 
 [build-system]
@@ -33,6 +33,9 @@ target-version = "py312"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "nautilus: integration tests that import nautilus_trader and drive a BacktestEngine; VM-only, skipped where nautilus is not installed (ARCHITECTURE §8.4).",
+]
 
 [tool.uv]
 # Pin all versions in uv.lock (commit it). Run with `uv run --no-sync`.
