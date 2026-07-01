@@ -24,7 +24,7 @@ from pathlib import Path
 
 import numpy as np
 
-from convexity.selection.universe import all_symbols
+from research.universe import all_symbols
 
 from research.xsec import metrics
 from research.xsec.cpcv import run_cpcv

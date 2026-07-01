@@ -21,7 +21,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from convexity.selection.universe import all_symbols
+from research.universe import all_symbols
 
 from research.xsec import metrics
 from research.xsec.engine import XSecConfig, XSecResult, run

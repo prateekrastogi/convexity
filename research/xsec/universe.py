@@ -109,7 +109,7 @@ def sleeve_symbols(sleeve: Sleeve) -> tuple[str, ...]:
     plural (``equities``/``commodities``). Returns the full sleeve; the panel builder then applies the
     point-in-time listing mask (a symbol appears only over its own live span).
     """
-    from convexity.selection.universe import all_symbols
+    from research.universe import all_symbols
 
     key = {"crypto": "crypto", "equity": "equities", "commodity": "commodities"}[sleeve]
     return tuple(all_symbols(sleeves=(key,)))
