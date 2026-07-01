@@ -1,6 +1,6 @@
 # convexity trading universe
 
-The candidate universe fed to the Carver dynamic optimiser (`dynamic_optimization.py`). Target
+The candidate universe consumed by the cross-sectional engine (`research/xsec/universe.py`). Target
 account ≈ **$1,000**, **1-minute** resolution, **5-year** history target. Built for diversification
 *within* each sleeve and *across* the whole book, not for raw volume.
 
