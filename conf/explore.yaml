@@ -1,8 +1,0 @@
-# Exploration config (MODE 1) — lean pandas/numpy first-pass backtest. Scaffold only; owner to fill in.
-# pairs:            # universe of perps traded simultaneously, e.g. [BTCUSDT-PERP, ETHUSDT-PERP, ...]
-# interval:         # kline cadence, e.g. 1m
-# date_range:       # [start, end]
-# range_def:        # donchian | utc_day_anchored   (owner to decide)
-# stop:             # intrabar cut-losses-fast level (re-validate for crypto)
-# hold:             # bounded hold (bars/hours; perps have no expiry)
-# allocation:       # how capital splits across the simultaneous pair bets

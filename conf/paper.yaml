@@ -1,8 +1,0 @@
-# PAPER config (MODE 2) — Nautilus TradingNode. Scaffold only; owner to fill in.
-# environment: DEMO     # preferred for Binance Futures sims (TESTNET = legacy fallback) — set on BOTH client configs
-# account_type: USDT_FUTURES
-# data_client:          # BinanceDataClientConfig (keys via env: BINANCE_FUTURES_DEMO_*)
-# exec_client:          # BinanceExecClientConfig (keys via env: BINANCE_FUTURES_DEMO_*)
-# instruments:          # the -PERP universe
-# strategy:             # ConvexityStrategy
-# NOTE: sim fills are NOT representative P&L — directional sanity check only.

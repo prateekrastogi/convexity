@@ -1,14 +1,13 @@
-"""SYSTEM shared data objects (SYSTEM §11).
+"""SYSTEM shared validation data objects (SYSTEM §11).
 
-The shapes that cross the orchestrator/validation boundary. ``BookState`` is the *canonical*
-cross-pillar reference (ARCHITECTURE §5.9): LEVERAGE/REGIME/OPS all consume it as ``object`` at
-their seams and SYSTEM owns the one true definition here (equity, peak_equity, free_margin,
-positions, cov, governor_multiplier — the shared equity/peak reference behind the 43% governor and
-the 45% OPS DD-kill, ARCHITECTURE §5.12).
+The shapes that cross the validation boundary and are consumed by ``system/validate/``. This module
+was trimmed during the cross-sectional pivot: the directional-live composition shapes
+(``ProposedPortfolio``/``OpenPosition``/``BookState``/``SystemAction``/``SystemDecision``) lived
+here alongside the validation records but were removed with the dead directional pillars. Only the
+three validation records the surviving ``validate/`` subtree imports (``TrialRecord``,
+``DSRResult``, ``SystemReport``) remain.
 
-Pure-Python + numpy only; NautilusTrader-free. Frozen dataclasses, minimal fields. The boundary
-``Side``/``EntrySignal``/``SignalInput``/``LeverageDecision`` live in :mod:`convexity.core.types`;
-only SYSTEM-private shapes live here.
+Pure-Python + numpy only; NautilusTrader-free. Frozen dataclasses, minimal fields.
 """
 
 from __future__ import annotations
@@ -18,99 +17,8 @@ from typing import Literal, Mapping
 
 import numpy as np
 
-from convexity.core.types import Side
-
+# Kept for the SystemReport.pillar_contribution mapping key (historical DSR attribution axis).
 PillarName = Literal["selection", "breakout", "leverage", "trend"]
-ActionKind = Literal["open", "close", "reduce", "hold", "flat_all"]
-
-
-# --------------------------------------------------------------------------- composition I/O
-
-
-@dataclass(frozen=True)
-class ProposedPortfolio:
-    """FROM the Carver Ch.25 selection module (SYSTEM §11), via ``modules/selection.py``.
-
-    ``keep`` = instruments selection wants capital in; ``eligible`` = instruments eligible for NEW
-    entries this bar; ``risk_weights`` = target RISK weights (NOT sizes, no edge); ``rank`` = a
-    diversification/quality RISK measure that NEVER drives sizing or budget priority (Invariant A).
-    """
-
-    keep: tuple[str, ...]
-    eligible: tuple[str, ...]
-    risk_weights: Mapping[str, float]
-    rank: Mapping[str, float]
-    reason_codes: tuple[str, ...] = ()
-
-
-@dataclass(frozen=True)
-class OpenPosition:
-    """One open position read from NautilusTrader (SYSTEM §11). ``held_risk_weight`` is the reserved
-    MCTR budget an incumbent holds (P4); ``trend_state`` echoes TREND's alive/reduce/death."""
-
-    instrument: str
-    side: Side
-    units: int
-    entry_price: float
-    held_risk_weight: float
-    trend_state: str  # "alive" / "reduce" / "death"
-
-
-@dataclass(frozen=True)
-class BookState:
-    """The canonical book snapshot read from NautilusTrader at F_t (SYSTEM §11, ARCHITECTURE §5.9).
-
-    ``cov`` is the LeverageEngine RISK covariance (no Σ⁻¹μ; Invariant P inherited). ``governor_multiplier``
-    is m ∈ [0,1] from the LEVERAGE drawdown governor (0 at ≥43% drawdown ⇒ FLAT_ALL). ``equity`` and
-    ``peak_equity`` are the SHARED equity/running-max reference behind both the LEVERAGE 43% governor
-    flat and the OPS 45% DD-kill (ARCHITECTURE §5.12; 45% > 43% holds by construction).
-    """
-
-    equity: float
-    peak_equity: float
-    free_margin: float
-    positions: Mapping[str, OpenPosition]
-    cov: np.ndarray
-    governor_multiplier: float
-
-    @property
-    def drawdown(self) -> float:
-        """Current drawdown from the peak (the axis the governor and OPS DD-kill share)."""
-        if self.peak_equity <= 0.0:
-            return 0.0
-        return max(0.0, 1.0 - self.equity / self.peak_equity)
-
-
-@dataclass(frozen=True)
-class SystemAction:
-    """One line of the book delta (SYSTEM §11). ``driven_by`` names the pillar/precedence stage that
-    produced it; ``binding`` names the binding ceiling/precedence rule; ``reason_chain`` is the full
-    cross-module audit trail (P8). ``target_units`` is post-quantize, round-DOWN (LEVERAGE Inv U)."""
-
-    instrument: str
-    kind: ActionKind
-    target_units: int
-    side: Side | None
-    driven_by: PillarName | Literal["governor", "iterate", "system"]
-    binding: str
-    reason_chain: tuple[str, ...] = ()
-
-
-@dataclass(frozen=True)
-class SystemDecision:
-    """OUTPUT of one :meth:`SystemOrchestrator.decide` (SYSTEM §11/§12). The target book delta plus
-    the fixed-point telemetry and the deferred-candidate ledger. Deterministic: identical inputs ⇒
-    identical SystemDecision."""
-
-    bar_ts: int
-    actions: tuple[SystemAction, ...]
-    iterations: int
-    converged: bool
-    book_heat_used: float
-    equity_ladder_used: Mapping[str, float]
-    deferred: tuple[str, ...]
-    reason_codes: tuple[str, ...]
-    system_version: str
 
 
 # --------------------------------------------------------------------------- validation I/O
