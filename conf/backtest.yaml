@@ -1,8 +1,0 @@
-# Parity-backtest config (Nautilus BacktestEngine). Scaffold only; owner to fill in.
-# venue:            # BINANCE simulated venue
-# starting_balance: # e.g. USDT
-# fill_model:       # maker/taker schedule mirroring live (else parity breaks)
-# instruments:      # the -PERP instruments
-# catalog_path:     # ParquetDataCatalog location
-# include_funding:  # true -> feed FundingRateUpdate data (else funding is silently zero)
-# strategy:         # ImportableStrategyConfig for convexity_strategy.ConvexityStrategy
