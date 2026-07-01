@@ -1,50 +1,368 @@
 # Convexity — Implementation Architecture
 
-This is the canonical implementation architecture for the convexity system: a multi-pair
-directional convex-breakout trader on Binance USDT-M perpetuals, composing on NautilusTrader. The
-**specs in `docs/specs/{BREAKOUT,TREND,LEVERAGE,EXECUTION,COST,SYSTEM,OPS,REGIME}.md` are the
-authoritative source** (all ≥9.5/10). This document maps those eight specs onto a single Python
-package, fixes the cross-spec interface mismatches the spec `risks` sections flagged, and defines
-the shared foundation + test strategy.
+**This document describes the live system: a 9-pillar crypto CROSS-SECTIONAL MOMENTUM book**
+(weekly, dollar-neutral, quintile, vol-scaled) on Binance USDT-M perpetuals. The **specs in
+`docs/specs/{UNIVERSE,SIGNAL,PORTFOLIO,LEVERAGE,COST,EXECUTION,REGIME,SYSTEM,OPS}.md` are the
+authoritative source** for every formula, invariant, and parameter; this document is the map
+between those nine specs, the real `research/xsec/` + `src/convexity/{core,cost,system}/` code,
+and the weekly data-flow that ties them together. The fuller evidentiary narrative — what was
+tried, what died, what survived, and why — lives in **`docs/EDGE.md`**; read it before this
+document if you have not already.
+
+The repo was pivoted from a single-instrument, single-trade **directional convex-breakout**
+thesis. That thesis is **PROVEN DEAD** (`docs/EDGE.md` §a: gross directional R ≈ 0 across every
+timeframe, exit rule, entry filter, leverage tier, and three asset classes tested, even inverted —
+a structural finding, not a tuning miss). Its architecture is preserved for the historical record
+in **Appendix A** below, but it is not live, not being built, and not the subject of this
+document's main sections.
 
 ---
 
-## 1. Architecture principle
+## 0. First-class principle: NO-ML, closed-form-only
 
-Every pillar is split into two layers:
+**Every estimator in this system is closed-form or classical statistics — never a fitted,
+trained, or black-box model.** This is not an implementation detail buried in one pillar; it is a
+repo-wide constraint that every one of the nine specs independently upholds, and it is why the
+system is auditable end-to-end from the formulas in `docs/specs/*.md` to the code in
+`research/xsec/` and `src/convexity/{core,cost,system}/`.
+
+**Forbidden, unconditionally:** neural networks, gradient-boosted trees, any learned/fitted
+black-box signal combiner, large hyperparameter grid search or walk-forward retraining loops, and
+continuously-refit hidden-Markov/EM regime models. `pyproject.toml`'s own dependency doctrine
+states this plainly: `scipy: closed-form (NOT ML)`.
+
+**What is used instead, pillar by pillar:**
+
+| Tool | Where it appears | Spec anchor |
+|---|---|---|
+| Cross-sectional percentile rank (order statistics) | SIGNAL's momentum/carry/combined score | `SIGNAL.md` §3 |
+| EWMA volatility estimator | LEVERAGE's `σ̂_t`, REGIME's dispersion `D_t` | `LEVERAGE.md` §4, `REGIME.md` §2.2 |
+| Ledoit-Wolf shrinkage (Ledoit & Wolf 2004) | cited as the disciplined alternative wherever a covariance estimate is tempting | `LEVERAGE.md` §4.3, `PORTFOLIO.md` §4.2 |
+| Inverse-realized-vol weighting (closed-form, no optimizer) | PORTFOLIO's within-leg weights | `PORTFOLIO.md` §4.2 |
+| CUSUM sequential change-detection + average-run-length calibration (Page 1954) | REGIME's market-state detector, OPS's kill-switch | `REGIME.md` §3, `OPS.md` §4 |
+| Moving-block bootstrap (Künsch 1989), block length per Politis & White (2004) | SYSTEM's confidence intervals on weekly Sharpe | `SYSTEM.md` §7 |
+| Deflated / Probabilistic Sharpe Ratio, closed-form (Bailey & López de Prado) | SYSTEM's promotion gate | `SYSTEM.md` §5 |
+| Combinatorial Purged CV + PBO, closed-form combinatorics (López de Prado 2014) | SYSTEM/`research/xsec/cpcv.py`'s lookback-band robustness check | `SYSTEM.md` §4 |
+| Cube-root law / Almgren-Chriss optimal execution (closed-form) | EXECUTION's rebalance-trajectory sizing | `EXECUTION.md` §2.4, §4.2 |
+
+**Why full mean-variance/Markowitz optimization is refused, specifically (not just "we prefer
+simple methods"):** `PORTFOLIO.md` §4.2 and `LEVERAGE.md` §4.3 independently invoke the
+**Marchenko–Pastur / random-matrix-theory eigenvalue-spreading argument** at the system's actual
+ratio `N/n_obs ≈ 50/258 ≈ 0.19` — with only ~5 years of weekly observations (`n_obs≈258`) against
+an `N≈50`-name universe, a sample cross-sectional covariance matrix is materially ill-conditioned;
+its smallest eigenvalues are dominated by estimation noise, not real structure, and a fitted
+mean-variance optimizer would lever up on exactly that noise. This is a closed-form,
+falsifiable reason, not a style preference — LEVERAGE's own §4.3 ("Invariant NO-MV") confirms
+the system never estimates the cross-sectional covariance matrix.
+
+---
+
+## 1. The nine pillars, the weekly rebalance, and the code they map to
+
+The system runs on a **Friday-close weekly clock**. At each rebalance timestamp `t`, information
+is admissible only if it is measurable with respect to the filtration `F_t` (the point-in-time
+information set — formalized once in `UNIVERSE.md` §1.1 and reused without redefinition by every
+downstream spec). One pass through the nine pillars turns `F_t` into next week's portfolio return.
+
+| # | Pillar | Spec | Answers | Implemented in |
+|---|---|---|---|---|
+| 1 | **UNIVERSE** | `docs/specs/UNIVERSE.md` | Which names is it legitimate to rank/trade this week, using only what was knowable strictly before `t`? | `research/xsec/panel.py` (point-in-time daily close/funding panel + listed mask), `research/xsec/universe.py` (candidate-table loader), `research/universe.py` (UNIVERSE.md JSON parser) |
+| 2 | **SIGNAL** | `docs/specs/SIGNAL.md` | Given the eligible universe, what is each name's cross-sectional rank (momentum, carry, combined)? | `research/xsec/signals.py` |
+| 3 | **PORTFOLIO** | `docs/specs/PORTFOLIO.md` | Given ranks, what dollar-neutral quantile weight vector realizes them? | `research/xsec/portfolio.py` (`quantile_weights`, `liquidity_weights`, `realized_vol`) |
+| 4 | **LEVERAGE** | `docs/specs/LEVERAGE.md` | What gross exposure `G_t` should scale the unit-gross book this week (quarter-Kelly, confidence-adjusted)? | Sizing math specified; consumes `src/convexity/system/validate/deflated.py` (`SR_LCB_t`) and `robustness.py` (`block_bootstrap_ci`) |
+| 5 | **COST** | `docs/specs/COST.md` | What is the honest round-trip friction and signed funding cash flow for this week's turnover? | `research/xsec/accounting.py` (`round_trip_friction`, `settle_week`), reusing `src/convexity/cost/config/fee_schedule.py` (`BINANCE_USDM_FEE_SCHEDULE`, the ONE fee truth) |
+| 6 | **EXECUTION** | `docs/specs/EXECUTION.md` | How does the target book computed at the Friday close actually get filled — child-order trajectory, shortfall? | Specified only; **not yet built** — `research/xsec/accounting.py::settle_week` still assumes a frictionless instantaneous Friday-close fill (the decision-price benchmark, not a fill price) |
+| 7 | **REGIME** | `docs/specs/REGIME.md` | Should the book's gross be cut (or a defensive overlay applied) given the current cross-sectional market state? | `research/xsec/overlay.py` (`beta_hedge_returns`, `vol_target_scale`, `drawdown_stop_scale`) |
+| 8 | **SYSTEM** | `docs/specs/SYSTEM.md` | Does the resulting weekly return series survive the promotion gate (DSR, CPCV/PBO, purged walk-forward)? | `research/xsec/validate.py` (purged-WF + `DeflatedSharpe` wiring), `research/xsec/cpcv.py` (CPCV/PBO over the lookback family), reusing `src/convexity/system/validate/{deflated,cpcv,walkforward}.py` verbatim |
+| 9 | **OPS** | `docs/specs/OPS.md` | How is the live/paper book monitored operationally — reconciliation, kill-switch, SLA, forced-flatten? | Specified only; **not yet built** — no live/paper rebalancer exists yet to operate |
+
+Two supporting, non-pillar modules complete the picture: `research/xsec/engine.py` is the driver
+that composes panel → signal → portfolio → accounting into one weekly series per config, and
+`research/xsec/metrics.py` computes the raw (non-deflated) weekly Sharpe/CAGR/maxDD/turnover/cost
+summary that `validate.py` then deflates.
+
+Of the eight `src/convexity/<pillar>/` packages the pre-pivot architecture (Appendix A §2) laid
+out, only **three survive as live, implemented code**, reused verbatim by the new system:
+
+* **`src/convexity/core/`** — shared types (`Bars`, `InstrumentSpec`, `AssetClass`), the
+  RED/AMBER/BLUE/TEAL governance buckets (`params.py`), and the cross-pillar composition
+  Protocols (`protocols.py`). Still load-bearing: the xsec engine's data layer builds on
+  `core.types.Bars`/`InstrumentSpec`, and every spec's parameter-governance section still uses the
+  four-bucket taxonomy defined here.
+* **`src/convexity/cost/`** — the fee schedule and friction structure. `BINANCE_USDM_FEE_SCHEDULE`
+  in `cost/config/fee_schedule.py` is the ONE fee truth `research/xsec/accounting.py` imports
+  directly (`BINANCE_VIP0_TAKER = BINANCE_USDM_FEE_SCHEDULE.tier_for_volume(0.0).taker_rate`,
+  5bp) — never a second, drifted fee table.
+* **`src/convexity/system/validate/{deflated,cpcv,walkforward}.py`** — the DSR/CPCV/purged-WF
+  machinery. Bailey–López de Prado's mathematics does not care whether the return series is
+  1-minute trade R-multiples or weekly portfolio returns, so `research/xsec/validate.py` and
+  `research/xsec/cpcv.py` reuse these modules directly rather than reimplementing the math for a
+  weekly cadence — they instead build a **weekly-tuned `SystemDefaults`** (`weekly_defaults`,
+  overriding `ppy` and the observation-count floors) so only the *cadence*, never the *math*,
+  changes (`SYSTEM.md` §5.2).
+
+The `breakout/`, `trend/`, `leverage/`, `execution/`, `ops/`, `regime/` package trees the old
+architecture (Appendix A §2) planned were never fully built for the directional system and are
+**not being built now** in that location — the cross-sectional LEVERAGE/EXECUTION/REGIME/OPS
+pillars are specified in `docs/specs/*.md` and, where implemented, live thin under `research/xsec/`
+rather than as new `src/convexity/<pillar>/` trees.
+
+---
+
+## 2. Weekly data-flow (the composition graph)
+
+Unlike the old directional system's per-instrument, per-trade composition graph (Appendix A §4),
+every arrow below carries a **whole-book weekly vector**, not a single instrument's signal — this
+is the risk-unit shift every pillar spec states explicitly: *"the risk unit is next week's
+portfolio return, not one trade's R-multiple"* (`PORTFOLIO.md` §0/§2; `SYSTEM.md` §1).
+
+```
+ UNIVERSE.panel                                    SIGNAL.rank_t
+ (panel.py: point-in-time      ──U_t──▶            (signals.py: momentum/carry/
+  daily close+funding panel,                        combined percentile rank
+  listed mask, F_t filtration)                       over U_t, [0,1], NaN if
+                                                      ineligible)
+                                                            │
+                                                            │ rank_t
+                                                            ▼
+                                            PORTFOLIO.quantile_weights
+                                            (portfolio.py §4-5 of PORTFOLIO.md:
+                                             top/bottom quintile, inverse-realized-
+                                             vol within leg, dollar-neutral,
+                                             gross=1.0 reference — PORTFOLIO.md §2.3/§4.3)
+                                                            │
+                                                            │ w_t  (unit gross)
+                                                            ▼
+                                            LEVERAGE.size_book
+                                            (LEVERAGE.md §6.1: G_t = c·SR_LCB_t/σ̂_t,
+                                             quarter-Kelly on SYSTEM's DeflatedSharpe /
+                                             block_bootstrap_ci — PORTFOLIO.md §14 names
+                                             this hand-off; LEVERAGE.md's top-of-file
+                                             note pins the shared symbol G)
+                                                            │
+                                                            │ G_t
+                                                            ▼
+                                            REGIME.overlay
+                                            (overlay.py: beta-hedge / drawdown-stop /
+                                             g_t∈[0,1] gross multiplier from CUSUM
+                                             market-state detection — REGIME.md §0/§3/§4;
+                                             gross_live = g_t · G_t)
+                                                            │
+                                                            │ w_t^live = gross_live · w_t
+                                                            ▼
+                                            EXECUTION (spec only — not yet built)
+                                            (EXECUTION.md: child-order trajectory /
+                                             cube-root no-trade band / implementation
+                                             shortfall for turning w_t^live into fills;
+                                             today accounting.settle_week stands in with
+                                             a frictionless instantaneous Friday-close fill)
+                                                            │
+                                                            ▼
+                                            accounting.settle_week
+                                            (turnover, signed per-leg funding, price P&L)
+                                                            │
+                                                            │ turnover
+                                                            ▼
+                                            COST.round_trip_friction
+                                            (accounting.py, reusing cost/config/fee_schedule.py:
+                                             2·(taker+half_spread+impact) both legs)
+                                                            │
+                                                            ▼
+                                            WeekResult.net  ──▶  metrics.py
+                                                                  (raw weekly Sharpe/CAGR/maxDD)
+                                                            │
+                                                            ▼
+                                SYSTEM.{validate,cpcv}  ──▶  DSR / CPCV / PBO / frac_pos
+                                (validate.py + cpcv.py, reusing                │
+                                 system/validate/{deflated,cpcv,walkforward}.py verbatim)
+                                                                               │
+                                                                               ▼
+                                                                  promotion gate (SYSTEM.md §6)
+                                                                               │
+                                                                               ▼
+                                            OPS (spec only — not yet built: monitoring,
+                                            kill-switch, reconciliation, forced-flatten
+                                            for the live/paper loop once it exists)
+```
+
+**The single-call-site gross invariant (never a double cut).** The gross-exposure scalar is set at
+exactly ONE call site, never independently by two pillars: `PORTFOLIO.quantile_weights` /
+`liquidity_weights` accept a single `gross=` parameter; LEVERAGE computes `G_t`, and REGIME
+composes its own `g_t ∈ [0,1]` multiplicatively on top — `gross_live = g_t · G_t` — and that ONE
+product is what is passed into `gross=` at the same call site, never two separate `gross=` calls.
+This is the same "never a double cut" principle the old directional system's Appendix A §5 states
+for its own exposure brakes (REGIME/LEVERAGE-governor/OPS-kill composing on disjoint axes rather
+than multiplying independently); it carries over unchanged to this graph.
+
+**Where the pipeline is genuinely incomplete today.** `EXECUTION.md` and `OPS.md` specify real
+pillars, but per `docs/EDGE.md` §(e) **the live/paper rebalancer is not yet built**. `research/xsec/`
+is research-and-validation-only: `accounting.settle_week` marks the whole week's P&L as if the book
+re-weighted atomically at the Friday closing print, which is the correct *decision-price
+benchmark* but not a real fill price (`EXECUTION.md` §0 states this gap explicitly). A future
+`strategy/`-style composition layer, analogous to Appendix A §1/§4's Nautilus adapter pattern, is
+the integration point once papering starts — do not pre-build it (`CLAUDE.md`, `README.md`).
+
+---
+
+## 3. Governance and parameter discipline (unchanged doctrine, carried over)
+
+Every pillar spec classifies its parameters into the same four governance buckets defined once in
+`src/convexity/core/params.py` and reused without redefinition by all nine specs:
+
+* **RED** — shared economic/modelling constants, set once globally, reachable only through a
+  `resolve_config(defaults=...)` single-merge-point (e.g. the Kelly fraction `φ`, CUSUM `(k,h)`).
+* **AMBER** — per-instrument market metadata never optimised by any pillar (tick/lot size, venue,
+  fee schedule, funding interval).
+* **BLUE** — finite, pre-declared candidate grids searched offline (e.g. the `{12,14,16}`-day
+  lookback family) and promoted only through SYSTEM's deflated-Sharpe/CPCV gate; every BLUE grid's
+  cardinality is counted into SYSTEM's trial ledger so multiple-testing deflation is honest.
+  `SYSTEM.md`'s real code-level floor for the minimum group count in a CPCV split is
+  `k_min=3` (`research/xsec/validate.py::weekly_defaults`) — cite this, not any larger invented
+  figure.
+* **TEAL** — fitted per-name from strictly causal (`F_{t-1}`) past data at runtime: rolling
+  realized vol, EWMA dispersion, Ledoit-Wolf shrinkage intensity. Never a hand knob, never
+  full-sample, never P&L-fit.
+
+This is the same governance discipline the old architecture's §7 (Appendix A) established; nothing
+about the bucket taxonomy changed in the pivot, only which parameters live in which pillar.
+
+---
+
+## 4. Current validated performance envelope (the evidentiary baseline)
+
+This is the system's live evidentiary baseline as of the most recent validated run. Every number
+below is cited from `docs/EDGE.md`; do not restate a headline figure without its honest
+counterpart. **`docs/EDGE.md` is the fuller narrative — read it for the full validation battery,
+caveats, and next steps.**
+
+| Dimension | Honest / deployable number | Caveat |
+|---|---|---|
+| Net Sharpe | **~0.8–1.0** (real Amihud-impact cost) | The light-cost/single-peak headline of Sharpe ~1.6–1.9 / CAGR ~65% is an **optimistic upper bound, not the deployable estimate** — cite it only as such |
+| CAGR @ 100% gross | **~20–25%** | Scales with chosen gross; Sharpe is gross-invariant, CAGR/maxDD are not (`PORTFOLIO.md` §2.3, Lemma 1) |
+| Max drawdown @ 100% gross | **~25%** (~28% annualized vol) | Scales ~linearly with gross/leverage |
+| Weekly win rate | **~60%** | — |
+| Universe size | **~50–75** point-in-time names; **N≈50 is the defensible simple choice** | Peaks empirically at N≈60–75, but the gain over N=50 is inside the block-bootstrap CI — not a real improvement; N=100 declines from illiquid-tail cost + ~15/50 added names effectively unshortable |
+| Signal lookback | **L ∈ {12, 14, 16} trading days**, a sparse 3-point ensemble (m=3), deployed as a band | L=14 is a sharp fitted peak (PBO logit-relative-rank 0.31–0.47 across partitions); single-L selection is partly overfit — deploy the band, not one L. The ensemble is anchored on the three lookbacks with an explicit, cited, tested Sharpe figure; L=13 and L=15 have no tested backtest configuration anywhere in the evidence base and are deliberately excluded, not interpolated (`SYSTEM.md` §5.1) |
+| CPCV (N=8 groups, k=2 test groups, 28 paths, 1-week embargo) | Mean OOS path Sharpe **~0.91** vs naive single-path **0.98** (haircut ~0.07) | No OOS collapse — categorically unlike the dead directional book, whose CPCV paths straddled zero |
+| `frac_pos` (fraction of CPCV paths with positive Sharpe) | **0.85–1.00** — the **robust** statistic | The 5th-percentile path Sharpe is partition-fragile (swings +0.42 to −0.59 with N/k choice); promotion criteria weight `frac_pos` over `p05` |
+| PBO (probability of backtest overfitting) | **≈0.36** | Moderate — real edge, not a slam-dunk; reinforces the band-not-a-point deployment rule |
+| DSR status | **Fails on track-record length only** (PSR≈0.994, high; ~5yr = 258 weekly observations is short relative to the multi-testing-inflated MinTRL) | A track-length problem, not a deflation rejection |
+| Funding carry (satellite only, never core sizing) | Real income **+12.9%/yr** gross | Structural ~70–75% max drawdown, regime-fragile (dies 2023–24 low-funding stretch), fails DSR (0.10–0.45 depending on overlay); no overlay fixes it — beta-hedge only lifts Sharpe to ~0.57 at ~70% DD, a causal DD-stop caps DD at ~24% but collapses Sharpe to ~0.10 and income to ~0.6%/yr |
+| Sizing rule | **Quarter-Kelly**, scale up only on live confirmation | Conservative by construction given the PBO/DSR caveats above |
+
+**Directional breakout/trend background, for contrast (dead, not deployed):** gross directional R
+≈ 0 across every timeframe/exit/filter/leverage tier/asset class tested, even inverted
+(`docs/EDGE.md` §a). Cited here only so the magnitude of "dead" (R≈0) is visible against the
+magnitude of "alive" (Sharpe 0.8–1.0) in the same document.
+
+---
+
+## 5. Testing philosophy (carried over, re-scoped to the weekly risk unit)
+
+The old architecture's four-layer test strategy (Appendix A §8: invariant tests, worked-example
+regression fixtures, property tests, integration tests) is the still-correct shape of testing
+discipline; what changed is the unit each layer operates on.
+
+* **Invariant tests** — now keyed to the weekly risk unit's invariants: no-lookahead (perturbing
+  any panel row after rebalance day `d` must not change the signal/weights at `d`), the
+  single-call-site gross invariant (§2 above), dollar-neutrality (long leg sums to +0.5, short leg
+  to −0.5), and the point-in-time listed mask (a delisted name is closed at its last live bar, a
+  not-yet-listed name never enters a cross-section). These live under `tests/research/xsec/`.
+* **Worked-example regression fixtures** — each spec's numbered worked example (e.g. COST.md's
+  §9 end-to-end friction reconciliation, SYSTEM.md's §5.3 DSR worked numbers, REGIME.md's §3.5
+  CUSUM-ARL calibration) is reproduced bit-for-bit from its tabulated inputs, exactly as Appendix
+  A §8.2 already required for the directional pillars.
+  `tests/research/xsec/{test_accounting,test_breadth,test_cpcv,test_engine_panel,
+  test_metrics_validate,test_multiasset,test_overlay,test_portfolio,test_signals}.py` are the
+  live instances of this layer.
+- **Property tests** — the monotonicities each spec asserts (e.g. `frac_pos` robustness to N/k
+  choice, Sharpe's gross-invariance from PORTFOLIO.md §2.3's Lemma 1) are swept and asserted
+  explicitly, no `hypothesis` dependency required — same discipline as Appendix A §8.3.
+* **Integration tests** — deferred. There is no live/paper rebalancer yet to integration-test
+  against Nautilus (§2 above); this layer activates once EXECUTION's live rebalancer and OPS's
+  monitoring loop are built.
+
+Every pillar's tests need **no external data** — `research/xsec/` reuses the same
+seeded-synthetic-generator discipline the old architecture's §8 closing note required
+(`tests/research/xsec/conftest.py` fixtures), so invariant and worked-example tests never touch
+the 137-instrument production data lake.
+
+---
+
+## 6. Environment, repo, and data-layer conventions (unchanged by the pivot)
+
+These conventions predate the pivot and remain accurate; see `CLAUDE.md` for the full, current
+statement of each.
+
+* **Dependency management:** `uv`, pinned via `uv.lock` (committed); `.python-version = 3.12`
+  (the cp312 manylinux aarch64 wheel is what makes `uv sync` resolve a binary NautilusTrader
+  wheel when the live rebalancer is eventually built). Run research code with `.venv/bin/python`
+  or `uv run --no-sync`.
+* **Repo hygiene:** hatchling build backend, ruff line-length 100, pytest. Commit/push only when
+  explicitly asked; never commit secrets (`.env` is gitignored).
+* **Data lake:** `data/` is the 137-instrument 1-min lake (gitignored, ~15G) — do not touch or
+  delete it. `research/data.py` (`load_bars`/`load_funding`) is the sole loader the xsec panel
+  builds on. Symbology: the USDT-M perpetual is `BTCUSDT-PERP` in Nautilus terms; bare `BTCUSDT`
+  is spot. Funding only accrues if explicitly charged — `research/xsec/accounting.py` charges
+  signed funding by side; there is no silent-zero-funding trap in the xsec path.
+* **Open-source-first, minimal custom surface** (the repo's core development principle, stated in
+  full in `CLAUDE.md`): NautilusTrader for the eventual paper/live engine, its native Binance
+  USDT-M adapter for connectivity, pandas/numpy/pyarrow for the research dataframe layer, httpx +
+  `data.binance.vision` for bulk historical backfill. The only code written from scratch is the
+  cross-sectional engine (`research/xsec/`), the data-layer backfill scripts
+  (`scripts/backfill_*_1m.py`), and — not yet built — the live/paper weekly rebalancer. Do not
+  reimplement an engine, a broker connector, a dataframe layer, or a backtest framework; do not
+  add competing engines (freqtrade/hummingbot/vectorbt/zipline) or raw `python-binance`.
+* **Refuted/forbidden — do not reintroduce** (full list in `CLAUDE.md`): directional
+  breakout/trend in any form; funding carry as a standalone book (income-overlay at most); long-vol
+  straddle/strangle, HAR-RV/Lee-Mykland vol forecasting, backspreads, OU mean-reversion exits
+  (refuted upstream in the `vol_research`/`arbitrage` lineage); options greeks/moneyness/expiry-roll
+  concepts (perps are linear instruments, no analog); presenting un-robust, lookahead-tainted, or
+  gross-of-cost results as edge (cross-sectional backtests lie easily — survivorship, delist gaps,
+  size-blind cost — results that don't survive DSR/PBO/purged-WF/drop-top-N are not edge).
+
+---
+
+## Appendix A — the directional convex-breakout architecture (historical record, not live)
+
+**Status of this appendix.** Everything below describes the architecture for the directional
+convex-breakout system, which is **PROVEN DEAD** (`docs/EDGE.md` §a: gross directional R ≈ 0
+across every timeframe/exit/filter/leverage/asset-class cell tested, even inverted). It is
+retained verbatim as a historical record of that build — including the cross-spec interface
+mismatches it resolved and the test strategy it established, both of which informed the
+conventions §§3/5 above carry forward — not as a live build plan. Do not resurrect any of the
+`breakout/`, `trend/`, `leverage/`, `execution/`, `ops/`, `regime/` package trees below; they were
+never fully built out and are not being built now.
+
+### A.1 Architecture principle
+
+Every pillar was split into two layers:
 
 * **Pillar POLICY (pure-Python, NautilusTrader-FREE).** All the modelling, detection, sizing, cost,
   regime, monitoring and orchestration logic. Depends only on `numpy`/`pandas`/`scipy` and the
-  shared `convexity.core`. **Unit-testable without the engine** — the test venv (`.venv-test`) has
+  shared `convexity.core`. Unit-testable without the engine — the test venv (`.venv-test`) has
   no `nautilus_trader` installed, and every pillar test runs `PYTHONPATH=src .venv-test/bin/python
   -m pytest`.
 * **Thin Nautilus ADAPTER.** A small number of clearly-isolated modules — `strategy/`,
   `<pillar>/nautilus/`, `cost/facts/nautilus_adapter.py` — that translate between Nautilus
   events/state and the pure-Python pillar types. These are the *only* files that `import
-  nautilus_trader`. They are covered by integration tests on the VM (where nautilus is installed),
-  not by the pillar unit suite.
+  nautilus_trader`. They were to be covered by integration tests on the VM (where nautilus is
+  installed), not by the pillar unit suite.
 
-The single live `strategy/convexity_strategy.py` Nautilus `Strategy` subclass **composes** the
-pillars: it builds the pure-Python inputs from Nautilus bars/events, calls each pillar's outward
-method, and routes the returned commands/intents back through the Nautilus adapters.
+The single live `strategy/convexity_strategy.py` Nautilus `Strategy` subclass was to **compose**
+the pillars: build the pure-Python inputs from Nautilus bars/events, call each pillar's outward
+method, and route the returned commands/intents back through the Nautilus adapters.
 
 This split is *why* the foundation (`convexity.core`) is the thing that makes pillars interoperate:
 the boundary objects that cross pillar lines must be one shared type, not redefined per pillar.
+**This principle is the one part of Appendix A that is still load-bearing today** — `core/types.py`
+and `core/params.py` are reused as-is by the cross-sectional system (§1 above).
 
----
-
-## 2. Package layout
-
-The specs each write their directory tree at a *bare* top level (`breakout/`, `trend/`, …). The
-repo packages everything under `src/convexity/` (`pyproject` `packages=["src/convexity"]`, tests
-run `PYTHONPATH=src`). **Resolution (applied uniformly):** every spec path `<pillar>/…` maps to
-`src/convexity/<pillar>/…`, imported as `convexity.<pillar>.…`. Every spec-prescribed *filename* is
-preserved verbatim under that prefix — `range_geometry.py`, `detect/combine.py`, `validate/arl.py`,
-`components/funding_forecast.py`, `ceilings/stop.py`, etc.
+### A.2 Package layout (as planned; never fully built)
 
 ```
 src/convexity/
-  core/                      # SHARED FOUNDATION (implemented now)
+  core/                      # SHARED FOUNDATION (implemented; still reused — see §1)
     params.py                #   RED/AMBER/BLUE/TEAL governance + typed param registry
     types.py                 #   cross-pillar boundary dataclasses (Bars, Side, EntrySignal, …)
     protocols.py             #   the composition-seam Protocols each pillar implements
@@ -53,359 +371,78 @@ src/convexity/
     dynamic_optimization.py  #   greedy tracking-error optimiser (19 passing tests — DO NOT regress)
     universe.py  UNIVERSE.md
 
-  breakout/                  # BREAKOUT pillar  (entry detector)
-    types.py pipeline.py
-    config/{defaults,instrument,asset_class,tuning,cost,resolve}.py
-    data/{schema,calendar,corporate_actions,rolls,quality}.py
-    standardize/{returns,seasonal,volatility,tails,liquidity}.py
-    features/{range_geometry,compression,trend_state,flow,jumps,context}.py
-    detect/{candidates,glr,bocpd,empirical_null,evidence,combine,dedupe}.py
-    validate/{labels,walkforward,cpcv,baselines,ablation,stats,diagnostics}.py
-    tune/{search_space,autotune,promotion,registry}.py
-    online/{state,replay,monitor}.py
-    synth/generate.py
-
-  trend/                     # TREND pillar  (convex trend-life exit)
-    types.py engine.py
-    config/{defaults,instrument,asset_class,cost,tuning,resolve}.py
-    data/{schema,calendar,timing,actions,rolls,quality}.py
-    estimate/{volatility,drift,horizon,kalman,sequential,jump,hazard,state}.py
-    policy/{convex_exit,reduce,decision}.py
-    priors/market_dna.py
-    online/{snapshot,replay,monitor}.py
-    validate/{labels,survival,baselines,walkforward,cpcv,ablation,stats,reports}.py
-    tune/{search_space,autotune,promotion,registry}.py
-    research/diagnostics.py
-    synth/generate.py
-
-  leverage/                  # LEVERAGE pillar  (min() of seven ceilings)
-    types.py engine_api.py
-    config/{defaults,asset_class,instrument,margin,resolve}.py
-    vol/forecast.py
-    ceilings/{stop,vol_target,kelly,tail,portfolio,margin,liquidity}.py
-    combine/{kelly_fraction,governor,lot_sizer,engine}.py
-    allocate/{risk_budget,clusters}.py
-    priors/market_dna.py
-    validate/{labels,stress,baselines,ablation,walkforward,stats,reports}.py
-    synth/generate.py
-
-  execution/                 # EXECUTION pillar  (tactic selection + protective stop)
-    types.py engine_api.py
-    config/{defaults,asset_class,instrument,venue,resolve}.py
-    microstate/{spread,vol,volume_proxy,fill_prob}.py
-    cost/{spread_cost,impact,adverse_selection,delay_cost,tactic_cost}.py
-    policy/{tactic_select,chase,partial,order_issuer,protective_stop,engine}.py
-    nautilus/{adapter,reconcile}.py          # the ONLY nautilus-importing execution code
-    priors/exec_dna.py
-    validate/{labels,shortfall,calibration,baselines,ablation,walkforward,stats,reports}.py
-    synth/generate.py
-
-  cost/                      # COST pillar  (net-of-cost truth; supersedes the per-pillar stubs)
-    types.py cost_api.py
-    config/{defaults,fee_schedule,asset_class,instrument,resolve}.py
-    facts/{nautilus_adapter,execution_adapter}.py   # the ONLY nautilus-touching cost code
-    components/{fees,spread,impact,funding_accrual,funding_forecast,carry}.py
-    assemble/cost_book.py
-    consume/{net_ev_gate,hold_carry,carry_term,tca}.py
-    validate/{labels,walkforward,cpcv,baselines,ablation,stats,reports}.py
-    synth/generate.py
-
-  system/                    # SYSTEM pillar  (orchestrator + integrated validation)
-    types.py system_api.py
-    config/{defaults,universe,tuning,resolve}.py
-    modules/{selection,breakout_adapter,leverage_adapter,trend_adapter}.py  # thin pillar adapters
-    compose/{cadence,incumbent,budget,iterate,precedence,orchestrator}.py
-    nautilus/{adapter,exec_stub}.py
-    validate/{labels,walkforward,cpcv,deflated,robustness,attribution,
-              baselines,trials,promotion,budget,cache,reports}.py
-    synth/generate.py
-
-  ops/                       # OPS pillar  (SPC monitoring + kill switch)
-    types.py ops_api.py
-    config/{defaults,in_control,asset_class,severity,resolve}.py
-    detectors/{base,cusum,page_hinkley,ewma,shewhart,sprt}.py
-    streams/{whiten,fills,cost_tca,vol,edge,recon,heartbeat}.py
-    reconcile/streams_map.py
-    brake/{triggers,alarms,safe_state,kill_switch,engine}.py
-    nautilus/{adapter,flatten}.py
-    forensics/{log,replay}.py
-    validate/{derive_limits,arl,oos,baselines,reports}.py
-    synth/generate.py
-
-  regime/                    # REGIME pillar  (global gross multiplier g_t)
-    types.py engine_api.py
-    config/{defaults,asset_class,resolve}.py
-    panel/build.py
-    measures/{vol_regime,absorption,turbulence,liquidity}.py
-    state/{bands,machine,cost_gate,emit}.py
-    validate/{threshold_stability,baselines,ablation,backtest}.py
-    synth/generate.py
-
-  strategy/                  # THE Nautilus composition layer (existing stubs to be filled)
-    convexity_strategy.py    #   the single Strategy; composes all pillars (see §4)
-    breakout.py config.py universe.py     # legacy stubs — absorbed/re-exported (see §6)
-
-  costs/binance_fees.py      # legacy stub — ABSORBED into cost/config/fee_schedule.py (see §6)
-  adapters/ run/             # existing data/runtime plumbing (unchanged by this work)
+  breakout/                  # BREAKOUT pillar  (entry detector) — never fully built, not being built
+  trend/                     # TREND pillar  (convex trend-life exit) — never fully built
+  leverage/                  # LEVERAGE pillar  (min() of seven ceilings) — never fully built
+  execution/                 # EXECUTION pillar  (tactic selection + protective stop) — never fully built
+  cost/                      # COST pillar (fee schedule) — IMPLEMENTED, reused verbatim — see §1
+  system/                    # SYSTEM pillar (orchestrator + integrated validation)
+    validate/{deflated,cpcv,walkforward}.py   # IMPLEMENTED, reused verbatim — see §1
+    # remaining SYSTEM orchestration modules (compose/, modules/) — never fully built
+  ops/                       # OPS pillar  (SPC monitoring + kill switch) — never fully built
+  regime/                    # REGIME pillar  (global gross multiplier g_t) — never fully built
+  strategy/                  # THE Nautilus composition layer — existing stubs, never filled
+  costs/binance_fees.py      # legacy stub — absorbed into cost/config/fee_schedule.py
 ```
 
-Tests mirror the tree under `tests/`: `tests/<pillar>/test_<module>.py`, plus
-`tests/<pillar>/test_invariants.py` and `tests/<pillar>/test_worked_examples.py` (see §8).
+### A.3 Cross-spec interface mismatches found in the blueprints — and their resolution
 
----
+These were the conflicts each directional-era spec's `risks` section raised, resolved so that
+build (had it continued) would have been unblocked. Retained for historical record:
 
-## 3. Shared foundation (`convexity.core`) — implemented
+1. **Package placement (all eight specs).** Resolution: everything under `src/convexity/<pillar>/`.
+2. **REGIME `g_t` channel: REGIME.md vs LEVERAGE.md.** Resolution: single channel through
+   `L_portfolio`, never a separate min() term.
+3. **`ExecTarget` cross-pillar contract**, undefined in any sibling spec. Resolution: defined in
+   `core/types.ExecTarget` with exactly 8 fields, no edge field (Inv A).
+4. **`HoldHorizon` producer/`m_max` redundancy.** Resolution: `HoldHorizon.from_quantile`
+   classmethod computes `m_max` so the field can never disagree.
+5. **COST carry sign / LEVERAGE clamp location.** Resolution: `CarryTerm.over_horizon` returns
+   signed (credit negative); the `max(carry,0)` clamp lives in `leverage/ceilings/stop.py`.
+6. **`HoldHorizonEstimate` → COST `HoldHorizon` mapping.** Resolution: COST computes `m_max` via
+   `HoldHorizon.from_quantile`; TREND never computes funding-stamp counts.
+7. **CLAUDE.md "Lee-Mykland forbidden" vs TREND/BREAKOUT jump detectors.** Resolution: jump
+   detectors default to the robust standardized-return exceedance branch for crypto; the
+   bipower/Lee-Mykland branch is config-gated off by default.
+8. **`scipy` dependency.** Resolution: scipy allowed in validation/research code, kept out of the
+   live-engine runtime closure.
+9. **`BookState` undefined in LEVERAGE.** Resolution: `system/types.BookState` is canonical.
+10. **SYSTEM SelectionAdapter contract mismatch.** Resolution: `system/modules/selection.py` maps
+    `DynOptResult→ProposedPortfolio`.
+11. **Nautilus version (1.229) vs spec prose.** Resolution: adapters target nautilus 1.229/py312
+    exactly.
+12. **OPS DD-kill (45%) vs LEVERAGE governor flat (43%) shared reference.** Resolution: both read
+    the same equity series + running-max peak.
+13. **OPS `§17 rollout` filename.** Resolution: `ops/brake/rollout.py`.
 
-The single source of the shapes and governance that cross pillar boundaries. Pure-Python,
-numpy-typed, NautilusTrader-free, ruff-clean (matches the existing `selection/` style).
+### A.4 Test strategy (the shape carried forward into §5 above)
 
-### `core/params.py` — governance
-* `Bucket(str, Enum)` = `RED | AMBER | BLUE | TEAL` — the four governance buckets every spec §2/§4
-  uses. The bucket decides *where* a value may enter and *who* may set it.
-* `ParamSpec(name, bucket, meaning, spec_ref, blue_grid=None)` — one declared parameter, citing its
-  owning spec/section; `blue_grid` records the finite candidate set (rejected on a non-BLUE param).
-* `ParamRegistry` Protocol + `StaticParamRegistry` — each pillar declares its parameter set;
-  `.of_bucket(RED)` for Invariant-C assertions; `.blue_grid_cardinality()` is the per-pillar trial
-  count SYSTEM's ledger deflates against (SYSTEM Inv DSR/SG; caps like REGIME `K_regime_max`).
-* `assert_no_red_in_amber(amber_field_names, registry)` — the reusable Invariant-C check: raises if
-  a RED/BLUE name leaks into a per-instrument `InstrumentSpec`. **Every pillar's Inv-C test calls
-  this.**
+Four layers, mirroring the spec invariants + worked examples, all under `PYTHONPATH=src
+.venv-test/bin/python -m pytest` with no nautilus:
 
-### `core/types.py` — cross-pillar boundary objects
-The types that flow *between* pillars (rich internal objects stay in each `<pillar>/types.py`):
+1. **Invariant tests** — firewall/governance AST checks, causality/no-lookahead perturbation
+   tests, batch/live parity + snapshot-restore, score/edge firewalls, min()/precedence uniqueness,
+   diagnostics-are-log-only checks.
+2. **Worked-example regression fixtures** — each spec's numbered worked example reproduced
+   bit-for-bit (e.g. BREAKOUT's strict-pre-bar barrier identity, TREND's `z_drift=0.9531018`,
+   LEVERAGE's governor ladder, COST's §5.7 centerpiece `C_impact=0.0282843`, SYSTEM's DSR
+   FAIL/PASS fixtures, OPS's CUSUM cost-drift fixture, REGIME's §6.1 corr-spike fixture).
+3. **Property tests** — monotonicities (`p_fill` ↓ / `A` ↑ / `D` ↑ in urgency; rounding only
+   reduces risk; ARL₀ ↑ with `D_min`).
+4. **Integration tests** (VM-only, nautilus installed) — batch↔live parity through the real
+   engine, restart reconciliation, stop placement.
 
-| Type | Producer → consumer | Spec anchor / firewall |
-|---|---|---|
-| `Side`/`Direction`/`AssetClass`/`SignalStatus`/`Urgency`/`ExecUrgency`/`RegimeStateName`/`KillState` | shared aliases | one definition, not per-pillar |
-| `Bars` | data layer → all | int64 epoch-ms; optional micro arrays None on a kline feed |
-| `InstrumentSpec` | metadata → all | **AMBER only** (every Inv C); no RED/BLUE field |
-| `CostModel` | stub → BREAKOUT/TREND validation | superseded by COST pillar (COST P1) |
-| `HoldHorizon` | BREAKOUT/TREND/LEVERAGE → COST | a RANGE; `m_max` via `from_quantile` (ceil) |
-| `EntrySignal` | BREAKOUT `combine` → SYSTEM/EXEC | Inv A (only `combine` builds it), Inv K (downstream reads only direction/status/urgency/levels) |
-| `Position` | BREAKOUT entry → TREND | Inv O (TREND never recomputes entry) |
-| `SignalInput` | SYSTEM/SELECTION → LEVERAGE | Inv A (no edge field, by absence) |
-| `LeverageDecision` | LEVERAGE → SYSTEM/EXEC | regime cut surfaces as `binding_ceiling='portfolio'` |
-| `ExecutionIntent`/`HoldHorizonEstimate`/`ResidualMoveEstimate` | TREND → EXEC/LEV/COST | Inv N/P |
-| `ExecTarget` | SYSTEM (BREAKOUT+LEV+TREND) → EXEC | Inv A (no edge/sizing/exit score) |
-| `CostComponent`/`RoundTripCost` | COST → BREAKOUT/LEV/TREND/REGIME | Inv B (additive), Inv F-band-gate |
-| `RegimeState` | REGIME → LEVERAGE/SELECTION | g_t∈{1,.75,.5,.25} floored .25; single H_book channel |
-| `OpsDirective` | OPS → live loop | Inv PROV (monitors, never trades) |
+### A.5 Legacy stub reconciliation
 
-### `core/protocols.py` — composition seams
-One `typing.Protocol` per pillar's single outward method (`BreakoutModule.propose`,
-`LeverageEngine.size_position`, `TrendEngine.update`, `ExecutionEngine.on_target`, `CostEngine`'s
-four consumers, `RegimeEngine.regime_state`, `OpsEngine.on_obs`, `SystemOrchestrator.decide`).
-SYSTEM's orchestrator and the strategy adapter depend on these Protocols, so each pillar can be
-built and tested against a mock satisfying its Protocol before any sibling exists. Pillar-private
-return types (`ActionDecision`, `ExecDecision`, `SystemDecision`, …) are typed `object` at the seam
-with the spec reference in the docstring — the consumer only needs the boundary fields.
+* `strategy/breakout.py` → logic was to move to the `breakout/` package; never completed.
+* `strategy/config.py`, `strategy/universe.py` → were to fold into per-pillar `config/`.
+* `strategy/convexity_strategy.py` → the planned live composer; never filled.
+* `costs/binance_fees.py` → absorbed into `cost/config/fee_schedule.py`; this part DID happen and
+  is the fee truth §1 above cites.
 
----
+### A.6 Governance discipline
 
-## 4. The composition graph (who consumes/emits what)
-
-```
-                         ┌─────────────────────────── REGIME ──────────────────────────┐
-                         │ panel + vol/absorption/turbulence/liquidity → g_t∈{1,.75,.5,.25}
-                         └──────────────────────────────┬──────────────────────────────┘
-                                                        g_t (single channel)
-                                                         ▼
- SELECTION ─risk_weights/rank─▶ SYSTEM.orchestrator ◀──── LEVERAGE  (g_t·H_book scales L_portfolio)
-   (Carver Ch.25)                    │  ▲                     ▲   │
-                                     │  │ EntrySignal         │   │ LeverageDecision (size)
-                     BREAKOUT.propose ┘  └──────── SignalInput ┘   │
-                                     │                            ▼
-                                     │  Position           (min() of 7 ceilings × governor; lot-quantize)
-                                     ▼                            │
-                                  TREND.update ──ExecutionIntent──┤
-                                     │  ActionDecision            ▼
-                                     │  HoldHorizonEstimate    ExecTarget
-                                     │  ResidualMoveEstimate      │
-                                     ▼                            ▼
-                COST  ◀── net-EV gate (BREAKOUT) ───────────  EXECUTION.on_target
-                 │     ◀── hold-carry  (TREND)                    │  OrderCommand / venue reduce-only stop
-                 │     ◀── carry-term  (LEVERAGE clamps)          ▼
-                 │     ◀── round_trip_estimate (REGIME cost gate)  Nautilus engine
-                 └── one CostBook, one resolved config (Inv T)
-                                     │
-   OPS  ◀── streams: fills/cost_tca/vol/edge/recon/heartbeat ── (EXECUTION/COST/LEVERAGE/SYSTEM)
-        ──OpsDirective {run,degrade,halt}+flatten── live loop (flatten via EXECUTION venue stops)
-```
-
-**The three exposure brakes compose on disjoint axes (LEVERAGE Inv R/BRAKE, REGIME Inv NODOUBLE,
-OPS Inv BRAKE):** REGIME `g_t` reads *market-state* and enters only via `g_t·H_book`; the LEVERAGE
-drawdown governor reads *equity-drawdown*; OPS owns the *binary* kill state. They multiply on
-disjoint inputs — never a double cut (e.g. CRISIS realized gross is `0.25·full`, **not** `0.25²`).
-
-**Validation firewall (every pillar, Inv C/FW/G/V):** nothing under a pillar's live layers
-(`detect/`, `features/`, `standardize/`, `policy/`, `estimate/`, `compose/`, `components/`,
-`ceilings/`, `measures/`, `streams/`, `brake/`, `online/`, `nautilus/`) imports from that pillar's
-`validate/` (or `forensics/`). Future-looking labels live only under `validate/`. This is asserted
-by an AST import-graph test per pillar.
-
----
-
-## 5. Cross-spec interface mismatches found in the blueprints — and their resolution
-
-These are the conflicts each spec's `risks` section raised. Resolved here so the build is unblocked.
-
-1. **Package placement (all eight specs).** Specs write bare `breakout/`, `cost/` (singular), etc.
-   *Resolution:* everything under `src/convexity/<pillar>/`, imported `convexity.<pillar>`. COST is
-   `convexity.cost` (singular, matching its prose) as a **new** package; the existing
-   `convexity.costs` (plural) holds only `binance_fees.py`, which is **absorbed** into
-   `cost/config/fee_schedule.py` (see §6). One fee table only (COST P1).
-
-2. **REGIME `g_t` channel: REGIME.md vs LEVERAGE.md.** REGIME's intro says g_t is "one more min()
-   term *and* a scalar on H_book"; LEVERAGE.md (P7/Inv R, the authoritative build spec for sizing)
-   says g_t enters **only** through `g_t·H_book`, never a separate min() term. *Resolution:* build
-   to LEVERAGE.md — single channel through `L_portfolio`. REGIME's own §3.4 agrees. Encoded in
-   `core/types.RegimeState` docstring + `LeverageDecision.binding_ceiling=='portfolio'`.
-
-3. **`ExecTarget` is the load-bearing cross-pillar contract** and was not defined in any sibling
-   spec. *Resolution:* defined in `core/types.ExecTarget` with exactly the 8 fields EXECUTION
-   prescribes and **no edge field** (Inv A). SYSTEM assembles it from BREAKOUT (side, invalidation),
-   LEVERAGE (target_qty), TREND (reduce/exit + invalidation moves + urgency). Owner of `urgency`:
-   the signal pillar (BREAKOUT for entries → `'URGENT'`; TREND for exits → `'IMMEDIATE'` on hard
-   exit). Owner of `invalidation_generation`: TREND.
-
-4. **`HoldHorizon` producer/`m_max` redundancy (COST risk).** COST stores `m_max` *and* says it
-   equals `ceil(max_hold_quantile_ms/funding_interval_ms)`. *Resolution:* `HoldHorizon.from_quantile`
-   classmethod computes `m_max` (ceil) so the field can never disagree. `expected_m_caller` is
-   diagnostic-only and cannot relax the gate (COST Inv M-hold).
-
-5. **COST carry sign / LEVERAGE clamp location.** COST emits a **signed** carry; LEVERAGE's
-   `StopCeiling` applies `L_stop=(c-max(carry,0))/d`. *Resolution:* `CarryTerm.over_horizon` returns
-   signed (credit negative); the `max(carry,0)` clamp lives in `leverage/ceilings/stop.py`, NOT in
-   COST. COST's Inv T test checks only the signed value is bit-identical across the three consumers;
-   the clamp is a LEVERAGE test (Inv CARRY).
-
-6. **`HoldHorizonEstimate` → COST `HoldHorizon` field mapping (TREND risk).** Who computes
-   `m_max`? *Resolution:* COST computes it via `HoldHorizon.from_quantile(..., funding_interval_ms)`
-   from TREND's `max_hold_quantile_ms`; TREND never computes funding-stamp counts.
-
-7. **CLAUDE.md "Lee-Mykland forbidden" vs TREND/BREAKOUT jump detectors.** *Resolution:* the jump
-   detectors (`trend/estimate/jump.py`, `breakout/features/jumps.py`) **default to the robust
-   standardized-return exceedance branch** (the CLAUDE.md-compatible path) for crypto; the
-   bipower/Lee-Mykland branch is config-gated off by default and documented as the CLAUDE.md
-   exception (the forbid was scoped to the *entry signal*, not these exit/feature diagnostics).
-
-8. **`scipy` dependency (TREND/COST/SYSTEM/OPS risk).** KM/Greenwood/Weibull-MLE, PSR/DSR (`norm`),
-   CUSUM-ARL MC, Ledoit-Wolf all want scipy. CLAUDE.md discourages scipy in the live engine;
-   `.venv-test` *has* scipy 1.18. *Resolution:* scipy is allowed in **validation/research** code and
-   in pure-math measure code (it is numpy-adjacent, not a live-engine dep). Add it to a
-   `validation`/`research` dependency group in `pyproject`, kept out of the NautilusTrader live
-   runtime closure. The pillar policy hot path stays numpy-only where feasible.
-
-9. **`BookState` undefined in LEVERAGE (owned by SYSTEM).** *Resolution:* `system/types.BookState`
-   is the canonical definition (equity, peak_equity, free_margin, positions, cov, governor_mult);
-   LEVERAGE consumes it via the `LeverageEngine` Protocol (typed `object` at the seam until SYSTEM
-   lands; LEVERAGE built/tested against a `BookState` fixture). Same for `SplitPlan`/`PositionSampler`
-   (validation support types, defined in each pillar's `validate/` or a shared validation core).
-
-10. **SYSTEM SelectionAdapter contract mismatch.** SYSTEM assumes `select(...)→ProposedPortfolio`;
-    the existing `selection/dynamic_optimization.py` exposes `optimise_portfolio→DynOptResult`.
-    *Resolution:* `system/modules/selection.py` **maps** `DynOptResult→ProposedPortfolio`
-    (keep/eligible from non-zero positions, `risk_weights` from optimised weights). The `rank` field
-    (undefined source) is derived as a **RISK measure** — tracking-error-contribution /
-    correlation-distance — never edge (Inv A). Selection's 19 tests are untouched.
-
-11. **Nautilus version (1.229) vs spec prose ("generic APIs / 3.11+").** *Resolution:* adapters
-    target nautilus 1.229 / py312 exactly; spec API names are illustrative. `FundingRateUpdate`
-    interval hardcoded 8h for Binance per CLAUDE.md.
-
-12. **OPS DD-kill (45%) vs LEVERAGE governor flat (43%) shared reference.** *Resolution:* both read
-    the SAME equity series + running-max peak (the LEVERAGE-owned reference); `45% > 43%` holds by
-    construction (OPS Inv BRAKE §7.1a). The shared reference contract is in `system/types.BookState`.
-
-13. **OPS `§17 rollout` has no spec-prescribed filename.** *Resolution:* `ops/brake/rollout.py`
-    (consumes the same §5 streams as the promotion gates; sits beside `engine.py`). Added to the
-    build plan, not the initial scaffold (logic-bearing).
-
----
-
-## 6. Legacy stub reconciliation
-
-* `strategy/breakout.py` → its logic moves to the `breakout/` package; the file becomes a thin
-  re-export of `convexity.breakout.detect.combine.BreakoutModule` (or is deleted once
-  `convexity_strategy.py` imports the package directly).
-* `strategy/config.py`, `strategy/universe.py` → folded into per-pillar `config/` +
-  `system/config/universe.py`.
-* `strategy/convexity_strategy.py` → the live composer (§4); filled in the SYSTEM/integration phase.
-* `costs/binance_fees.py` → absorbed into `cost/config/fee_schedule.py` (AMBER VIP tiers) feeding
-  `cost/components/fees.py`. One cost truth (COST P1). The plural `costs/` package is retired.
-
----
-
-## 7. Governance discipline (enforced, not aspirational)
-
-Every pillar implements `resolve_config(defaults=...)` as the **single merge point** where RED
-enters; per-class overrides come through a separate `AssetClassPreset` argument; per-instrument
-`InstrumentSpec` carries AMBER only. Each pillar declares its parameters as a
-`StaticParamRegistry` and its Inv-C test calls `assert_no_red_in_amber(InstrumentSpec field names,
-registry)`. BLUE grid cardinalities are summed into SYSTEM's persistent trial ledger so the
-deflated-Sharpe gate counts every searched config (SYSTEM Inv SG/DSR; REGIME `K_regime_max`,
-SYSTEM `K_max` caps). TEAL fits are causal/fold-local, never hand knobs.
-
----
-
-## 8. Test strategy
-
-Four layers, mirroring the spec invariants + worked examples. All run under `PYTHONPATH=src
-.venv-test/bin/python -m pytest` with **no nautilus**.
-
-1. **Invariant tests** (`tests/<pillar>/test_invariants.py`). Each named Invariant in a spec becomes
-   one test. Recurring shapes:
-   * *Firewall/governance (AST):* import-graph scan that live layers never import `validate/`;
-     `assert_no_red_in_amber` for Inv C; "only `combine` constructs `EntrySignal`" (Inv A);
-     "only `decision` constructs `ActionDecision`".
-   * *Causality / no-lookahead:* perturb every bar after `t`, assert output at `≤t` byte-identical
-     (BREAKOUT Inv B, TREND Inv H, REGIME Inv CAUSAL, OPS Inv CAUSAL, LEVERAGE Inv CAUSAL-L,
-     EXECUTION Inv L).
-   * *Batch/live parity + snapshot restore:* `run_batch` == sequential `update`, mid-stream snapshot
-     restore reproduces signals (BREAKOUT Inv E, TREND Inv I, EXECUTION Inv E, SYSTEM Inv PAR).
-   * *Score/edge firewalls:* scale all scores by `c>0` → downstream decisions byte-identical
-     (BREAKOUT Inv K, SYSTEM Inv CB); vary a hypothetical edge field → sizes/tactics unchanged
-     (LEVERAGE Inv A, EXECUTION Inv A).
-   * *min()/precedence, never a product:* unique-minimum binding tests (LEVERAGE Inv B, REGIME Inv
-     MIN, OPS Inv KILL).
-   * *Diagnostics are log-only:* randomize diagnostics → decision unchanged (everywhere: Inv H/F).
-
-2. **Worked-example regression fixtures** (`tests/<pillar>/test_worked_examples.py`). Each spec's
-   numbered worked example is reproduced **bit-for-bit** (or to the spec's stated tolerance) from
-   its tabulated inputs. Load-bearing examples:
-   * BREAKOUT: strict-pre-bar barrier identity; inclusive-max-never-fires; same-k 1-tick-vs-kσ;
-     entry-timestamp `entry_idx=signal_idx+1`; score-scale invariance; future-needle; cross-sectional
-     FDR on a noise universe; `convexity_ratio` formula.
-   * TREND: `z_drift` = `log(1.1)/0.1 = 0.9531018`; trail multiplier schedule at 0.4/1.0/3.0/5.0 R;
-     `E[Π]` net-convexity PASS/MARGINAL/FAIL (+0.3725 / +0.08 / **−0.13** R₀); KM censoring bias;
-     Weibull tail quantile; action timing next-bar.
-   * LEVERAGE: `L_stop` carry-sign clamp; `d(2T)/d(T)=√2`; `L_kelly` notional-invariance; governor
-     ladder + ramp (`dd=0.42 → 0.0833`); MCTR sum identity; `g_t=1.0` no-overlay equivalence;
-     `g_t=0.25` regime cut at full equity; quantization round-down + divergence `0.189189`.
-   * EXECUTION: PI at touch / one-tick; entry vs exit maker cost split; `worst_entry` long/short;
-     funding half-open window; sqrt impact → 0; `p_fill` LCB gate; `STOP_OK` predicate;
-     disjoint slice/stop id schemes.
-   * COST: the **§5.7 centerpiece** — every line including `C_impact=0.0282843` (NOT 2.83e-6, Inv
-     U-dim), `F_band_conservative=0.69798`, `total_BAND=1.9545485`, `passes=False`, `margin=−0.1045485`;
-     EWMA `α=1−2^(−1/9)=0.074125`; carry time-scaling; financing-once.
-   * SYSTEM: the **DSR §7.3b FAIL** fixture (DSR=0.6950 @ n_obs=108 < MinTRL≈1114) and the **PASS**
-     contrast (DSR≈1.0 @ n_obs=400 ≥ MinTRL≈56); `N_sys=1` BLdP convention; anti-correlated
-     ledger → `N_sys=K`; double-consumed-HALT single flatten; DD backstop above governor; **Carver
-     [0,1,3]** preserved (the existing 19 selection tests).
-   * OPS: the **§10 CUSUM cost-drift** fixture — full `C⁺` recursion, DEGRADE@15 / HALT@18; SPRT
-     boundaries `(+2.890,−2.251)` + ASN `(99,118)`; two-sided ARL `743→370`, `h≈4.77` (NOT ≈3.5);
-     AR(1)-Student-t realized ARL within CI of 370 only after prewhitening.
-   * REGIME: **§6.1** corr-spike `AR_t=0.750, δ_AR=+2.20, g=0.25`, gross `750→250` (NOT 62.50);
-     **§6.2** corr→vol handoff dwell continues (CLOCK); **§6.3** drifted-gross cost-gate defers.
-
-3. **Property tests.** Monotonicities the specs assert (e.g. EXECUTION Inv J: p_fill ↓, A ↑, D ↑ in
-   g; LEVERAGE Inv U: rounding only reduces risk; OPS Inv ALARM: ARL₀ ↑ with D_min; REGIME Inv
-   DSR-MONO: N_sys ↑ as ρ_cl tightens). Implemented with explicit sweeps + assertions (no hypothesis
-   dependency required).
-
-4. **Integration tests** (VM-only, nautilus installed). The `strategy/` + `*/nautilus/` adapters:
-   batch↔live parity through the real engine, restart reconciliation, stop placement. Marked
-   `@pytest.mark.nautilus` and skipped in the pillar venv.
-
-Each pillar also ships `synth/generate.py` so its tests need **no external data** — every invariant
-and worked-example fixture is driven by a seeded synthetic generator.
+Every pillar was to implement `resolve_config(defaults=...)` as the single merge point where RED
+enters; per-class overrides through a separate `AssetClassPreset`; per-instrument `InstrumentSpec`
+carrying AMBER only. This is the same RED/AMBER/BLUE/TEAL discipline §3 above restates for the live
+system — it did not change in the pivot, only which parameters live in which pillar.
