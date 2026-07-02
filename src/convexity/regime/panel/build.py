@@ -1,4 +1,4 @@
-"""Thin adapter over ``research.xsec.panel.Panel`` (REGIME.md §1 Invariant N).
+"""Thin adapter over ``convexity.panel.panel.Panel`` (REGIME.md §1 Invariant N).
 
 REGIME does NOT rebuild the panel, the signal, the portfolio construction, or the overlay mechanics
 (§1). This module is a STRICT RE-KEY of the already-built ``Panel`` fields into the daily arrays the
@@ -7,7 +7,7 @@ it does NOT recompute daily closes, funding sums, or listed masks (Invariant N: 
 ``panel/build.py``'s outputs are a strict re-key ..., not an independent recomputation").
 
 The one derived quantity here is daily SIMPLE RETURNS from the panel close, computed exactly as
-``research.xsec.overlay._daily_returns`` already does (same masking, same NaN convention) so there is
+``convexity.regime.overlay._daily_returns`` already does (same masking, same NaN convention) so there is
 ONE return convention across REGIME and the overlay it gates — not a second, subtly-different
 recomputation. We import that helper directly rather than re-deriving it (Invariant N).
 """
@@ -18,8 +18,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from research.xsec.overlay import _daily_returns
-from research.xsec.panel import Panel
+from convexity.regime.overlay import _daily_returns
+from convexity.panel.panel import Panel
 
 
 @dataclass(frozen=True)
@@ -40,7 +40,7 @@ class RegimeInputs:
 def build_regime_inputs(panel: Panel, *, market_symbol: str = "BTCUSDT") -> RegimeInputs:
     """Re-key a ``Panel`` into :class:`RegimeInputs` (REGIME.md §1 Invariant N — re-key, not recompute).
 
-    ``daily_returns`` reuses ``research.xsec.overlay._daily_returns`` verbatim (the ONE return
+    ``daily_returns`` reuses ``convexity.regime.overlay._daily_returns`` verbatim (the ONE return
     convention). ``listed``/``symbols`` are passed through by reference — no recomputation. Raises
     ``ValueError`` if the market symbol is absent (conservative under uncertainty, §0 P6: a missing
     market column is a hard error, never a silent HEALTHY default)."""

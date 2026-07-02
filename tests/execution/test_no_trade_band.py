@@ -6,8 +6,8 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from research.xsec import portfolio
-from research.xsec.execution import (
+from convexity.portfolio import portfolio
+from convexity.execution.execution import (
     CostFacts,
     ExecTarget,
     ExecutionDefaults,
@@ -16,7 +16,7 @@ from research.xsec.execution import (
     solve_trajectory,
     weight_drift_vol,
 )
-from research.xsec.panel import Panel
+from convexity.panel.panel import Panel
 
 
 def _facts(n: int, theta: np.ndarray) -> CostFacts:

@@ -25,7 +25,7 @@ import numpy as np
 
 from convexity.universe.config.defaults import DEFAULT_UNIVERSE_CONFIG, L_MAX, UniverseConfig
 from convexity.universe.eligibility.stopping_times import in_tradeable_life, tau_list
-from research.xsec.panel import Panel
+from convexity.panel.panel import Panel
 
 
 def history_warmup(cfg: UniverseConfig = DEFAULT_UNIVERSE_CONFIG) -> int:

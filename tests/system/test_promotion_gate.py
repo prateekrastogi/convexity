@@ -30,7 +30,7 @@ from convexity.system.validate.promotion_gate import (
     PromotionReport,
 )
 
-from research.xsec.validate import deflated_sharpe, weekly_defaults
+from convexity.system.xsec_validate import deflated_sharpe, weekly_defaults
 
 REGIMES_ALL_POSITIVE = {
     "2021_bull": 1.2,

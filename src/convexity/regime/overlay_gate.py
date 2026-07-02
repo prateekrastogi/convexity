@@ -22,7 +22,7 @@ from dataclasses import dataclass, replace
 
 import numpy as np
 
-from research.xsec.overlay import drawdown_stop_scale
+from convexity.regime.overlay import drawdown_stop_scale
 from convexity.regime.config.resolve import ResolvedRegimeConfig
 
 

@@ -6,7 +6,7 @@ lookahead), and a coin that delisted must be closed at its last live bar (holdin
 fabricates a return). We enforce both here, at the panel layer, so every downstream module (signals,
 portfolio, accounting) sees only legitimately-tradeable cells.
 
-Construction (pure pandas/numpy; REUSES ``research.data.load_bars`` / ``load_funding``):
+Construction (pure pandas/numpy; REUSES ``convexity.panel.data.load_bars`` / ``load_funding``):
 
   * DAILY CLOSE PANEL — resample each symbol's 1-min lake to a DAILY close (the last 1-min close of
     each UTC day). Row index = calendar days (UTC), columns = symbols. A cell is NaN before the
@@ -31,7 +31,7 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
-from research.data import load_bars, load_funding
+from convexity.panel.data import load_bars, load_funding
 
 MS_PER_DAY: int = 86_400_000
 
@@ -73,7 +73,7 @@ class Panel:
 def _daily_close(bars_ts_ms: np.ndarray, close: np.ndarray) -> pd.Series:
     """Last 1-min close of each UTC calendar day -> a day-indexed close series (no lookahead).
 
-    ``bars_ts_ms`` is the bar CLOSE epoch-ms (``research.data`` sets ts = open_time + 60_000), so the
+    ``bars_ts_ms`` is the bar CLOSE epoch-ms (``convexity.panel.data`` sets ts = open_time + 60_000), so the
     day bucket uses ``(ts - 1) // MS_PER_DAY`` — the close stamp of 00:00:00.000 the next day belongs
     to the day that just ENDED, not the day that is starting. The last close in each bucket is that
     day's daily close.
@@ -179,7 +179,7 @@ def build_class_panel(
 
     Thin sleeve-aware wrapper over ``build_panel`` (REUSES its resampler + point-in-time mask):
 
-      1. resolve the sleeve's symbol list from UNIVERSE.md (``research.xsec.universe.sleeve_symbols``),
+      1. resolve the sleeve's symbol list from UNIVERSE.md (``convexity.panel.sleeve.sleeve_symbols``),
       2. build the standard daily close + listed panels,
       3. when ``zero_funding`` (the MOMENTUM-ONLY, underlying case for equities/commodities — and crypto
          run momentum-only), overwrite the funding array with 0.0 on every LIVE cell (NaN off-span) so
@@ -191,7 +191,7 @@ def build_class_panel(
     close -> next-Fri RTH close), never a fabricated fill. Commodities are session-aware the same way
     (last live 1-min close of the UTC day). Both inherit the point-in-time listing mask unchanged.
     """
-    from research.xsec.universe import sleeve_symbols
+    from convexity.panel.sleeve import sleeve_symbols
 
     syms = sleeve_symbols(sleeve)  # type: ignore[arg-type]
     panel = build_panel(syms, lake_dir=lake_dir, funding_dir=funding_dir)

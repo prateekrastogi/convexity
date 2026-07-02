@@ -17,7 +17,7 @@ from pathlib import Path
 
 import numpy as np
 
-from research.xsec.cost.validate.corwin_schultz_reject import (
+from convexity.cost.friction.validate.corwin_schultz_reject import (
     CS_REJECT_ORDER_OF_MAGNITUDE,
     CS_REJECTED_DRAG_PCT_PER_YEAR,
     CS_REJECTED_ROUND_TRIP_BP,
@@ -183,7 +183,7 @@ def test_guard_exempts_legitimate_imports_of_its_own_api(tmp_path):
     pkg = tmp_path / "research" / "xsec"
     pkg.mkdir(parents=True)
     (pkg / "runner.py").write_text(
-        "from research.xsec.cost.validate.corwin_schultz_reject import (\n"
+        "from convexity.cost.friction.validate.corwin_schultz_reject import (\n"
         "    corwin_schultz_offenders,\n"
         "    MEASURED_ROUND_TRIP_BP,\n"
         ")\n\n"
@@ -198,7 +198,7 @@ def test_guard_exempts_module_by_name_import(tmp_path):
     pkg = tmp_path / "research" / "xsec"
     pkg.mkdir(parents=True)
     (pkg / "runner2.py").write_text(
-        "import research.xsec.cost.validate.corwin_schultz_reject as guard\n\n"
+        "import convexity.cost.friction.validate.corwin_schultz_reject as guard\n\n"
         "USE = guard.MEASURED_ROUND_TRIP_BP\n",
         encoding="utf-8",
     )

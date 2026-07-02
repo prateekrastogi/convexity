@@ -19,7 +19,7 @@ import math
 import numpy as np
 
 from convexity.universe.config.defaults import DEFAULT_UNIVERSE_CONFIG, UniverseConfig
-from research.xsec.panel import Panel, trailing_dollar_volume
+from convexity.panel.panel import Panel, trailing_dollar_volume
 
 
 def dollar_volume_at(
@@ -30,7 +30,7 @@ def dollar_volume_at(
 ) -> np.ndarray:
     """Trailing ``W``-day mean dollar volume ``DV_i(d)`` (UNIVERSE.md §2.1); REUSES panel.py.
 
-    ``dvol`` is the daily dollar-volume array from ``research.xsec.panel.build_dollar_volume`` (same
+    ``dvol`` is the daily dollar-volume array from ``convexity.panel.panel.build_dollar_volume`` (same
     dates x symbols order, NaN off-span). Thin pass-through to ``trailing_dollar_volume`` at ``cfg.W`` —
     no new liquidity notion. Returns shape ``(n_symbols,)`` float, NaN for names not live at ``d``.
     """

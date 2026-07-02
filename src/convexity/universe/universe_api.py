@@ -32,7 +32,7 @@ from convexity.universe.liquidity.ranking import liquidity_rank, top_n_universe
 from convexity.universe.shortability.liquidity_gate import ShortLiquidityThreshold, short_liquid
 from convexity.universe.shortability.venue_gate import short_permitted
 from convexity.universe.types import EligibilitySnapshot, ShortabilitySnapshot
-from research.xsec.panel import Panel
+from convexity.panel.panel import Panel
 
 
 def _snapshot_at(
@@ -110,7 +110,7 @@ def build_eligibility(
     start, reading only panel rows ``<= t``. That causal replay is exactly what makes ``U_t`` invariant to
     future-row corruption (Invariant PIT, §7) — nothing here touches a row ``> t``.
 
-    ``dvol`` -- the daily dollar-volume array (``research.xsec.panel.build_dollar_volume``); computed once
+    ``dvol`` -- the daily dollar-volume array (``convexity.panel.panel.build_dollar_volume``); computed once
                 by the caller and passed in (it is not stored on the frozen ``Panel``). If None it is left
                 to the caller to build (this function does not read the lake).
     ``rebalances`` -- the rebalance calendar up to and including ``t`` (the weekly Friday-close ordinals,
@@ -125,7 +125,7 @@ def build_eligibility(
     """
     if dvol is None:
         raise ValueError(
-            "build_eligibility needs the daily dollar-volume array (research.xsec.panel.build_dollar_volume); "
+            "build_eligibility needs the daily dollar-volume array (convexity.panel.panel.build_dollar_volume); "
             "pass dvol= explicitly (UNIVERSE.md §2.1 — this layer never reads the lake)"
         )
     if rebalances is None:

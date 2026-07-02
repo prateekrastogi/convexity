@@ -1,16 +1,16 @@
 """§9 validation deliverable: the execution-adjusted weekly series through the SAME battery
 (EXECUTION.md §9). These tests assert the reconcile layer (a) is a pure per-week transform in the
-P6-conservative direction, and (b) delegates to convexity.system.validate.{walkforward,deflated,cpcv}
-BYTE-FOR-BYTE (reused via research.xsec.{validate,cpcv}), never a new statistical test."""
+P6-conservative direction, and (b) delegates to convexity.system.xsec_validate.{walkforward,deflated,cpcv}
+BYTE-FOR-BYTE (reused via convexity.system.{validate,cpcv}), never a new statistical test."""
 
 from __future__ import annotations
 
 import numpy as np
 import pytest
 
-from research.xsec import cpcv as xsec_cpcv
-from research.xsec import validate as xsec_validate
-from research.xsec.execution import (
+from convexity.system import cpcv as xsec_cpcv
+from convexity.system import xsec_validate as xsec_validate
+from convexity.execution.execution import (
     ExecutionValidation,
     execution_adjusted_series,
     reconcile,
@@ -42,7 +42,7 @@ def test_execution_adjusted_series_is_conservative_per_week_transform():
 
 def test_reconcile_delegates_byte_for_byte_to_the_existing_battery():
     # §9: reconcile is a SECOND INPUT SERIES through the existing machinery, not a new test. Assert
-    # its outputs equal calling research.xsec.{validate.purged_walkforward, validate.deflated_sharpe,
+    # its outputs equal calling convexity.system.{validate.purged_walkforward, validate.deflated_sharpe,
     # cpcv.run_cpcv} directly on the SAME execution-adjusted series — byte-for-byte (Invariant N-exec).
     rng = np.random.default_rng(5)
     fam = _family(rng)

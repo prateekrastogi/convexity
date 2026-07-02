@@ -93,7 +93,7 @@ it rebalances cannot catch a mid-week blowup.
 **P1 — The risk unit is the WEEKLY BOOK RETURN, not a trade R-multiple.** Every
 statistic OPS monitors is built from the same object the strategy actually
 produces: the realized net-of-cost return of the whole dollar-neutral book
-over one rebalance interval (`research/xsec/accounting.py::WeekResult.net`).
+over one rebalance interval (`src/convexity/cost/accounting.py::WeekResult.net`).
 There are no per-trade stops to watch, no single-position R-multiples, no
 trade-level triple-barrier labels — a rotation out of one name into another
 inside an unchanged dollar-neutral book is a *reallocation*, not a "trade"
@@ -157,7 +157,7 @@ FACT/ESTIMATE separation, specialized: OPS is 100% FACT, 0% ESTIMATE.)
 
 **P6 — Dollar-neutrality is a live invariant, not a design aspiration.** The
 book satisfies `Σ w_long = −Σ w_short` at every rebalance by construction
-(`research/xsec/portfolio.py::quantile_weights`). Between rebalances, an
+(`src/convexity/portfolio/portfolio.py::quantile_weights`). Between rebalances, an
 **exogenous stopping time** — a delisting, a trading halt, a forced perp
 settlement — can force an unplanned exit that breaks this identity strictly
 between the planned weekly rebalances. OPS is the layer that detects the
@@ -198,7 +198,7 @@ Every symbol used below, collected in one place (each is re-defined at its
 first point of use in prose; this table is a lookup, not a substitute for
 those definitions), following the same convention as `LEVERAGE.md` §0.1 and
 `SYSTEM.md` §0.1. Week index `t`/`k` runs over Friday-close rebalances (the
-same clock `LEVERAGE.md`/`SYSTEM.md` use, `research/xsec/engine.py`); `d`
+same clock `LEVERAGE.md`/`SYSTEM.md` use, `src/convexity/portfolio/engine.py`); `d`
 without a subscript below is OPS's CUSUM reference-value symbol (§4.3), not
 a day-count.
 
@@ -364,7 +364,7 @@ detector invents its own private notion of "the book's return."
 
 | Stream | Source | Cadence | Consumed by |
 |---|---|---|---|
-| `weekly_net_return` | `research/xsec/accounting.py::WeekResult.net` (realized, post-settlement) | weekly (Friday close) | §4 CUSUM kill-switch |
+| `weekly_net_return` | `src/convexity/cost/accounting.py::WeekResult.net` (realized, post-settlement) | weekly (Friday close) | §4 CUSUM kill-switch |
 | `position_delta` | book vs exchange position snapshot (§1) | daily | §1 reconciliation |
 | `rebalance_completion_time` | realized wall-clock time the weekly rebalance's last fill settles | weekly, checked intraday during the execution window | §5 SLA monitor |
 | `realized_slippage` | EXECUTION's realized implementation-shortfall per rebalance (once EXECUTION exists; until then, COST's realized-fill TCA) | weekly | §5 SLA monitor |
@@ -393,7 +393,7 @@ tau_delist  ∈  (t_k, t_{k+1})      strictly between rebalance k and k+1
 
 where `t_k` are the scheduled Friday-close rebalance instants. This is a
 genuine edge case (not hand-waved): the strategy's book is constructed at
-`t_k` under a point-in-time `listed` mask (`research/xsec/panel.py`,
+`t_k` under a point-in-time `listed` mask (`src/convexity/panel/panel.py`,
 `accounting.py::_asset_week_return` already returns `NaN` for a name not
 `listed` at both week endpoints when computing the *backtest* P&L), but a
 **live** delisting announcement can land at any wall-clock moment inside the
@@ -540,7 +540,7 @@ the one truth (`COST.md` P1).
   fictitious clean close.
 - **A NEW listing appearing mid-week is NOT a symmetric event and requires NO
   live action.** The universe is re-evaluated point-in-time only at the next
-  scheduled rebalance (`research/xsec/panel.py`'s point-in-time `listed`
+  scheduled rebalance (`src/convexity/panel/panel.py`'s point-in-time `listed`
   mask); a name newly meeting eligibility mid-week simply enters the
   candidate set at the next Friday close. There is no "forced entry"
   analogous to forced exit — under-investing in a not-yet-held opportunity is
@@ -637,7 +637,7 @@ sigma_0  = ann_vol_0 / sqrt(52.18)                                        [DERIV
 z_k      = ( r_k − mu_0 ) / sigma_0     # standardized weekly innovation, mean 0 / var 1 under H0
 ```
 
-`PERIODS_PER_YEAR = 52.18` matches `research/xsec/metrics.py`'s own
+`PERIODS_PER_YEAR = 52.18` matches `src/convexity/system/metrics.py`'s own
 annualization constant — OPS does not introduce a second, inconsistent
 week-count.
 
@@ -1092,7 +1092,7 @@ spec — `core/params.py::Bucket`).
   discussion below.
 - **AMBER — supplied metadata.** Per-instrument `lot_size_i` (venue
   `stepSize`), the rebalance calendar/cadence source (`rebalance_days = 7`,
-  matching `research/xsec/engine.py::XSecConfig.rebalance_days`), venue
+  matching `src/convexity/portfolio/engine.py::XSecConfig.rebalance_days`), venue
   position/fill endpoints.
 - **RED — shared control constants.** `k_lot`, `k_notional` (§1.2 tolerance
   scaling), `m_warn` (§1.4), `staleness_max` (§1.4), `mu_0`'s underlying
@@ -1340,7 +1340,7 @@ unhealthy episodes, at the calibrated false-alarm rate."
 2. **Historical replay (`validate/oos.py`).** Replay the CUSUM kill-switch
    against the REAL historical `weekly_net_return` series the strategy's own
    validation produced (the `N=8`-group, `k_test=2`, 28-path CPCV
-   construction of `research/xsec/cpcv.py` / `SystemCPCV`, `n_obs ≈ 258`
+   construction of `src/convexity/system/cpcv.py` / `SystemCPCV`, `n_obs ≈ 258`
    weeks (~5 years), `SYSTEM.md` §4.2) and report: did the monitor fire on
    any of the genuinely bad historical stretches (2022 bear incl. LUNA/FTX,
    `docs/EDGE.md` §c's per-regime breakdown), and did it stay quiet through
@@ -1560,7 +1560,7 @@ unhealthy episodes, at the calibrated false-alarm rate."
   discussed in §4.3.
 - López de Prado, M. (2018). *Advances in Financial Machine Learning*. Wiley.
   — combinatorial purged cross-validation and the PBO (probability of
-  backtest overfitting) estimator (`research/xsec/cpcv.py`), whose historical
+  backtest overfitting) estimator (`src/convexity/system/cpcv.py`), whose historical
   OOS paths §11.2's replay reuses.
 - Kunsch, H. R. (1989). "The Jackknife and the Bootstrap for General
   Stationary Observations." *Annals of Statistics*, 17(3), 1217–1241. —
@@ -1571,7 +1571,7 @@ unhealthy episodes, at the calibrated false-alarm rate."
 - Bailey, D. H., Borwein, J., López de Prado, M., & Zhu, Q. J. (2014). "The
   Probability of Backtest Overfitting." *Journal of Computational Finance*.
   — the combinatorially symmetric cross-validation (CSCV) procedure and the
-  PBO logit-of-relative-rank statistic (`research/xsec/cpcv.py::compute_pbo`,
+  PBO logit-of-relative-rank statistic (`src/convexity/system/cpcv.py::compute_pbo`,
   `SYSTEM.md` §4.4), cited here (§4.3) only to justify the conservatism of
   `delta_target = 1.0`; OPS does not compute or re-derive PBO itself.
 - `docs/EDGE.md` — the empirical baseline this spec's honest-Sharpe / vol /

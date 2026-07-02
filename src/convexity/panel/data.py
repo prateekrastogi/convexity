@@ -6,7 +6,7 @@ the breakout/trend pillars consume, and a wall-clock funding schedule.
 
 The lake spans three sleeves (crypto perps, Dukascopy equity underlyings, Dukascopy commodity
 underlyings) under one ``{SYMBOL}USDT.parquet`` naming; the sleeve is resolved per symbol in
-``research.assetclass``. FUNDING is sleeve-specific (``load_funding``): crypto reads its native
+``convexity.panel.assetclass``. FUNDING is sleeve-specific (``load_funding``): crypto reads its native
 ``data/funding/{SYMBOL}.parquet``; equities/commodities have NO native funding, so a constant synthetic
 schedule at the ASSUMED perp rate is built over the bar span (the user trades them as perps/CFDs).
 
@@ -74,7 +74,7 @@ def instrument_spec(symbol: str, funding_interval_hours: int = 8) -> InstrumentS
     ``gap_before``/``is_session_open``, which the pillars read directly) but tag the correct
     ``asset_class`` so any class-aware pillar behaviour (gap-survival sigmas etc.) resolves right.
     """
-    from research.assetclass import asset_class_of
+    from convexity.panel.assetclass import asset_class_of
 
     return InstrumentSpec(
         symbol=symbol,
@@ -137,7 +137,7 @@ def load_funding(
       is built every 8h across the bar span (``bars`` required for the span). Same accrual mechanism
       as crypto, just a flat rate — this is the funding HEADWIND the non-crypto sleeves must clear.
     """
-    from research.assetclass import uses_native_funding
+    from convexity.panel.assetclass import uses_native_funding
 
     if uses_native_funding(symbol):
         path = pathlib.Path(funding_dir) / f"{symbol}.parquet"

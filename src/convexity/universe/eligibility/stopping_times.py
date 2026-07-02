@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from research.xsec.panel import Panel
+from convexity.panel.panel import Panel
 
 DELIST_NEVER: int = 2**62  # sentinel for tau_delist = +inf (never observed to delist), §1.2
 

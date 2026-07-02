@@ -62,9 +62,10 @@ MEASURED_ROUND_TRIP_BP: float = 13.0  # 2*(5 + 1 + 0.5)bp, research/xsec/account
 # check), never that it hits 135bp to the bp — the spec itself only claims order-of-magnitude ("~135bp").
 CS_REJECT_ORDER_OF_MAGNITUDE: float = 10.0
 
-# Source roots forming the cost path (repo-relative): the xsec research engine + the src cost
-# pillar. Tests are scanned too — a test EXERCISING Corwin-Schultz would itself be a reintroduction.
-COST_PATH_ROOTS: tuple[str, ...] = ("research/xsec", "src/convexity/cost")
+# Source roots forming the cost path (repo-relative): the cross-sectional engine + cost pillar,
+# now all promoted under src/convexity (research/xsec retained so a pre-promotion reintroduction is
+# still caught). Tests are scanned too — a test EXERCISING Corwin-Schultz would itself be a reintro.
+COST_PATH_ROOTS: tuple[str, ...] = ("research/xsec", "src/convexity")
 
 _FORBIDDEN_TOKENS: tuple[str, ...] = ("corwin", "schultz")
 _EXEMPT_FILENAME: str = "corwin_schultz_reject.py"  # this guard module names the dead end itself
@@ -177,7 +178,7 @@ def corwin_schultz_round_trip_bp(
 def _imports_the_guard_module(node: ast.Import | ast.ImportFrom) -> bool:
     """True iff ``node`` is an import statement targeting the guard module itself.
 
-    Importing the guard's OWN public API — e.g. ``from research.xsec.cost.validate.
+    Importing the guard's OWN public API — e.g. ``from convexity.cost.friction.validate.
     corwin_schultz_reject import corwin_schultz_offenders`` — is a legitimate use of the standing
     regression test (baselines/stats/a promotion runner may consume it), NOT a reintroduction of the
     Corwin-Schultz estimator. Its module path (``...corwin_schultz_reject``) and its imported names

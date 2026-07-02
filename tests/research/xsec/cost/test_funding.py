@@ -11,7 +11,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from research.xsec.accounting import settle_week
+from convexity.cost.accounting import settle_week
 
 
 def _flat_panel(n_days: int, n_sym: int):

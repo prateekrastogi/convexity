@@ -25,7 +25,7 @@ import numpy as np
 
 from convexity.system.validate.robustness import block_bootstrap_ci
 
-from research.xsec.metrics import PERIODS_PER_YEAR, compute
+from convexity.system.metrics import PERIODS_PER_YEAR, compute
 
 # Default moving-block bootstrap knobs (COST.md Section 6.4 / SYSTEM Section 8.1). ``block_length``
 # >= the weekly vol-clustering scale. 6 weeks is SYSTEM Section 7.4's retained committed default:

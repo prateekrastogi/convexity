@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import numpy as np
 
-from research.xsec import metrics
-from research.xsec.validate import deflated_sharpe, purged_walkforward, weekly_defaults
+from convexity.system import metrics
+from convexity.system.xsec_validate import deflated_sharpe, purged_walkforward, weekly_defaults
 
 
 def test_weekly_metrics_sharpe_sign_and_attribution():

@@ -30,9 +30,9 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from research.xsec.cpcv import path_distribution
-from research.xsec.engine import XSecConfig, XSecResult, run
-from research.xsec.metrics import compute
+from convexity.system.cpcv import path_distribution
+from convexity.portfolio.engine import XSecConfig, XSecResult, run
+from convexity.system.metrics import compute
 
 # ---------------------------------------------------------------------------------------------
 # RED shared economic constants (COST.md Section 4, Section 8.1-8.2). Shared verbatim with

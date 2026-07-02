@@ -26,7 +26,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from research.xsec.cost.spread_impact import SpreadImpactModel, _median_positive, amihud_ratio
+from convexity.cost.friction.spread_impact import SpreadImpactModel, _median_positive, amihud_ratio
 
 
 @dataclass(frozen=True)

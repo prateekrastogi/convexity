@@ -13,7 +13,7 @@ import pytest
 
 from convexity.cost.config.fee_schedule import BINANCE_USDM_FEE_SCHEDULE
 
-from research.xsec.accounting import (
+from convexity.cost.accounting import (
     HALF_SPREAD_FRAC,
     IMPACT_FRAC,
     round_trip_friction,

@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import numpy as np
 
-from research.xsec.engine import XSecConfig, run, run_book
-from research.xsec.overlay import (
+from convexity.portfolio.engine import XSecConfig, run, run_book
+from convexity.regime.overlay import (
     apply_scale,
     beta_hedge_returns,
     drawdown_stop_scale,
@@ -46,7 +46,7 @@ def test_run_book_aggregate_matches_run(simple_panel):
 
 def test_trailing_beta_recovers_known_beta():
     panel = _btc_panel()
-    from research.xsec.overlay import _daily_returns
+    from convexity.regime.overlay import _daily_returns
 
     daily = _daily_returns(panel)
     mkt = daily[:, 0]

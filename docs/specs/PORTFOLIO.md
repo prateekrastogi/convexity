@@ -18,7 +18,7 @@ liquid USDT-M perps (`docs/EDGE.md` §(b)). The risk unit is now **next week's
 portfolio return** — a vector of simultaneous positions held over a fixed
 horizon, not a single trade's excursion to a stop or target. PORTFOLIO is the
 pillar that turns a cross-sectional **signal rank** (already computed upstream —
-`research/xsec/signals.py`) into a **dollar-neutral weight vector**, and it is the
+`src/convexity/signal/signals.py`) into a **dollar-neutral weight vector**, and it is the
 one pillar in the new system with **no directional predecessor**: nothing in the
 old BREAKOUT/TREND/LEVERAGE stack answers "how many names, which quantile, how
 much weight per name" for a simultaneous multi-asset book. This spec formalizes
@@ -27,7 +27,7 @@ that construction from first principles.
 Scope of this document: rank → quantile bucketing → within-leg weighting →
 dollar-neutral aggregation → turnover, at weekly (Friday-close) cadence. It does
 **not** re-derive the signal (SIGNAL, upstream of this pillar, already computed
-as `research/xsec/signals.py::momentum_signal` / `carry_signal` /
+as `src/convexity/signal/signals.py::momentum_signal` / `carry_signal` /
 `combined_signal`), and it does **not** re-derive round-trip friction pricing
 (COST.md owns fee/spread/impact structure; this spec only connects PORTFOLIO's
 turnover definition to COST's per-unit friction, salvaged verbatim below).
@@ -61,7 +61,7 @@ P&L over `[t, t+1)` is the sum of `N_t` simultaneous position returns, not one
 position's path to a barrier. Any invariant, formula, or acceptance gate written
 in terms of "the trade" is out of scope for PORTFOLIO; the analogous quantity
 here is "the week's realized book return" (COST.md's `WeekResult.net`,
-`research/xsec/accounting.py`).
+`src/convexity/cost/accounting.py`).
 
 **P2 — Rank in, dollar-neutral weight out; PORTFOLIO is a provider, never a
 forecaster.** PORTFOLIO consumes a cross-sectional rank vector
@@ -92,7 +92,7 @@ doctrine already declared in `pyproject.toml` ("scipy: closed-form (NOT ML)").
 
 **P5 — Liquidity-capped weighting is a TESTED AND REJECTED default; capacity dial
 only.** A liquidity-share cap on within-leg weight was implemented
-(`research/xsec/portfolio.py::liquidity_weights`, scheme `liqcap_volscaled`) and
+(`src/convexity/portfolio/portfolio.py::liquidity_weights`, scheme `liqcap_volscaled`) and
 evaluated. It does not beat plain inverse-vol weighting net of cost, and it
 provably **reduces** effective breadth in this specific market structure (§5).
 It is retained in code as a capacity dial, gated on book size, never as the
@@ -114,7 +114,7 @@ for why `L=13`/`L=15` are excluded.
 turnover as a pure geometric quantity — `0.5 * sum_i |w_new_i − w_carried_i|` —
 and hands it to COST's `round_trip_friction()` for pricing. PORTFOLIO owns the
 turnover **definition** (including the weight-drift mechanics, salvaged from
-`research/xsec/accounting.py::settle_week`, §7); COST owns the friction **rate**.
+`src/convexity/cost/accounting.py::settle_week`, §7); COST owns the friction **rate**.
 
 Forbidden in v1: any full covariance-matrix (Markowitz/Σ⁻¹μ) optimizer fitted at
 runtime (P4); liquidity-capped weighting as a default scheme (P5); deploying a
@@ -135,7 +135,7 @@ Every symbol used below, collected in one place (each is re-defined at its
 first point of use in prose; this table is a lookup, not a substitute for
 those definitions), mirroring `LEVERAGE.md` §0.1 / `SYSTEM.md` §0.1's format.
 Week index `t` runs over Friday-close rebalances, the same clock
-SIGNAL/LEVERAGE/SYSTEM use (`research/xsec/engine.py`).
+SIGNAL/LEVERAGE/SYSTEM use (`src/convexity/portfolio/engine.py`).
 
 | Symbol | Meaning | Bucket | Owning section |
 |---|---|---|---|
@@ -176,16 +176,16 @@ them:
 
 | Sibling owns (do NOT rebuild)                                  | PORTFOLIO consumes it as                       |
 |------------------------------------------------------------------|-------------------------------------------------|
-| Point-in-time eligible universe `U_t`, listing/delisting mask     | `Panel.listed` (`research/xsec/panel.py`)       |
-| Cross-sectional signal rank `rank_t ∈ [0,1]`                      | `momentum_signal` / `carry_signal` / `combined_signal` (`research/xsec/signals.py`) |
-| Round-trip friction rate (fee + half-spread + impact, per leg)    | `round_trip_friction()` (`research/xsec/accounting.py`, backed by COST's `BINANCE_USDM_FEE_SCHEDULE`) |
-| Signed funding cash-flow accrual                                  | `_week_funding` (`research/xsec/accounting.py`) |
-| Realized-vol estimator infrastructure (EWMA / trailing-std)       | `realized_vol` (`research/xsec/portfolio.py`) — PORTFOLIO's own estimator, but the closed-form doctrine is shared with COST/SYSTEM |
+| Point-in-time eligible universe `U_t`, listing/delisting mask     | `Panel.listed` (`src/convexity/panel/panel.py`)       |
+| Cross-sectional signal rank `rank_t ∈ [0,1]`                      | `momentum_signal` / `carry_signal` / `combined_signal` (`src/convexity/signal/signals.py`) |
+| Round-trip friction rate (fee + half-spread + impact, per leg)    | `round_trip_friction()` (`src/convexity/cost/accounting.py`, backed by COST's `BINANCE_USDM_FEE_SCHEDULE`) |
+| Signed funding cash-flow accrual                                  | `_week_funding` (`src/convexity/cost/accounting.py`) |
+| Realized-vol estimator infrastructure (EWMA / trailing-std)       | `realized_vol` (`src/convexity/portfolio/portfolio.py`) — PORTFOLIO's own estimator, but the closed-form doctrine is shared with COST/SYSTEM |
 | DSR / CPCV / purged walk-forward machinery                        | `convexity.system.validate.{deflated,cpcv,walkforward}` reused by `research/xsec/{validate,cpcv}.py` |
 
 > **Invariant N-port — no re-derivation of sibling math.** PORTFOLIO does not
 > compute a momentum or carry signal (that is SIGNAL's job, already implemented
-> in `research/xsec/signals.py`), does not compute a friction rate in bps (that
+> in `src/convexity/signal/signals.py`), does not compute a friction rate in bps (that
 > is COST's job), and does not implement its own DSR/CPCV estimator (that is
 > SYSTEM's job, reused via `research/xsec/{validate,cpcv}.py`). A test asserts
 > PORTFOLIO's turnover-cost number equals `turnover * round_trip_friction()`
@@ -199,14 +199,14 @@ them:
 ### 2.1 Notation and information set
 
 Fix a weekly rebalance grid `t = 0, 1, 2, …, T-1` (Friday UTC close to Friday UTC
-close, `research/xsec/engine.py::_first_friday_index`). Let `F_t` be the
+close, `src/convexity/portfolio/engine.py::_first_friday_index`). Let `F_t` be the
 filtration (information set) generated by all daily closes, funding stamps, and
 listing/delisting events up to and including day `t`'s close. Every quantity
 PORTFOLIO computes at `t` — the rank `rank_t`, the vol estimate `σ̂_{i,t}`, the
 weight `w_t` — must be `F_t`-measurable: a function of information known **at**
 `t`'s close, never of any row after `t`. This is enforced structurally in
-`research/xsec/panel.py` (the `listed` point-in-time mask) and
-`research/xsec/signals.py` (every signal window ends at `d - skip ≤ d`).
+`src/convexity/panel/panel.py` (the `listed` point-in-time mask) and
+`src/convexity/signal/signals.py` (every signal window ends at `d - skip ≤ d`).
 
 Let `U_t ⊆ {1, …, N}` be the point-in-time eligible universe at `t` (names live
 and with enough trailing history for the signal), `|U_t| = m_t`. Let
@@ -227,7 +227,7 @@ R_t = sum_i w_{i,t} * r_{i,t}            (price P&L, dollar-neutral)
     - Turnover_t * c_rt                  (turnover friction, §7)
 ```
 
-(`research/xsec/accounting.py::settle_week`, `WeekResult.net`.) This is the
+(`src/convexity/cost/accounting.py::settle_week`, `WeekResult.net`.) This is the
 direct replacement for the old system's per-trade R: **one observation is one
 week's simultaneous multi-name outcome**, not one instrument's excursion to a
 stop/target. `R_t` is realized at `t+1`'s close and is therefore `F_{t+1}`-
@@ -339,7 +339,7 @@ the formal justification for **P3**.
 > code-level contract, not only a derivation.** A regression fixture must
 > replay one committed weekly-return path `{Y_t}` (§2.3's fixed-shape
 > object) at two distinct gross levels `G_1 ≠ G_2` (e.g. `G_1=1.0`,
-> `G_2=1.5`) through `research/xsec/metrics.py`'s Sharpe computation and
+> `G_2=1.5`) through `src/convexity/system/metrics.py`'s Sharpe computation and
 > assert the two annualized Sharpe ratios agree to within floating-point
 > tolerance (`abs(Sharpe(G_1) - Sharpe(G_2)) < 1e-9`, the tolerance
 > reflecting pure floating-point rounding in the `G_t·Y_t` scaling, not a
@@ -398,7 +398,7 @@ assignment left implicit.
     worked derivation below for why `q=0.2` rather than a finer/coarser
     fraction.
   - The realized-vol window `window = 28` days (§4.2,
-    `research/xsec/portfolio.py::realized_vol`'s default) — one estimator
+    `src/convexity/portfolio/portfolio.py::realized_vol`'s default) — one estimator
     window for every name's `σ̂_{i,t}`, not tuned per-instrument.
   - The liquidity-cap tightness dial `C ∈ {2, 3}` (§5.1) — **ownership note**:
     `C` is the same symbol LEVERAGE's own capacity ceiling uses for its
@@ -425,7 +425,7 @@ assignment left implicit.
     into SYSTEM's trial ledger exactly as `ARCHITECTURE.md` §3 requires for
     every BLUE grid in the system.
   - The quantile granularity choice itself, `quantile ∈ {"quintile",
-    "tercile"}` (`research/xsec/portfolio.py::Quantile`) is the finite,
+    "tercile"}` (`src/convexity/portfolio/portfolio.py::Quantile`) is the finite,
     pre-declared alternative set `q=0.2` was validated against (§4.1) — a
     two-point BLUE grid, not a continuously-tunable dial; no other quantile
     granularity is implemented or v1-deployable.
@@ -446,7 +446,7 @@ assignment left implicit.
 > (inherited verbatim from COST/SYSTEM/LEVERAGE's own Invariant C). `q`,
 > `window`, `C`, and reference `G` enter `quantile_weights`/
 > `liquidity_weights` only via `resolve_config(defaults=...)` or an explicit
-> keyword default on the function signature itself (`research/xsec/portfolio.py`)
+> keyword default on the function signature itself (`src/convexity/portfolio/portfolio.py`)
 > — never as a per-symbol override threaded through `Panel` or `InstrumentSpec`.
 > If any of these four appears keyed by instrument, that is the bug.
 
@@ -459,14 +459,14 @@ assignment left implicit.
 At rebalance `t`, let `m_t = |U_t|` and let `rank_{(1),t} ≤ rank_{(2),t} ≤ … ≤
 rank_{(m_t),t}` be the order statistics of `{rank_{i,t} : i ∈ U_t}`. Fix a
 quantile fraction `q = 0.2` (quintile — validated choice vs. tercile,
-`research/xsec/portfolio.py` docstring; `docs/EDGE.md` §(b) confirms quintile
+`src/convexity/portfolio/portfolio.py` docstring; `docs/EDGE.md` §(b) confirms quintile
 over tercile net of cost). Define the per-leg name count
 
 ```
 k_t = min( floor(q * m_t) ∨ 1,  floor(m_t / 2) )
 ```
 
-(`research/xsec/portfolio.py::_leg_count`) — floored at 1 so a small early
+(`src/convexity/portfolio/portfolio.py::_leg_count`) — floored at 1 so a small early
 universe still forms a book, and capped at `floor(m_t/2)` so the two legs never
 overlap. The **short leg** is `S_t = { i ∈ U_t : rank_{i,t} ≤ rank_{(k_t),t} }`
 (bottom-`k_t` by rank) and the **long leg** is
@@ -475,7 +475,7 @@ Names strictly between the two cutoffs are flat (`w_{i,t} = 0`). If `m_t < 2` no
 book can form (`k_t = 0`, all-flat) — see Invariant E1 (§11).
 
 **Why order statistics, not a fixed absolute rank threshold.** The rank
-`rank_{i,t}` is already a percentile (`_pct_rank`, `research/xsec/signals.py`),
+`rank_{i,t}` is already a percentile (`_pct_rank`, `src/convexity/signal/signals.py`),
 so the `q`-quantile cutoff via order statistics is automatically adaptive to
 `m_t`: at `m_t = 50` this is 10 names/leg, at `m_t = 60` it is 12 names/leg — the
 selection rule scales with the live universe without any re-calibration, which
@@ -547,13 +547,13 @@ tradeoff, a tercile (`q=1/3`) closer to the diluted end, and a quintile
 (`q=0.2`) is the interior point roughly equidistant between them on a log
 scale (`log(0.1), log(0.2), log(1/3)` are approximately evenly spaced) —
 consistent with, but not a proof of, why the tested optimum (§4.1's opening
-citation: quintile beats tercile net of cost, `research/xsec/portfolio.py`
+citation: quintile beats tercile net of cost, `src/convexity/portfolio/portfolio.py`
 docstring, `docs/EDGE.md` §(b)) lands where it does rather than at the
 tested tercile boundary. **This derivation motivates why a quintile is a
 priori a reasonable interior candidate, not a guarantee that `q=0.2`
 exactly maximizes the tradeoff** — the actual optimum among the two GRID
 POINTS this repo tests (quintile, tercile; §3's BLUE grid: no decile point
-is implemented or tested, `research/xsec/portfolio.py::Quantile`) is, and
+is implemented or tested, `src/convexity/portfolio/portfolio.py::Quantile`) is, and
 remains, the cited empirical CPCV/net-of-cost result, not a closed-form
 solution to the tradeoff above — the two effects are not quantified into a
 single closed-form objective in this spec (that would require assuming a
@@ -575,7 +575,7 @@ w_{i,t} = sign(leg) * (G/2) * (1/σ̂_{i,t}) / sum_{j ∈ leg} (1/σ̂_{j,t})
 ```
 
 where `σ̂_{i,t}` is the trailing sample standard deviation of daily simple
-returns over a `[t-28, t]`-day window (`research/xsec/portfolio.py::realized_vol`,
+returns over a `[t-28, t]`-day window (`src/convexity/portfolio/portfolio.py::realized_vol`,
 default `window=28`), an unweighted (flat) trailing estimator — a special case
 of an EWMA with weight concentrated uniformly over the last 28 observations.
 Names with no finite `σ̂` (insufficient trailing history) fall back to the
@@ -676,7 +676,7 @@ sum_i w_{i,t} = 0                    (dollar-neutral)
 sum_i |w_{i,t}| = G                  (gross exposure exactly G)
 ```
 
-This holds by construction: `_leg()` in `research/xsec/portfolio.py` normalizes
+This holds by construction: `_leg()` in `src/convexity/portfolio/portfolio.py` normalizes
 each leg's inverse-vol magnitudes to sum to exactly `±G/2` before assignment,
 so the constraint is an algebraic identity of the implementation, not a
 post-hoc check. Reference gross is `G = 1.0` (100% gross = 50% long + 50%
@@ -691,7 +691,7 @@ scales ~linearly with gross/leverage" — EVIDENCE digest).
 
 ### 5.1 The scheme that was tested
 
-`research/xsec/portfolio.py::liquidity_weights` (scheme `liqcap_volscaled`)
+`src/convexity/portfolio/portfolio.py::liquidity_weights` (scheme `liqcap_volscaled`)
 starts from the same inverse-vol base magnitude as §4.2, then caps each name's
 share of its leg at `C` times its **dollar-volume share of the leg**:
 
@@ -737,7 +737,7 @@ liquidity constraint's naive intent.
 
 Effective breadth is measured as the inverse Herfindahl-Hirschman index on
 per-name total absolute contribution to book P&L
-(`research/assetclass.py::effective_breadth`):
+(`src/convexity/panel/assetclass.py::effective_breadth`):
 
 ```
 breadth = 1 / sum_i w̄_i²,     w̄_i = |contrib_i| / sum_j |contrib_j|
@@ -762,7 +762,7 @@ lunch and not a pure loss either.
 > **Invariant L — liquidity capping is a capacity dial, never a default.**
 > `weighting="volscaled"` (plain inverse-vol, §4.2) is the default and the one
 > used for every headline number in this spec. `liqcap_volscaled` /
-> `liqtilt` / `eqcap` (`research/xsec/portfolio.py::Weighting`,
+> `liqtilt` / `eqcap` (`src/convexity/portfolio/portfolio.py::Weighting`,
 > `liquidity_weights`) are gated behind an explicit book-size threshold
 > (deploy only once AUM approaches the uncapped ~$3M capacity ceiling) and
 > must always be reported alongside the Sharpe cost they buy. A promotion
@@ -775,15 +775,15 @@ lunch and not a pure loss either.
 
 ### 6.1 Why a single fitted `L` is partly overfit
 
-The momentum signal (`research/xsec/signals.py::momentum_signal`) is
+The momentum signal (`src/convexity/signal/signals.py::momentum_signal`) is
 parameterized by a lookback `L` (trading days). A grid search over `L` finds a
 sharp peak at `L = 14`. CPCV (López de Prado combinatorial purged
 cross-validation, `N=8` groups, `k=2` test-groups per split, `C(8,2) = 28`
-paths, 1-week embargo, `research/xsec/cpcv.py::run_cpcv`) evaluates whether
+paths, 1-week embargo, `src/convexity/system/cpcv.py::run_cpcv`) evaluates whether
 that peak is a genuine signal or a partition-dependent artifact via the
 probability-of-backtest-overfitting (PBO) statistic (Bailey, Borwein, Salehipour
 & López de Prado, 2014 — logit-of-relative-rank estimator,
-`research/xsec/cpcv.py::compute_pbo`): for each of the 28 splits, pick the
+`src/convexity/system/cpcv.py::compute_pbo`): for each of the 28 splits, pick the
 config with the best **in-sample** Sharpe on the embargo-purged train
 complement, find *that* config's **out-of-sample** relative rank among the
 family on the held-out test blocks, map the rank to a logit
@@ -882,7 +882,7 @@ robustness, only interpolated arithmetic.
 ### 7.1 Weekly cadence, Friday close
 
 Rebalance day `t` snaps to the first Friday at/after the signal's warmup
-window, then steps 7 calendar days (`research/xsec/engine.py::_first_friday_index`,
+window, then steps 7 calendar days (`src/convexity/portfolio/engine.py::_first_friday_index`,
 `run`). Every hold period is Friday-close to Friday-close. This cadence is a
 direct, load-bearing input to the friction economics: paying the round-trip
 cost **52 times a year** (not thousands, as the old 1-minute directional
@@ -893,7 +893,7 @@ friction is paid ~52×/yr, not thousands of times — so it barely bites.").
 > **Invariant CADENCE-52 — the rebalance step is exactly 7 calendar days,
 > never a variable or data-dependent step.** `_first_friday_index` sets the
 > FIRST rebalance; every subsequent rebalance is exactly `+7` calendar days
-> from the previous one (`research/xsec/engine.py::run`), regardless of
+> from the previous one (`src/convexity/portfolio/engine.py::run`), regardless of
 > whether the intervening week contained a delisting, a data gap, or a
 > holiday-adjacent low-volume period. A test asserts the full `dates`
 > array of a multi-year `XSecResult` has a constant `7`-calendar-day
@@ -916,7 +916,7 @@ Turnover_t = 0.5 * sum_i | w_{new,i,t} - w_{carried,i,t} |
 `w_{new,i,t}` is this rebalance's target weight (§4–§6). `w_{carried,i,t}` is
 **not** simply last period's target weight — it is that weight **drifted
 forward by the realized return over the just-elapsed week**
-(`research/xsec/accounting.py::settle_week`):
+(`src/convexity/cost/accounting.py::settle_week`):
 
 ```
 w_{carried,i,t} = w_{new,i,t-1} * (1 + r_{i,t-1})     if i was live at both t-1 and t
@@ -949,7 +949,7 @@ Cost_t = Turnover_t * c_rt,       c_rt = round_trip_friction(taker, half_spread,
                                         = 2 * (taker + half_spread + impact)
 ```
 
-(`research/xsec/accounting.py::round_trip_friction`, backed by COST's
+(`src/convexity/cost/accounting.py::round_trip_friction`, backed by COST's
 `BINANCE_USDM_FEE_SCHEDULE` for the taker leg). The factor of 2 is because a
 unit of turnover is a **round trip** (enter one side, and the accounting
 convention already nets the exit of the other) — priced on both legs. The
@@ -1219,7 +1219,7 @@ the same discipline `panel.py`'s point-in-time mask enforces going into a
 listing).
 
 **E4 — all names in a leg share the same rank (a tie at the quantile
-boundary).** `_pct_rank`'s average-rank convention (`research/xsec/signals.py`)
+boundary).** `_pct_rank`'s average-rank convention (`src/convexity/signal/signals.py`)
 assigns tied raw scores the same percentile, so a tie exactly at the `q`-
 quantile boundary is broken by `argsort`'s stable (mergesort) tie-order,
 which is deterministic but not economically meaningful at the margin — this
@@ -1229,7 +1229,7 @@ probability event for real-valued trailing returns).
 
 **E5 — `L` band member has insufficient warmup at the very start of the
 panel.** Each `w_t^{(L)}` in the ensemble (§6.2) has its own warmup
-(`lookback + skip + rebalance_days`, `research/xsec/engine.py::run`). Since
+(`lookback + skip + rebalance_days`, `src/convexity/portfolio/engine.py::run`). Since
 `𝓛 = {12, 14, 16}` are close in magnitude, all three warm up within days of
 each other; the ensemble average (§6.2) is only computed from the first
 rebalance at which **all** three members are warm (the max over the band),
@@ -1248,7 +1248,7 @@ vol-scaled shape.
 §4–§6 are written for the momentum band, but the quantile-bucketing and
 inverse-vol weighting machinery (§4) is signal-agnostic — it operates on
 whatever `rank_t` it is handed. If `carry_signal` or `combined_signal`
-(`research/xsec/signals.py`) is substituted, §4's construction is unchanged,
+(`src/convexity/signal/signals.py`) is substituted, §4's construction is unchanged,
 but §6's PBO/band argument is specific to the momentum lookback family and
 does **not** transfer to a carry lookback without its own CPCV re-run; and per
 `docs/EDGE.md` §(a)/(d) ("~70% structural drawdown... income overlay at
@@ -1265,7 +1265,7 @@ index set `{1,…,N}` at the same `t` — i.e. all three `L`-configs must be run
 against the identical panel and the identical point-in-time universe `U_t`
 (UNIVERSE's output, §1), differing only in the signal's lookback window, never
 in which names are eligible. The per-`L` driver that exists today,
-`research/xsec/engine.py::run(panel, cfg)`, already makes this safe **by
+`src/convexity/portfolio/engine.py::run(panel, cfg)`, already makes this safe **by
 construction for a single `L`**: it takes one `Panel` object (one `U_t`
 sequence, one `n_symbols`) as a parameter rather than building it internally,
 so the natural way to run the ensemble is to construct one `Panel` once and
@@ -1319,7 +1319,7 @@ src/convexity/
   system/validate/{deflated,cpcv,walkforward}.py   # SYSTEM pillar: DSR/CPCV/walk-forward reused by research/xsec/{validate,cpcv}.py
 ```
 
-PORTFOLIO's own logic is `research/xsec/portfolio.py` (quantile bucketing +
+PORTFOLIO's own logic is `src/convexity/portfolio/portfolio.py` (quantile bucketing +
 within-leg weighting, §4–§5) plus the turnover half of `accounting.py` (§7);
 the remaining files above are the sibling pillars it composes with, listed
 for orientation, not because this spec governs them.
@@ -1338,13 +1338,13 @@ the composition graph from eight separate spec files.
 ## 13. Module acceptance gates (CI)
 
 Mirroring `LEVERAGE.md` §10's per-file "Pass when: ..." contract. The first
-two gates cover code that **already exists** in `research/xsec/portfolio.py`
+two gates cover code that **already exists** in `src/convexity/portfolio/portfolio.py`
 (§4–§5 of this spec); the third gate is a **specification artifact** for the
 §6.2 ensemble-averaging driver that, per Invariant E-align (§11, E8), **does
 not exist yet** — its signature, file path, and test are a build contract a
 future implementer must satisfy, not a description of running code.
 
-### Quantile + within-leg weighting (`research/xsec/portfolio.py::quantile_weights`) — EXISTING
+### Quantile + within-leg weighting (`src/convexity/portfolio/portfolio.py::quantile_weights`) — EXISTING
 Pass when: `quantile_weights(rank, *, quantile, weighting, gross=1.0,
 vol=None)` returns a vector satisfying the dollar-neutrality identity
 exactly (§4.3: long leg sums to `+gross/2`, short leg to `-gross/2`, `sum_i
@@ -1357,7 +1357,7 @@ default, not merely a caller convention; a name with non-finite `vol` falls
 back to the leg's mean inverse-vol (E2, §11), verified by a fixture with at
 least one `NaN`-vol name per leg.
 
-### Liquidity-capped weighting (`research/xsec/portfolio.py::liquidity_weights`) — EXISTING
+### Liquidity-capped weighting (`src/convexity/portfolio/portfolio.py::liquidity_weights`) — EXISTING
 Pass when: `C = ∞` (or the caller's sentinel for "no cap") reproduces
 `quantile_weights`'s `volscaled` output bit-for-bit (§5.1's nesting claim,
 a regression fixture, not just a prose assertion); the measured effective-
@@ -1368,17 +1368,17 @@ default (Invariant L) — a static check asserts no call site sets
 `weighting="liqcap_volscaled"` without an explicit, logged AUM-threshold
 justification string.
 
-### Ensemble-averaging driver (`research/xsec/engine.py::run_ensemble`) — SPECIFICATION, NOT YET BUILT
+### Ensemble-averaging driver (`src/convexity/portfolio/engine.py::run_ensemble`) — SPECIFICATION, NOT YET BUILT
 **Status: this function does not exist in `research/xsec/` as of this spec
 (Invariant E-align, §11, E8).** The signature, file path, and test below are
 PORTFOLIO's build contract for a future implementer — they are written with
 the same type-annotation style as the real, existing `run(panel, cfg) ->
-XSecResult` in `research/xsec/engine.py` (verified against that file's
+XSecResult` in `src/convexity/portfolio/engine.py` (verified against that file's
 current contents) so the contract is drop-in compatible with the module it
 extends, not a hypothetical API invented independently of the real code.
 
 ```python
-# research/xsec/engine.py  (proposed addition — does not exist yet)
+# src/convexity/portfolio/engine.py  (proposed addition — does not exist yet)
 
 def run_ensemble(panel: Panel, cfgs: list[XSecConfig]) -> XSecResult:
     """Average the dollar-neutral weight vectors of |cfgs| independently-run configs (§6.2).
@@ -1423,11 +1423,11 @@ a parallel reimplementation with its own drift risk.
 ## 14. Non-goals (belong to sibling modules)
 
 - **The rank itself** — momentum/carry/combined signal computation is
-  SIGNAL's responsibility (`research/xsec/signals.py`); PORTFOLIO consumes
+  SIGNAL's responsibility (`src/convexity/signal/signals.py`); PORTFOLIO consumes
   `rank_t` as given (P2, Invariant N-port).
 - **The point-in-time eligible universe `U_t`** — listing/delisting,
   shortability, and the target universe size `N` are UNIVERSE's
-  responsibility (`research/xsec/panel.py`, `research/universe.py`); PORTFOLIO
+  responsibility (`src/convexity/panel/panel.py`, `src/convexity/panel/candidates.py`); PORTFOLIO
   consumes `U_t` as given (§10, Invariant U-short).
 - **Friction rate in bps** — fee tier, half-spread, and impact estimation
   (including the Amihud vs. Corwin-Schultz choice, §7.4) are COST's
@@ -1437,7 +1437,7 @@ a parallel reimplementation with its own drift risk.
   `convexity.system.validate` and reused, never reimplemented, by
   `research/xsec/{validate,cpcv}.py` (Invariant N-port).
 - **Post-construction overlays** (beta-hedging residual market exposure,
-  causal drawdown-stops) — `research/xsec/overlay.py`. EVIDENCE (task digest,
+  causal drawdown-stops) — `src/convexity/regime/overlay.py`. EVIDENCE (task digest,
   cross-referenced in `docs/specs/REGIME.md` §5.3 (the tested carry instance;
   Sharpe 0.57→0.10, income →0.6%/yr) and §5.5 (beta-hedge, 0.48→0.57) — not in
   `docs/EDGE.md`,
@@ -1479,7 +1479,7 @@ a parallel reimplementation with its own drift risk.
   "Probability of Backtest Overfitting" (published as López de Prado &
   co-authors' PBO work) and López de Prado, M. (2018), *Advances in
   Financial Machine Learning* (combinatorial purged cross-validation,
-  purging, embargo) — the CPCV/PBO machinery in `research/xsec/cpcv.py` (§6,
+  purging, embargo) — the CPCV/PBO machinery in `src/convexity/system/cpcv.py` (§6,
   §9) and the logit-of-relative-rank PBO estimator.
 - Bailey, D. H. & López de Prado, M. (2014), "The Deflated Sharpe Ratio:
   Correcting for Selection Bias, Backtest Overfitting, and Non-Normality,"

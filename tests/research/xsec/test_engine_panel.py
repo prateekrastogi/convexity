@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import numpy as np
 
-from research.xsec.engine import XSecConfig, run
-from research.xsec.panel import universe_size_by_year
+from convexity.portfolio.engine import XSecConfig, run
+from convexity.panel.panel import universe_size_by_year
 
 
 def test_universe_size_grows_with_listings(simple_panel):

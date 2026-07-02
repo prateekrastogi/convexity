@@ -9,9 +9,9 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from research.xsec import signals as sig
-from research.xsec.panel import Panel
-from research.xsec.signals import _pct_rank
+from convexity.signal import signals as sig
+from convexity.panel.panel import Panel
+from convexity.signal.signals import _pct_rank
 
 
 def test_pct_rank_monotone_and_neutral_single():
@@ -220,7 +220,7 @@ def test_band_enforced_by_portfolio_promotion_gate_not_signals():
     # rejects any non-canonical lookback set with a ValueError BEFORE it can reach a promoted config.
     # This is the discriminating BAND test (it would fail if the promotion gate stopped enforcing
     # the band); signals.py's own tests must NOT claim to provide this guarantee.
-    from research.xsec.engine import LOOKBACK_BAND, band_configs
+    from convexity.portfolio.engine import LOOKBACK_BAND, band_configs
 
     assert LOOKBACK_BAND == (12, 14, 16)  # the single canonical ensemble (§7 RED / cross-pillar)
     cfgs = band_configs()  # default base is the canonical momentum/quintile/volscaled config

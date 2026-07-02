@@ -10,8 +10,8 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from research.xsec.accounting import _week_funding, settle_week
-from research.xsec.cost.funding import FundingModel
+from convexity.cost.accounting import _week_funding, settle_week
+from convexity.cost.friction.funding import FundingModel
 
 
 def _flat_panel(n_days: int, n_sym: int):
@@ -100,7 +100,7 @@ def _sep_panel(n_days: int = 250, n_sym: int = 8, seed: int = 7):
     """Synthetic all-listed panel with a mid-sample momentum flip so the book actually turns over."""
     import pandas as pd
 
-    from research.xsec.panel import Panel
+    from convexity.panel.panel import Panel
 
     rng = np.random.default_rng(seed)
     symbols = tuple(f"S{i}" for i in range(n_sym))
@@ -123,8 +123,8 @@ def test_sep_permuting_funding_leaves_weights_gross_turnover_byte_identical():
     # the funding panel (holding price/rank fixed, momentum signal reads no funding) must change
     # funding_t in settle_week's output while leaving w_target -- and therefore gross_price_t and
     # turnover_t -- BYTE-identical. If portfolio.py ever read funding, this test would fail.
-    from research.xsec.engine import XSecConfig, run_book
-    from research.xsec.panel import Panel
+    from convexity.portfolio.engine import XSecConfig, run_book
+    from convexity.panel.panel import Panel
 
     cfg = XSecConfig(
         signal="momentum", lookback=14, quantile="tercile", weighting="equal", vol_window=14
@@ -164,7 +164,7 @@ def test_sep_quantile_weights_take_no_funding_argument():
     # future refactor that threads funding into weight formation trips this guard.
     import inspect
 
-    from research.xsec.portfolio import liquidity_weights, quantile_weights
+    from convexity.portfolio.portfolio import liquidity_weights, quantile_weights
 
     for fn in (quantile_weights, liquidity_weights):
         params = set(inspect.signature(fn).parameters)

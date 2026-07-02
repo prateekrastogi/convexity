@@ -143,7 +143,7 @@ class RegimeEngine(Protocol):
 
     Migrated from the pre-pivot 6-argument surface (``exec_state``/``cost_state``/``book``/``prev``/
     ``cfg``) to the spec's two-argument ``regime_state(panel, t)`` contract (§9). ``panel`` is
-    ``research.xsec.panel.Panel``, typed ``object`` here to keep this module import-light and
+    ``convexity.panel.panel.Panel``, typed ``object`` here to keep this module import-light and
     pillar-agnostic; ``t`` is the weekly rebalance-grid index.
     """
 

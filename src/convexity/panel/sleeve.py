@@ -31,7 +31,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from research.assetclass import Sleeve
+from convexity.panel.assetclass import Sleeve
 
 # ------------------------------------------------------------------------------------------------
 # Per-class realistic friction (FRACTIONS of notional, per leg). Round-trip charged on both legs by
@@ -120,7 +120,7 @@ def sleeve_symbols(sleeve: Sleeve) -> tuple[str, ...]:
     plural (``equities``/``commodities``). Returns the full sleeve; the panel builder then applies the
     point-in-time listing mask (a symbol appears only over its own live span).
     """
-    from research.universe import all_symbols
+    from convexity.panel.candidates import all_symbols
 
     key = {"crypto": "crypto", "equity": "equities", "commodity": "commodities"}[sleeve]
     return tuple(all_symbols(sleeves=(key,)))

@@ -59,13 +59,13 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from research.xsec.accounting import (
+from convexity.cost.accounting import (
     BINANCE_VIP0_TAKER,
     HALF_SPREAD_FRAC,
     IMPACT_FRAC,
     round_trip_friction,
 )
-from research.xsec.universe import CRYPTO_FRICTION
+from convexity.panel.sleeve import CRYPTO_FRICTION
 
 # The book's typical single-name rebalance notional (dollars) at which the impact anchor is
 # calibrated (COST.md Section 5.3: "~0.5bp at the book's typical rebalance size"). A ~50-name

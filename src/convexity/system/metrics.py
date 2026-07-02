@@ -7,7 +7,7 @@ curve, win-rate-of-weeks, turnover/yr, cost-drag/yr, funding-income/yr.
 
 Annualization uses PERIODS_PER_YEAR = 365.25 / 7 ≈ 52.18 (weekly cadence). Sharpe here is the raw
 annualized Sharpe for reporting; the DEFLATED Sharpe (over the config-trial count) is computed by
-``research.xsec.validate`` reusing SYSTEM's ``DeflatedSharpe`` — that deflated number is the headline,
+``convexity.system.xsec_validate`` reusing SYSTEM's ``DeflatedSharpe`` — that deflated number is the headline,
 this raw one is diagnostic.
 """
 

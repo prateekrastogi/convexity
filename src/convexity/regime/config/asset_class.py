@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from research.xsec.universe import CRYPTO_REGIMES
+from convexity.panel.sleeve import CRYPTO_REGIMES
 
 
 @dataclass(frozen=True)

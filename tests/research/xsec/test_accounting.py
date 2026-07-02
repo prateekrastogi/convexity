@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from research.xsec.accounting import (
+from convexity.cost.accounting import (
     BINANCE_VIP0_TAKER,
     round_trip_friction,
     settle_week,

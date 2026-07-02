@@ -10,7 +10,7 @@ package holds the spec's NEW validation pieces built AROUND that core:
   * ``validate.corwin_schultz_reject`` — the documented Corwin-Schultz NEGATIVE result kept as a
     standing regression guard (COST.md Section 5.4.3, Invariant CS-REJECT).
 
-Import submodules directly (``from research.xsec.cost.friction_stress import ...``); this
+Import submodules directly (``from convexity.cost.friction.friction_stress import ...``); this
 ``__init__`` deliberately re-exports nothing so partially-built sibling modules never break the
 package import.
 """

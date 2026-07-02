@@ -8,8 +8,8 @@ import math
 import numpy as np
 import pytest
 
-from research.xsec.cost.spread_impact import SpreadImpactModel
-from research.xsec.execution import (
+from convexity.cost.friction.spread_impact import SpreadImpactModel
+from convexity.execution.execution import (
     ExecTarget,
     ExecutionDefaults,
     ExecutionEngine,
@@ -141,8 +141,8 @@ def test_lower_delta_bound_enforced_by_check_helper():
 def test_cost_facts_lambda_fill_threads_lower_bound_into_plan():
     # the CostFacts.lambda_fill array threads §2.1's lower bound through the plan path: an on_target
     # rebalance whose delta is too short for a name's fill rate raises rather than silently solving.
-    from research.xsec.cost.spread_impact import SpreadImpactModel
-    from research.xsec.execution import (
+    from convexity.cost.friction.spread_impact import SpreadImpactModel
+    from convexity.execution.execution import (
         ExecutionDefaults, ExecutionEngine, ExecTarget, cost_facts_from_spread_impact,
     )
     n = 3

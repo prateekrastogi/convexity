@@ -12,8 +12,8 @@ import pathlib
 import numpy as np
 import pandas as pd
 
-from research.xsec.overlay import _daily_returns
-from research.xsec.panel import Panel
+from convexity.regime.overlay import _daily_returns
+from convexity.panel.panel import Panel
 from convexity.regime.measures.absorption import daily_dispersion, weekly_dispersion
 from convexity.regime.measures.vol_regime import weekly_btc_vol
 from convexity.regime.panel.build import build_regime_inputs

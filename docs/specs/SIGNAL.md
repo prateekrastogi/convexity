@@ -32,17 +32,17 @@ Scope: crypto only. The cross-sectional momentum edge is **crypto-specific** —
 NOT to extend to equities or commodities sleeves (`docs/EDGE.md` §d: "This is a crypto
 cross-sectional dispersion premium, full stop"). Binance USDT-M perpetual futures, daily bars
 aggregated from a 1-minute lake, weekly (Friday-close) rebalance, point-in-time universe of
-~50 liquid names (UNIVERSE.md / `research/xsec/universe.py`).
+~50 liquid names (UNIVERSE.md / `src/convexity/panel/sleeve.py`).
 
 ---
 
 ## 0. Governing principles (read before anything else)
 
 **P1 — SIGNAL emits a rank, never a weight, never an action.** The public contract is
-`momentum_signal`, `carry_signal`, `combined_signal` (`research/xsec/signals.py`) — each returns
+`momentum_signal`, `carry_signal`, `combined_signal` (`src/convexity/signal/signals.py`) — each returns
 `np.ndarray` of shape `(n_symbols,)`, values in `[0, 1]` or `NaN`. Turning a rank into a
 dollar-neutral quantile weight (top-quantile long, bottom-quantile short, inverse-vol scaled) is
-PORTFOLIO's job (`research/xsec/portfolio.py`), not SIGNAL's. A rank vector that is monotone in
+PORTFOLIO's job (`src/convexity/portfolio/portfolio.py`), not SIGNAL's. A rank vector that is monotone in
 conviction is a complete and sufficient interface; anything more (a target notional, a leverage
 multiplier) is scope creep across the firewall and is the bug.
 
@@ -91,7 +91,7 @@ overlay variants; `docs/EDGE.md` "not deployable standalone") and a structural ~
 drawdown driven by a regime-fragile short-the-squeeze exposure. That drawdown was TESTED, not
 merely observed: a BTC-beta hedge lifts standalone carry Sharpe only from 0.48 to 0.57 (maxDD
 74.9%→69.9%), and a causal drawdown-stop caps maxDD at ~24% only by collapsing Sharpe to 0.10 and
-income to ~0.6%/yr (`research/xsec/overlay.py`; Section 6.1) — no overlay tried converts carry
+income to ~0.6%/yr (`src/convexity/regime/overlay.py`; Section 6.1) — no overlay tried converts carry
 into a standalone-deployable book, which is why it is a satellite, not a sizing input. Section 6
 formalizes, via the Sharpe-additivity identity for near-orthogonal signals plus this overlay
 evidence, why a combination weight large enough to matter for the combined Sharpe is not justified
@@ -166,9 +166,9 @@ rebalance (Section 2.3).
 
 ## 1. What SIGNAL builds ON TOP OF (and what it must NOT rebuild)
 
-SIGNAL builds on the point-in-time daily panel already constructed by `research/xsec/panel.py`
+SIGNAL builds on the point-in-time daily panel already constructed by `src/convexity/panel/panel.py`
 (`Panel.close`, `Panel.funding`, `Panel.listed`) and the universe/friction metadata in
-`research/xsec/universe.py` / `research/universe.py`. SIGNAL does **not** rebuild:
+`src/convexity/panel/sleeve.py` / `src/convexity/panel/candidates.py`. SIGNAL does **not** rebuild:
 
 | Already built (do NOT rebuild)                                      | SIGNAL consumes it as                          |
 |-----------------------------------------------------------------------|-------------------------------------------------|
@@ -176,11 +176,11 @@ SIGNAL builds on the point-in-time daily panel already constructed by `research/
 | Point-in-time listing mask (`Panel.listed`, no survivorship backfill) | the eligibility gate (Section 2)                 |
 | Daily funding aggregation (sum of 8h stamps → daily rate, `panel.py`) | the raw funding series `carry_signal` averages   |
 | Point-in-time dollar-volume panel (`build_dollar_volume`, `panel.py`) | (used by PORTFOLIO/UNIVERSE, not by SIGNAL itself) |
-| Sleeve/friction/regime metadata (`research/xsec/universe.py`)         | universe membership only (crypto sleeve)         |
-| `convexity.system.validate.{deflated,cpcv,walkforward}` (SYSTEM pillar) | the DSR/CPCV machinery `research/xsec/validate.py` and `research/xsec/cpcv.py` re-use for signal-family validation |
+| Sleeve/friction/regime metadata (`src/convexity/panel/sleeve.py`)         | universe membership only (crypto sleeve)         |
+| `convexity.system.validate.{deflated,cpcv,walkforward}` (SYSTEM pillar) | the DSR/CPCV machinery `src/convexity/system/xsec_validate.py` and `src/convexity/system/cpcv.py` re-use for signal-family validation |
 
-Implemented in `research/xsec/signals.py` (the module this spec documents),
-`research/xsec/panel.py` (upstream data), `research/xsec/cpcv.py` and `research/xsec/validate.py`
+Implemented in `src/convexity/signal/signals.py` (the module this spec documents),
+`src/convexity/panel/panel.py` (upstream data), `src/convexity/system/cpcv.py` and `src/convexity/system/xsec_validate.py`
 (the validation this spec's constants are drawn from).
 
 ---
@@ -216,7 +216,7 @@ listed[d - k, i]  AND  listed[d - k - L, i]  AND  (d - k - L) >= 0
 ```
 
 i.e. both endpoints of the trailing-return window are inside the symbol's live point-in-time span
-(`research/xsec/signals.py::momentum_signal`, using `Panel.listed`). Because `Panel.listed` is
+(`src/convexity/signal/signals.py::momentum_signal`, using `Panel.listed`). Because `Panel.listed` is
 constructed from each symbol's OWN first/last live day — never from the cross-sectional union
 (`panel.py::build_panel` docstring: "NEVER from the union … no survivorship backfill, no delist
 hold-through") — a symbol that has not yet listed, or has delisted, is correctly excluded without
@@ -291,7 +291,7 @@ rank_i = ( r_i − 0.5 ) / n
 where `r_i ∈ {1, …, n}` is `i`'s 1-based rank of `x_i` among the `n` finite values (ties broken by
 the average-rank convention: a block of `m` tied values each receive the mean of the `m`
 consecutive integer ranks they would occupy). This is exactly `_pct_rank` in
-`research/xsec/signals.py`. The map is affine in the rank, not in `x`, so it is a nonparametric
+`src/convexity/signal/signals.py`. The map is affine in the rank, not in `x`, so it is a nonparametric
 (distribution-free) transform: it depends only on the ORDER STATISTICS of `x_1, …, x_n`, never on
 their scale or shape.
 
@@ -310,7 +310,7 @@ through the inverse Gaussian CDF, which spreads the tails (a name ranked 99th pe
 gets a much larger magnitude under the normal-scores map than a linear percentile). Both are valid
 UNBIASED point-in-time cross-sectional standardizations under Invariant RANK below; `signals.py`
 implements the plain percentile form because PORTFOLIO's quantile-weight construction
-(`research/xsec/portfolio.py::quantile_weights`) only needs the ORDER of names to select the
+(`src/convexity/portfolio/portfolio.py::quantile_weights`) only needs the ORDER of names to select the
 top/bottom quantile, not their standardized magnitude — the percentile rank is the minimal
 sufficient statistic for that downstream consumer, so introducing the Gaussian tail-spreading is a
 free parameter this spec does not need and does not adopt. A future PORTFOLIO variant that used
@@ -373,7 +373,7 @@ different economic question from the one the dollar-neutral cross-sectional book
 
 ### 4.1 The empirical finding that forces this design
 
-CPCV over the momentum lookback family (`research/xsec/cpcv.py::compute_pbo`, the López de Prado
+CPCV over the momentum lookback family (`src/convexity/system/cpcv.py::compute_pbo`, the López de Prado
 logit-of-relative-rank estimator) gives **PBO = 0.31–0.47** across partitions of the ~259-week
 crypto history, with the best-in-sample lookback landing on `L = 12` in **21 of 28** CPCV splits —
 not the headline `L = 14` that the light-cost single-path backtest peaks at. PBO is defined
@@ -403,8 +403,8 @@ peak of the lookback curve is fake").
 **PBO is the overfitting-of-the-lookback-DIMENSION statistic; it is not the only CPCV product,
 and it is not the one this file should lead with when the question is "does the strategy survive
 CPCV at all."** The SAME `N=8`-group / `k_test=2` / 28-path / 1-week-embargo split family
-(`research/xsec/cpcv.py::run_cpcv`, Section 7's provenance table) also produces a PATH-SHARPE
-distribution for the selected/deployed config (`PathSharpeSummary`, `research/xsec/cpcv.py`):
+(`src/convexity/system/cpcv.py::run_cpcv`, Section 7's provenance table) also produces a PATH-SHARPE
+distribution for the selected/deployed config (`PathSharpeSummary`, `src/convexity/system/cpcv.py`):
 mean OOS path Sharpe **≈0.91** versus the naive full-sample Sharpe **≈0.98** — a haircut of only
 **≈0.07**, i.e. **no OOS collapse** (`docs/EDGE.md` §c; the same number every sibling pillar spec
 that touches CPCV cites verbatim — `docs/specs/PORTFOLIO.md` §"CPCV mean OOS path Sharpe" table,
@@ -525,9 +525,9 @@ estimation-noise-driven search over a 3-element family that Section 4.1's PBO ev
 shows is overfit-prone — equal-weight is the only variant that is fixed BEFORE any `SR_hat_L`/`IC_L`
 is observed, satisfying P7's no-fitted-weight rule without qualification.
 
-`combined_signal`/`momentum_signal` in `research/xsec/signals.py` currently expose a single
+`combined_signal`/`momentum_signal` in `src/convexity/signal/signals.py` currently expose a single
 `lookback: int` parameter (the point-selection interface used by the backtest/validation harness
-to SCORE the family, which is exactly how `research/xsec/cpcv.py` produces the PBO evidence this
+to SCORE the family, which is exactly how `src/convexity/system/cpcv.py` produces the PBO evidence this
 section cites). The DEPLOYABLE ensemble signal is a thin wrapper — not yet a named function in
 `signals.py` — defined as:
 
@@ -553,7 +553,7 @@ avg_i = sum_{s=1}^{m} v_s * rank^{(s)}_i      (defined only where i is finite in
 ensemble_rank_i = _pct_rank(avg)_i             (re-rank the averaged score cross-sectionally)
 ```
 
-This is literally the `combined_signal` construction in `research/xsec/signals.py` generalized
+This is literally the `combined_signal` construction in `src/convexity/signal/signals.py` generalized
 from `m = 2` (momentum, carry) sub-signals to `m = 3` (lookbacks 12/14/16), with `v_s = 1/2` each
 in the shipped `combined_signal` and `v_s = 1/3` each for the lookback-band ensemble of this
 section. The re-rank step matters: averaging two `[0,1]` ranks does not itself produce a uniform
@@ -606,7 +606,7 @@ rebalance day `d`:
 mean_funding_i,d = (1/c) * sum_{tau=d-c+1}^{d} funding_i,tau
 ```
 
-(`research/xsec/signals.py::carry_signal`, using `Panel.funding`'s daily-aggregated stamps —
+(`src/convexity/signal/signals.py::carry_signal`, using `Panel.funding`'s daily-aggregated stamps —
 Section 2.1's `F_d`-measurability holds because every `tau <= d`). The CARRY SIGNAL that ranks for
 LONG conviction is the NEGATION:
 
@@ -680,16 +680,16 @@ directly; the rank-level `combined_signal` construction in `signals.py` is a spe
 book-level intuition carrying over qualitatively). If `r^{mom}` and `r^{carry}` are uncorrelated
 (`Corr(r^{mom}, r^{carry}) = rho ≈ 0`, the near-orthogonality condition — momentum and carry are
 different information sources: trailing PRICE moves vs. trailing FUNDING-RATE levels, and the
-repo's overlay analysis (`research/xsec/overlay.py`'s docstring) finds carry's own residual
+repo's overlay analysis (`src/convexity/regime/overlay.py`'s docstring) finds carry's own residual
 exposure is to BTC-beta, not to the momentum book's cross-sectional dispersion), the combined
 book's variance is
 
 **How close to `rho ≈ 0` is this repo's actual evidence, stated numerically rather than only
 qualitatively.** No single Pearson correlation between `r^{mom}_t` and `r^{carry}_t` is currently
-computed and reported by `research/xsec/overlay.py` or elsewhere in this repo — that is a genuine
+computed and reported by `src/convexity/regime/overlay.py` or elsewhere in this repo — that is a genuine
 gap in the evidence base, flagged here rather than papered over with an invented number. What IS
 measured, and what the near-orthogonality claim actually rests on, is INDIRECT but numerical:
-`research/xsec/overlay.py::beta_hedge_returns` finds carry's residual market exposure is
+`src/convexity/regime/overlay.py::beta_hedge_returns` finds carry's residual market exposure is
 concentrated in BTC-beta (a hedgeable, single-factor exposure — beta-hedging the raw carry book
 lifts its Sharpe from 0.48 to 0.57, Section 6.2 above), which is evidence AGAINST carry's return
 stream being driven by the SAME cross-sectional dispersion momentum trades on: momentum's edge is
@@ -755,7 +755,7 @@ d/dw [ w^2 IR_mom^2 + (1-w)^2 IR_carry^2 ] = 0
 Plugging in this repo's numbers: momentum's honest net Sharpe (real Amihud-impact cost, the
 number this spec's evidence digest names as the deployable estimate, not the light-cost headline)
 is `IR_mom ≈ 0.8–1.0` [MEASURED, `docs/EDGE.md` §b honest column]; carry's standalone Sharpe is
-`0.48` RAW and `0.57` BTC-beta-hedged [MEASURED, `research/xsec/overlay.py`, the same two figures
+`0.48` RAW and `0.57` BTC-beta-hedged [MEASURED, `src/convexity/regime/overlay.py`, the same two figures
 Section 6.1's overlay table above quotes] — using these two DIRECTLY MEASURED point Sharpes as
 `IR_carry` avoids the extra, non-trivial step of converting the carry DSR range (`0.10–0.45`,
 Section 6.1 above) back into an IR/Sharpe range, which the DSR formula does not invert
@@ -834,7 +834,7 @@ the full defensible range of both unmeasured/ranged inputs.
 
 **The drawdown side of the argument is stronger than "carry is weak," and it was tested, not
 assumed: overlays were TRIED on the standalone carry book and failed to fix the drawdown.**
-`research/xsec/overlay.py` implements two causal (no-lookahead) defensive overlays on the raw
+`src/convexity/regime/overlay.py` implements two causal (no-lookahead) defensive overlays on the raw
 carry book (`beta_hedge_returns`, `vol_target_scale`, `drawdown_stop_scale`) and the results
 argue for `w_carry = 0` more directly than the Sharpe-additivity bound above:
 
@@ -845,7 +845,7 @@ raw carry book                          Sharpe 0.48,  maxDD 74.9%,  income +12.9
 ```
 
 (`docs/EDGE.md` §a/c; `docs/specs/REGIME.md` §5/§7's identical citation of
-`research/xsec/overlay.py`'s `beta_hedge_returns`/`drawdown_stop_scale` outputs; `docs/specs/
+`src/convexity/regime/overlay.py`'s `beta_hedge_returns`/`drawdown_stop_scale` outputs; `docs/specs/
 PORTFOLIO.md` §"EVIDENCE records that overlays do not fix funding carry's structural drawdown".)
 Beta-hedging the book's residual BTC-beta (the mechanism Section 6.1 above invokes qualitatively
 to justify `rho ≈ 0`) recovers only a modest `0.48 -> 0.57` Sharpe lift and a `74.9% -> 69.9%`
@@ -881,7 +881,7 @@ CARRY SATELLITE    =  carry_signal(panel, d, carry_lookback=7)                  
                        the core rank that PORTFOLIO consumes for the deployed book.
 ```
 
-This differs from the shipped `combined_signal` function in `research/xsec/signals.py`, which
+This differs from the shipped `combined_signal` function in `src/convexity/signal/signals.py`, which
 implements an EQUAL-weight (`v=0.5`) rank average of momentum and carry — `combined_signal` is
 correctly built as a RESEARCH/diagnostic tool (it is exactly the artifact the validation harness
 uses to show carry-blending does NOT improve the honest net Sharpe enough to justify its drawdown;
@@ -948,7 +948,7 @@ adopted unchanged).
   (the search that produced the PBO = 0.31–0.47 evidence in Section 4.1), evaluated under CPCV and
   never refit on a rolling/continuous basis. Any FUTURE change to the band composition (adding
   `L=10` or `L=18`, say) re-enters this BLUE bucket and must re-run the full CPCV/PBO procedure of
-  `research/xsec/cpcv.py` before promotion — it does not become RED by assertion.
+  `src/convexity/system/cpcv.py` before promotion — it does not become RED by assertion.
 - **TEAL — none.** SIGNAL fits nothing per-instrument at runtime; every quantity here is either a
   fixed RED constant or a raw read of the panel's `F_d`-measurable cells. (Contrast COST.md, whose
   EWMA funding forecast and impact coefficient are genuinely TEAL, fitted per-instrument online —
@@ -956,9 +956,9 @@ adopted unchanged).
 
 > **Invariant SCOPE — this signal is crypto-only.** `momentum_signal`/`carry_signal`/
 > `combined_signal`/`ensemble_momentum_signal` are validated and deployable ONLY against a crypto
-> perp panel (`research/xsec/panel.py::build_class_panel(sleeve="crypto", ...)`). The equity and
+> perp panel (`src/convexity/panel/panel.py::build_class_panel(sleeve="crypto", ...)`). The equity and
 > commodity sleeves are momentum-ONLY, zero-funding underlyings in the panel layer
-> (`research/xsec/universe.py`'s module docstring: "FUNDING = 0 for equities AND commodities") for
+> (`src/convexity/panel/sleeve.py`'s module docstring: "FUNDING = 0 for equities AND commodities") for
 > an unrelated reason (they are cash underlyings with no perp funding to harvest) and were
 > separately tested and found NOT to carry the cross-sectional momentum edge at all
 > (`docs/EDGE.md` §d: "does NOT extend to equities or commodities… tested; those sleeves were
@@ -1144,7 +1144,7 @@ weak, fragile standalone Sharpe.
 SIGNAL's complete outward contract (everything a PORTFOLIO.md / UNIVERSE.md spec may call):
 
 ```python
-# research/xsec/signals.py  (existing; this spec documents its invariants)
+# src/convexity/signal/signals.py  (existing; this spec documents its invariants)
 def momentum_signal(panel: Panel, d: int, *, lookback: int, skip: int) -> np.ndarray: ...
 def carry_signal(panel: Panel, d: int, *, lookback: int = 7) -> np.ndarray: ...
 def combined_signal(panel: Panel, d: int, *, lookback: int, skip: int,
@@ -1161,7 +1161,7 @@ RANK (point-in-time cross-sectional standardization), and — for the ensemble �
 single fitted lookback in the deployed path), Invariant NO-FIT (no regressed combination weight),
 and Invariant CARRY-ZERO (`w_carry` stays `0` absent a fresh `rho` measurement and DSR
 re-clearance). PORTFOLIO.md consumes exactly this contract to build dollar-neutral quantile weights
-(`research/xsec/portfolio.py::quantile_weights` / `liquidity_weights`); SIGNAL never constructs a
+(`src/convexity/portfolio/portfolio.py::quantile_weights` / `liquidity_weights`); SIGNAL never constructs a
 weight, a trade, or a position itself (P1).
 
 ---
@@ -1171,15 +1171,15 @@ weight, a trade, or a position itself (P1).
 - Bailey, D. H., & López de Prado, M. (2014). *The Deflated Sharpe Ratio: Correcting for
   Selection Bias, Backtest Overfitting, and Non-Normality.* Journal of Portfolio Management,
   40(5), 94–107. — the max-order-statistic selection-bias inequality underlying Section 4.2's
-  point-selection-vs-ensemble argument, and the DSR machinery `research/xsec/validate.py` reuses
+  point-selection-vs-ensemble argument, and the DSR machinery `src/convexity/system/xsec_validate.py` reuses
   from `convexity.system.validate.deflated`.
 - Bailey, D. H., Borwein, J., López de Prado, M., & Zhu, Q. J. (2014). *Pseudo-Mathematics and
   Financial Charlatanism: The Effects of Backtest Overfitting on Out-of-Sample Performance.*
   Notices of the AMS, 61(5), 458–471. — the combinatorial-purged-CV / PBO framework
-  `research/xsec/cpcv.py::compute_pbo` implements (logit-of-relative-rank estimator, Section 4.1).
+  `src/convexity/system/cpcv.py::compute_pbo` implements (logit-of-relative-rank estimator, Section 4.1).
 - López de Prado, M. (2018). *Advances in Financial Machine Learning*, Chapter 11 (Combinatorial
   Purged Cross-Validation) and Chapter 12 (Backtesting through Cross-Validation). Wiley. — the
-  CPCV path-construction and PBO estimator this repo's `research/xsec/cpcv.py` and
+  CPCV path-construction and PBO estimator this repo's `src/convexity/system/cpcv.py` and
   `docs/specs/SYSTEM.md` §6.4/§7 both cite and reuse.
 - Grinold, R. C., & Kahn, R. N. (2000). *Active Portfolio Management* (2nd ed.), Chapter 6
   (Information Analysis / combining signals via the Information Coefficient). McGraw-Hill. — the
@@ -1222,7 +1222,7 @@ So no constant here is ever mistaken for an invented or "reasonable-sounding" nu
 source below is either (a) a defaulted/implemented value read directly off a named function in
 `research/xsec/*.py`, or (b) a validation RESULT recorded in `docs/EDGE.md` (the repo's decision
 memo synthesizing the CPCV/PBO/DSR/overlay validation runs) and cross-cited, where the underlying
-run lives, in `research/xsec/cpcv.py` / `research/xsec/overlay.py`'s own docstrings and the
+run lives, in `src/convexity/system/cpcv.py` / `src/convexity/regime/overlay.py`'s own docstrings and the
 sibling pillar specs that independently cite the same numbers from the same runs
 (`docs/specs/PORTFOLIO.md`, `docs/specs/UNIVERSE.md`, `docs/specs/REGIME.md`,
 `docs/specs/SYSTEM.md`, `docs/specs/LEVERAGE.md`). No entry cites this document's own commissioning
@@ -1230,24 +1230,24 @@ instructions as a source.
 
 | Constant | Value | Source |
 |---|---|---|
-| Lookback band | `{12, 14, 16}` trading days | `docs/EDGE.md` §b "12–16 day BAND"; the CPCV/PBO grid search over the lookback family, `research/xsec/cpcv.py::compute_pbo` |
+| Lookback band | `{12, 14, 16}` trading days | `docs/EDGE.md` §b "12–16 day BAND"; the CPCV/PBO grid search over the lookback family, `src/convexity/system/cpcv.py::compute_pbo` |
 | Best-in-sample lookback (headline, biased) | `L=14` | `docs/EDGE.md` §b "headline" column (light-cost single-path peak) |
-| Best-in-sample lookback (per-split mode) | `L=12` on 21/28 CPCV splits | `research/xsec/cpcv.py::compute_pbo`'s per-split `best_is_labels` output, synthesized in `docs/EDGE.md` §c |
-| PBO range | `0.31–0.47` across partitions | `research/xsec/cpcv.py::compute_pbo` (the `pbo` field across `N_groups`/`k_test` partition choices); point estimate `0.36` in `docs/EDGE.md` §c |
-| PBO floor | never `< 0.2` clean-pass | `research/xsec/cpcv.py::compute_pbo` output across the partition grid referenced above |
-| CPCV mean OOS path Sharpe (selected config) | `≈0.91` vs. naive full-sample `≈0.98` (haircut `≈0.07`) | `research/xsec/cpcv.py::path_distribution` / `PathSharpeSummary.mean`/`.naive_full_sharpe`/`.haircut`; cited identically in `docs/specs/PORTFOLIO.md`, `docs/specs/SYSTEM.md` §"Result", `docs/specs/UNIVERSE.md`, `docs/specs/REGIME.md`, `docs/specs/LEVERAGE.md` |
-| `frac_pos` (CPCV path-positivity) | `0.85–1.00`, the robust statistic (contrast fragile `p05` = `+0.42` to `−0.59`) | `research/xsec/cpcv.py::PathSharpeSummary.frac_pos`; `docs/EDGE.md` §c; `docs/specs/PORTFOLIO.md` Invariant R-stat |
+| Best-in-sample lookback (per-split mode) | `L=12` on 21/28 CPCV splits | `src/convexity/system/cpcv.py::compute_pbo`'s per-split `best_is_labels` output, synthesized in `docs/EDGE.md` §c |
+| PBO range | `0.31–0.47` across partitions | `src/convexity/system/cpcv.py::compute_pbo` (the `pbo` field across `N_groups`/`k_test` partition choices); point estimate `0.36` in `docs/EDGE.md` §c |
+| PBO floor | never `< 0.2` clean-pass | `src/convexity/system/cpcv.py::compute_pbo` output across the partition grid referenced above |
+| CPCV mean OOS path Sharpe (selected config) | `≈0.91` vs. naive full-sample `≈0.98` (haircut `≈0.07`) | `src/convexity/system/cpcv.py::path_distribution` / `PathSharpeSummary.mean`/`.naive_full_sharpe`/`.haircut`; cited identically in `docs/specs/PORTFOLIO.md`, `docs/specs/SYSTEM.md` §"Result", `docs/specs/UNIVERSE.md`, `docs/specs/REGIME.md`, `docs/specs/LEVERAGE.md` |
+| `frac_pos` (CPCV path-positivity) | `0.85–1.00`, the robust statistic (contrast fragile `p05` = `+0.42` to `−0.59`) | `src/convexity/system/cpcv.py::PathSharpeSummary.frac_pos`; `docs/EDGE.md` §c; `docs/specs/PORTFOLIO.md` Invariant R-stat |
 | Momentum honest net Sharpe | `~0.8–1.0` | `docs/EDGE.md` §b honest column (real Amihud-impact cost reconciliation) |
 | Momentum light-cost/single-peak Sharpe | `~1.6–1.9` (cite as upper bound only) | `docs/EDGE.md` §b headline column (light-cost proxy, single fitted `L`) |
-| Carry standalone DSR | `0.10–0.45` across overlay variants | `convexity.system.validate.deflated` applied to `research/xsec/overlay.py`'s raw/hedged/DD-stopped carry series; `docs/EDGE.md` §d |
-| Carry standalone gross income | `+12.9%/yr` | `docs/EDGE.md` §a "Funding carry"; the raw (no-overlay) series in `research/xsec/overlay.py` |
-| Carry standalone max drawdown | `74.9%` (raw); `69.9%` (BTC-beta hedged); `~24%` (drawdown-stopped, at the cost of Sharpe 0.10 / income ~0.6%/yr) | `research/xsec/overlay.py::beta_hedge_returns`/`drawdown_stop_scale` output; `docs/EDGE.md` §a; identical figures in `docs/specs/REGIME.md` §5/§7 and `docs/specs/PORTFOLIO.md` |
-| Carry overlay Sharpe path | raw `0.48` → beta-hedged `0.57` → DD-stopped `0.10` | `research/xsec/overlay.py`; `docs/specs/REGIME.md` §7 cites the identical three-point path |
-| Carry lookback | `7` days | `research/xsec/signals.py::carry_signal` default parameter |
-| Momentum skip default | `k=0` (grid `{0,3,7}`) | `research/xsec/signals.py::momentum_signal` docstring |
+| Carry standalone DSR | `0.10–0.45` across overlay variants | `convexity.system.validate.deflated` applied to `src/convexity/regime/overlay.py`'s raw/hedged/DD-stopped carry series; `docs/EDGE.md` §d |
+| Carry standalone gross income | `+12.9%/yr` | `docs/EDGE.md` §a "Funding carry"; the raw (no-overlay) series in `src/convexity/regime/overlay.py` |
+| Carry standalone max drawdown | `74.9%` (raw); `69.9%` (BTC-beta hedged); `~24%` (drawdown-stopped, at the cost of Sharpe 0.10 / income ~0.6%/yr) | `src/convexity/regime/overlay.py::beta_hedge_returns`/`drawdown_stop_scale` output; `docs/EDGE.md` §a; identical figures in `docs/specs/REGIME.md` §5/§7 and `docs/specs/PORTFOLIO.md` |
+| Carry overlay Sharpe path | raw `0.48` → beta-hedged `0.57` → DD-stopped `0.10` | `src/convexity/regime/overlay.py`; `docs/specs/REGIME.md` §7 cites the identical three-point path |
+| Carry lookback | `7` days | `src/convexity/signal/signals.py::carry_signal` default parameter |
+| Momentum skip default | `k=0` (grid `{0,3,7}`) | `src/convexity/signal/signals.py::momentum_signal` docstring |
 | Ensemble weights | `v_L = 1/3` each (equal-weight) | Section 4.2 derivation (fixed-before-scoring weight, P7-compliant); the repo ships equal-weight as the non-fitted default (Section 4.3) |
 | Core-signal carry weight | `w_carry = 0` | Section 6.1 sensitivity sweep 1 (`w* ∈ [0.663, 0.813]` across the full cited `IR_mom∈{0.8,0.9,1.0}` × `IR_carry∈{0.48,0.57}` grid, so `1-w*∈[0.19,0.34]` bounds carry's OPTIMISTIC Sharpe-additivity share) and sweep 2 (`w*(rho)∈[0.668,0.793]` across `rho∈{-0.3,0,+0.3}`, ILLUSTRATIVE) jointly with the overlay evidence above (no overlay converts carry to standalone-deployable, so a nonzero core weight is not defensible even within either sweep's most carry-favorable corner) |
-| `w*` sensitivity sweep inputs (sweep 1) | `IR_mom∈{0.8,0.9,1.0}` (MEASURED), `IR_carry∈{0.48,0.57}` (MEASURED raw/beta-hedged carry Sharpe) | `docs/EDGE.md` §b (IR_mom); `research/xsec/overlay.py` raw/`beta_hedge_returns` output (IR_carry) — Section 6.1 sweep 1 |
+| `w*` sensitivity sweep inputs (sweep 1) | `IR_mom∈{0.8,0.9,1.0}` (MEASURED), `IR_carry∈{0.48,0.57}` (MEASURED raw/beta-hedged carry Sharpe) | `docs/EDGE.md` §b (IR_mom); `src/convexity/regime/overlay.py` raw/`beta_hedge_returns` output (IR_carry) — Section 6.1 sweep 1 |
 | `w*(rho)` sensitivity sweep inputs (sweep 2) | `rho∈{-0.3,0,+0.3}` (ILLUSTRATIVE — no persisted `Corr(r^mom,r^carry)` run backs any specific value), `sigma_carry/sigma_mom≈1.579` (derived from the `IR_mom=0.9,IR_carry=0.57` sweep-1 midpoint) | Section 6.1 sweep 2 derivation; see Invariant CARRY-ZERO for the promotion-time re-measurement requirement |
 | Universe size | `~50` names (peak `60–75`, gain inside block-bootstrap CI) | `docs/EDGE.md` §c universe-size sweep (block-bootstrap CI on the weekly return series across `N`) |
-| CPCV split family | `N_groups=8, k_test=2, 28 paths, 1-week embargo` | `research/xsec/cpcv.py::run_cpcv` defaults (`n_groups=8, k_test=2`, `C(8,2)=28` paths, `embargo=1` week) |
+| CPCV split family | `N_groups=8, k_test=2, 28 paths, 1-week embargo` | `src/convexity/system/cpcv.py::run_cpcv` defaults (`n_groups=8, k_test=2`, `C(8,2)=28` paths, `embargo=1` week) |

@@ -23,9 +23,9 @@ from __future__ import annotations
 
 import numpy as np
 
-from research.xsec.accounting import round_trip_friction
-from research.xsec.cost.spread_impact import SpreadImpactModel
-from research.xsec.universe import CRYPTO_FRICTION
+from convexity.cost.accounting import round_trip_friction
+from convexity.cost.friction.spread_impact import SpreadImpactModel
+from convexity.panel.sleeve import CRYPTO_FRICTION
 
 
 def flat_bps_friction() -> float:

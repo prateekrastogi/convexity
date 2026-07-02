@@ -11,7 +11,7 @@ The overlay numerics are NOT touched (Invariant N) — the gate only delegates t
 import numpy as np
 import pytest
 
-from research.xsec.overlay import drawdown_stop_scale
+from convexity.regime.overlay import drawdown_stop_scale
 from convexity.regime.config.resolve import resolve_config
 from convexity.regime.overlay_gate import (
     DDStopAblationRecord,

@@ -13,18 +13,18 @@ import math
 import numpy as np
 import pytest
 
-from research.xsec.accounting import (
+from convexity.cost.accounting import (
     HALF_SPREAD_FRAC,
     IMPACT_FRAC,
     round_trip_friction,
     settle_week,
 )
-from research.xsec.cost.spread_impact import (
+from convexity.cost.friction.spread_impact import (
     ANCHOR_NOTIONAL,
     SpreadImpactModel,
     amihud_ratio,
 )
-from research.xsec.universe import CRYPTO_FRICTION
+from convexity.panel.sleeve import CRYPTO_FRICTION
 
 # A representative median-liquidity anchor: $40M/day ADV, a small Amihud ratio.
 ADV_MEDIAN = 40_000_000.0

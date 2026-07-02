@@ -4,7 +4,7 @@ The one robustness pillar the xsec edge had NOT yet faced. Purged-WF + DSR + blo
 holdout already ran; this adds Combinatorial Purged CV — a DISTRIBUTION of OOS path Sharpes for the
 selected lookback plus PBO (probability of backtest overfitting) over the whole lookback family (is
 picking the best L overfitting?). REUSES ``convexity.system.validate.cpcv.SystemCPCV`` and the xsec
-engine; the CPCV glue lives in ``research.xsec.cpcv``.
+engine; the CPCV glue lives in ``convexity.system.cpcv``.
 
 Family: L in {10,12,14,16,18,21,28} d, all momentum / quintile / vol-scaled / weekly dollar-neutral,
 50-crypto point-in-time, REAL cost (dollar-volume spread proxy + Amihud impact baked into the engine's
@@ -24,12 +24,12 @@ from pathlib import Path
 
 import numpy as np
 
-from research.universe import all_symbols
+from convexity.panel.candidates import all_symbols
 
-from research.xsec import metrics
-from research.xsec.cpcv import run_cpcv
-from research.xsec.engine import XSecConfig, run
-from research.xsec.panel import Panel, build_panel, universe_size_by_year
+from convexity.system import metrics
+from convexity.system.cpcv import run_cpcv
+from convexity.portfolio.engine import XSecConfig, run
+from convexity.panel.panel import Panel, build_panel, universe_size_by_year
 
 LOOKBACKS: tuple[int, ...] = (10, 12, 14, 16, 18, 21, 28)
 SELECTED_L: int = 14  # the fitted peak — the config whose OOS path distribution we headline

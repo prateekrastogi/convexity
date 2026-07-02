@@ -28,7 +28,7 @@ from convexity.system.config.defaults import SystemDefaults
 from convexity.system.validate.deflated import DeflatedSharpe
 from convexity.system.validate.walkforward import make_walkforward_folds
 
-from research.xsec.metrics import PERIODS_PER_YEAR
+from convexity.system.metrics import PERIODS_PER_YEAR
 
 
 @dataclass(frozen=True)

@@ -40,10 +40,10 @@ from typing import TYPE_CHECKING, Mapping
 
 import numpy as np
 
-from research.xsec.accounting import HALF_SPREAD_FRAC
+from convexity.cost.accounting import HALF_SPREAD_FRAC
 
 if TYPE_CHECKING:
-    from research.xsec.cost.spread_impact import SpreadImpactModel
+    from convexity.cost.friction.spread_impact import SpreadImpactModel
 
 # One rebalance period in hours — the operative scale of §2.1's upper regularity bound
 # ``Delta << 7 days`` (the weekly cadence of research/xsec/engine.py, EXECUTION.md §2.1/§6.1).
@@ -828,7 +828,7 @@ def execution_adjusted_series(
     proxy, never better; §0). This is a pure per-week transform, not a new statistic.
 
     ``net_frictionless`` — shape (T,) the engine's per-week net return series
-        (``research.xsec.engine.run(...).net``), the decision-price benchmark.
+        (``convexity.portfolio.engine.run(...).net``), the decision-price benchmark.
     ``realized_shortfall`` — shape (T,) per-week ``is_total`` from ``implementation_shortfall``,
         aligned week-for-week to ``net_frictionless``.
 
@@ -849,8 +849,8 @@ def execution_adjusted_series(
 class ExecutionValidation:
     """The §9 verdict: the execution-adjusted weekly series through the SAME validation battery.
 
-    Every field is the OUTPUT of ``convexity.system.validate.{walkforward,deflated,cpcv}`` (reused
-    BYTE-FOR-BYTE via ``research.xsec.{validate,cpcv}``, Invariant N-exec) on the execution-adjusted
+    Every field is the OUTPUT of ``convexity.system.xsec_validate.{walkforward,deflated,cpcv}`` (reused
+    BYTE-FOR-BYTE via ``convexity.system.{validate,cpcv}``, Invariant N-exec) on the execution-adjusted
     series — never a new statistical test (§9). ``naive_*`` fields carry the frictionless baseline the
     adjusted series is compared against, so the haircut of realizing execution is auditable.
     """
@@ -882,11 +882,11 @@ def reconcile(
     series?" It does NOT define a new test — it routes the adjusted series through the EXISTING
     machinery byte-for-byte (Invariant N-exec):
 
-      * purged walk-forward  — ``research.xsec.validate.purged_walkforward`` (reuses SYSTEM's
+      * purged walk-forward  — ``convexity.system.xsec_validate.purged_walkforward`` (reuses SYSTEM's
         ``make_walkforward_folds``);
-      * CPCV                 — ``research.xsec.cpcv.run_cpcv`` (reuses SYSTEM's ``SystemCPCV`` +
+      * CPCV                 — ``convexity.system.cpcv.run_cpcv`` (reuses SYSTEM's ``SystemCPCV`` +
         the LdP PBO estimator), N=8/k=2/28 paths/1-week embargo — the recorded baseline config;
-      * DSR                  — ``research.xsec.validate.deflated_sharpe`` (reuses SYSTEM's
+      * DSR                  — ``convexity.system.xsec_validate.deflated_sharpe`` (reuses SYSTEM's
         ``DeflatedSharpe.deflate``) over the lookback-family trial Sharpes.
 
     Only the SELECTED config's series is shortfall-adjusted (the deployed book is one ``w_target``
@@ -896,7 +896,7 @@ def reconcile(
     decision-price family the frictionless run used.
 
     ``family_series`` — {label: frictionless weekly net series} for the aligned lookback family
-        (``research.xsec.engine.run(...).net`` per L, aligned to a common length — see
+        (``convexity.portfolio.engine.run(...).net`` per L, aligned to a common length — see
         ``scripts/xsec_cpcv.py``).
     ``selected_label`` — the deployed config's label (e.g. the L=14 fitted peak).
     ``realized_shortfall_selected`` — shape (T,) per-week ``ShortfallReport.is_total`` for the
@@ -910,8 +910,8 @@ def reconcile(
     track-length-limited to ``SR_pp``-fail is the §9 signal that execution eats real edge (retuned
     only via the RED governance path, §10 — never a per-instrument tune on realized P&L).
     """
-    from research.xsec.cpcv import run_cpcv
-    from research.xsec.validate import deflated_sharpe, purged_walkforward
+    from convexity.system.cpcv import run_cpcv
+    from convexity.system.xsec_validate import deflated_sharpe, purged_walkforward
 
     if selected_label not in family_series:
         raise KeyError(f"selected_label {selected_label!r} not in family {tuple(family_series)}")
@@ -932,7 +932,7 @@ def reconcile(
     # DSR over the FULL lookback family's trial Sharpes (the multiplicity the headline is selected
     # from), with the selected trial's own Sharpe adjusted — the same trial set the frictionless run
     # deflated against, so the comparison is like-for-like (§9).
-    from research.xsec.cpcv import _sharpe_ann  # the family's own annualized-Sharpe helper
+    from convexity.system.cpcv import _sharpe_ann  # the family's own annualized-Sharpe helper
 
     trial_sharpes = np.array([_sharpe_ann(adj_family[lab]) for lab in adj_family])
     dsr = deflated_sharpe(adjusted, trial_sharpes)

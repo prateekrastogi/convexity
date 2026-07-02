@@ -10,7 +10,7 @@ import pandas as pd
 
 from convexity.core.protocols import RegimeEngine as RegimeEngineProto
 from convexity.core.types import RegimeState
-from research.xsec.panel import Panel
+from convexity.panel.panel import Panel
 from convexity.regime import cusum
 from convexity.regime.config.resolve import resolve_config
 from convexity.regime.engine_api import RegimeEngine

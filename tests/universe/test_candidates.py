@@ -8,7 +8,7 @@ import pandas as pd
 from convexity.universe.config.candidates import candidate_symbols, crypto_candidates
 from convexity.universe.eligibility.history_gate import base_eligible
 from convexity.universe.eligibility.stopping_times import tau_delist, tau_list
-from research.xsec.panel import Panel
+from convexity.panel.panel import Panel
 
 
 def _panel(listed: np.ndarray, symbols: tuple[str, ...]) -> Panel:

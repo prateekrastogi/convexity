@@ -8,8 +8,8 @@ import dataclasses
 import numpy as np
 import pytest
 
-import research.xsec.engine as eng
-from research.xsec.engine import (
+import convexity.portfolio.engine as eng
+from convexity.portfolio.engine import (
     LOOKBACK_BAND,
     XSecConfig,
     band_configs,
@@ -17,7 +17,7 @@ from research.xsec.engine import (
     run_book,
     run_ensemble,
 )
-from research.xsec.panel import Panel
+from convexity.panel.panel import Panel
 from tests.research.xsec.conftest import make_panel
 
 # "machine-epsilon tolerance" (§13): leg sums are a handful of terms around 0.5, so a few ulps.

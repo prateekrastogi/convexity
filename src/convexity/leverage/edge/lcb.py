@@ -24,7 +24,7 @@ import numpy as np
 
 from convexity.system.validate.robustness import block_bootstrap_ci
 
-from research.xsec.validate import deflated_sharpe
+from convexity.system.xsec_validate import deflated_sharpe
 
 from convexity.leverage.config.defaults import LeverageDefaults
 

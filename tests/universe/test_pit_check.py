@@ -8,7 +8,7 @@ from convexity.universe.config.defaults import DEFAULT_UNIVERSE_CONFIG
 from convexity.universe.types import EligibilitySnapshot
 from convexity.universe.universe_api import build_eligibility
 from convexity.universe.validate.pit_check import corrupt_future, pit_check
-from research.xsec.panel import build_dollar_volume  # noqa: F401  (import-surface sanity)
+from convexity.panel.panel import build_dollar_volume  # noqa: F401  (import-surface sanity)
 
 
 def _make_eligibility_fn(rebalances):
@@ -21,7 +21,7 @@ def _make_eligibility_fn(rebalances):
 
     def _dvol_from_panel(panel):
         # A deterministic dollar-volume proxy from the panel's own close, masked off-span exactly like
-        # research.xsec.panel.build_dollar_volume's post-condition (np.where(listed, ., nan)).
+        # convexity.panel.panel.build_dollar_volume's post-condition (np.where(listed, ., nan)).
         base = np.nan_to_num(panel.close, nan=0.0) * 1.0e6
         return np.where(panel.listed, base, np.nan)
 

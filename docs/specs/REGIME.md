@@ -35,10 +35,10 @@ engine runs on:
 > persistent regime-bleed that a naive stop would only make worse?
 
 REGIME composes with the sibling modules without importing their internals:
-- The **xsec engine** (`research/xsec/engine.py`) computes the raw weekly
+- The **xsec engine** (`src/convexity/portfolio/engine.py`) computes the raw weekly
   dollar-neutral net return from the momentum signal — REGIME never touches
   signal computation.
-- `research/xsec/overlay.py` **already implements the overlay MECHANICS**
+- `src/convexity/regime/overlay.py` **already implements the overlay MECHANICS**
   (`vol_target_scale`, `beta_hedge_returns`, `drawdown_stop_scale`) as pure
   causal transforms of a return series. REGIME does **not** duplicate these. It
   is the missing **detector** that decides *when* and *how hard* to apply them,
@@ -50,7 +50,7 @@ REGIME composes with the sibling modules without importing their internals:
   just because it was tested on carry.
 - `src/convexity/system/validate/{deflated,cpcv,walkforward}.py` are REUSED
   (not reimplemented) for REGIME's own promotion gate (Section 7), exactly as
-  `research/xsec/cpcv.py` already reuses `SystemCPCV` for the momentum family.
+  `src/convexity/system/cpcv.py` already reuses `SystemCPCV` for the momentum family.
 
 REGIME never opens, holds, reduces, or routes anything. It emits one scalar
 multiplier `g_t ∈ [0, 1]` (never a vector, never a per-instrument value) that
@@ -61,7 +61,7 @@ the decider; REGIME is a provider, mirroring COST's P2 (`COST.md` §0).
 
 Scope: the crypto cross-sectional momentum sleeve (Binance USDT-M perps,
 weekly Friday-close rebalance, dollar-neutral, ~50-name point-in-time universe).
-The equity/commodity sleeves (`research/xsec/universe.py` `ClassFriction`
+The equity/commodity sleeves (`src/convexity/panel/sleeve.py` `ClassFriction`
 table) share the same detector machinery through the same `Panel` abstraction
 but are out of scope for the worked numbers below, which are crypto-specific.
 Compute target: closed-form, `O(n_days · n_symbols)` per week, on the existing
@@ -89,7 +89,7 @@ mistaken for two different clocks.
 **P1 — The risk unit is next week's portfolio return, not one trade's
 R-multiple.** Every statistic REGIME watches, and every threshold it is
 calibrated against, is expressed on the **weekly, non-overlapping** observation
-grid the xsec engine already uses (`research/xsec/metrics.py`
+grid the xsec engine already uses (`src/convexity/system/metrics.py`
 `PERIODS_PER_YEAR = 365.25/7 ≈ 52.18`). A regime "event" is a week or a
 short run of weeks, not a single trade's excursion past a stop. Any borrowed
 formula from `COST.md`/`SYSTEM.md` that was expressed in bar-count or
@@ -132,10 +132,10 @@ needs no retraining loop and ships a provable false-alarm rate (Section 3).
 **P4 — The detector is causal; the calibration is offline and frozen.** The
 live statistic `S_t` at week `t` uses only weekly closes/dispersion up to and
 including week `t`'s Friday close (the same `F_t` the xsec engine's signals
-are computed at, `research/xsec/panel.py`: "known only AT day D's close"). The
+are computed at, `src/convexity/panel/panel.py`: "known only AT day D's close"). The
 CUSUM parameters `(mu_0, k, h)` are fit ONCE, offline, on the pre-pivot history
 using the class-level regime windows already defined in
-`research/xsec/universe.py` (`CRYPTO_REGIMES`: `2021_bull, 2022_bear,
+`src/convexity/panel/sleeve.py` (`CRYPTO_REGIMES`: `2021_bull, 2022_bear,
 2023_recovery, 2024_bull, 2025_2026`) and then FROZEN for live use — no online
 re-estimation of `(mu_0, k, h)` from the live stream (that would be exactly the
 forbidden continuous refit of P3, just relabeled as "calibration"). Re-
@@ -144,7 +144,7 @@ Section 6), never a per-week update.
 
 **P5 — Honest asymmetry: a stop that helps a tail event can hurt a persistent
 bleed, and this must be TESTED, not assumed.** Our own tested result on the
-funding-carry book (`research/xsec/overlay.py` `drawdown_stop_scale`,
+funding-carry book (`src/convexity/regime/overlay.py` `drawdown_stop_scale`,
 digest below) is that a causal DD-stop **caps drawdown at ~24% but collapses
 Sharpe from 0.57 to 0.10 and funding income from ~12.9%/yr to ~0.6%/yr**,
 because that book's ~70-75% drawdown is a **persistent regime-bleed** (the
@@ -209,11 +209,11 @@ the overlay mechanics. It consumes:
 
 | Existing module (do NOT rebuild)                             | REGIME consumes it as                                   |
 |----------------------------------------------------------------|----------------------------------------------------------|
-| `research/xsec/panel.py` `Panel.close/listed/funding`          | the raw daily/weekly data REGIME's statistics are built from |
-| `research/xsec/panel.py` `build_dollar_volume`, `trailing_dollar_volume` | a liquidity/turbulence input if a multivariate measure is used (Section 2.4) |
-| `research/xsec/engine.py` (weekly net-return series)            | the book-level return series the drawdown state machine (Section 5) watches |
-| `research/xsec/overlay.py` `vol_target_scale`, `beta_hedge_returns`, `drawdown_stop_scale` | the MECHANICS REGIME's detector gates — REGIME decides trigger levels, these functions execute them |
-| `src/convexity/system/validate/deflated.py` `DeflatedSharpe`   | REGIME's own promotion gate reuses this, exactly as `research/xsec/cpcv.py` reuses `SystemCPCV` |
+| `src/convexity/panel/panel.py` `Panel.close/listed/funding`          | the raw daily/weekly data REGIME's statistics are built from |
+| `src/convexity/panel/panel.py` `build_dollar_volume`, `trailing_dollar_volume` | a liquidity/turbulence input if a multivariate measure is used (Section 2.4) |
+| `src/convexity/portfolio/engine.py` (weekly net-return series)            | the book-level return series the drawdown state machine (Section 5) watches |
+| `src/convexity/regime/overlay.py` `vol_target_scale`, `beta_hedge_returns`, `drawdown_stop_scale` | the MECHANICS REGIME's detector gates — REGIME decides trigger levels, these functions execute them |
+| `src/convexity/system/validate/deflated.py` `DeflatedSharpe`   | REGIME's own promotion gate reuses this, exactly as `src/convexity/system/cpcv.py` reuses `SystemCPCV` |
 | `src/convexity/system/validate/cpcv.py` `SystemCPCV`           | REGIME's threshold-stability validation (Section 7) |
 
 > **Invariant N — no re-implementation of panel/overlay/validate.** REGIME's
@@ -257,7 +257,7 @@ is explicitly NOT the default), so each feeds its own single-statistic CUSUM
 symbol for the same thing.** Let `U_τ ⊆ {1,...,N}` be the point-in-time
 eligible cross-section at day `τ` (SIGNAL.md §2.1's `U_t`, `research/xsec/
 panel.py` `Panel.listed[τ]`) — exactly the same eligibility mask
-`research/xsec/signals.py` uses for the momentum rank, so `D_t` and the
+`src/convexity/signal/signals.py` uses for the momentum rank, so `D_t` and the
 momentum signal are computed over an IDENTICAL peer set at every date, by
 construction (there is no separate "REGIME universe"). Define the
 cross-sectional dispersion as the **cross-sectional standard deviation of
@@ -320,7 +320,7 @@ variance explained by the top-k principal components of a returns covariance
 matrix) is a legitimate closed-form (non-ML) statistic, but it requires
 estimating an `n_symbols × n_symbols` sample covariance matrix from ~50-75
 symbols on a weekly cadence with only ~250-260 historical weekly observations
-total (`research/xsec/cpcv.py`: "~259-week timeline"). This is exactly the
+total (`src/convexity/system/cpcv.py`: "~259-week timeline"). This is exactly the
 regime the **Marchenko–Pastur / random-matrix-theory eigenvalue-spreading
 argument** warns against: when the number of assets `N` approaches the number
 of observations `T` (here `N/T ≈ 50/50 ≈ 1` in-sample, or worse in any rolling
@@ -596,7 +596,7 @@ on `S_D^+`, `S_D^-`, `S_V^+`).
 ### 3.5 Worked example — calibrating `h` for `D_t`, reproduce bit-for-bit
 
 > **NOT YET EMPIRICALLY GROUNDED — read before trusting any number below.**
-> `mu_0=0.0420` and `sigma=0.0060` are NOT fitted from `research/xsec/panel.py`
+> `mu_0=0.0420` and `sigma=0.0060` are NOT fitted from `src/convexity/panel/panel.py`
 > data and are NOT in the EVIDENCE digest at the end of this spec; they are
 > invented, self-consistent placeholder numbers whose sole job is to let a
 > builder reproduce the ARITHMETIC of Sections 3.5/4.3 bit-for-bit while
@@ -783,7 +783,7 @@ than asserted away.
 ### 5.2 First-passage-time framing of "when does a stop even bind"
 
 Let `W_t` be the book's cumulative equity (product of `1 + net_weekly returns`,
-`research/xsec/metrics.py` `compute()`'s `equity` construction) and `M_t` its
+`src/convexity/system/metrics.py` `compute()`'s `equity` construction) and `M_t` its
 running peak. The drawdown-stop of `overlay.py` fires at the **first-passage
 time** `T_trigger = inf{t : (M_t − W_t)/M_t ≥ dd_trigger}`. Whether a stop
 triggered at `T_trigger` HELPS or HURTS subsequent Sharpe depends entirely on
@@ -845,14 +845,14 @@ regime is a sharp, sudden **reversal/crash week** (a v-shaped or short-lived
 cross-sectional reversal), which is closer to Section 5.2's isolated-tail-event
 case than carry's slow funding-regime bleed. But "closer to" is not
 "confirmed," so REGIME requires the following **regime-conditional ablation**
-(reusing `research/xsec/cpcv.py`'s CPCV machinery exactly as-is, no new
+(reusing `src/convexity/system/cpcv.py`'s CPCV machinery exactly as-is, no new
 validation code) before any DD-stop parameter is promoted to live for the
 momentum book:
 
 ```
-1. Compute the raw (no-stop) momentum weekly net-return series (research/xsec/engine.py).
+1. Compute the raw (no-stop) momentum weekly net-return series (src/convexity/portfolio/engine.py).
 2. Apply drawdown_stop_scale at each RED-candidate (dd_trigger, dd_reset) pair (BLUE grid, Section 6).
-3. For EACH candidate, compute per-REGIME-WINDOW (using the EXISTING research/xsec/universe.py
+3. For EACH candidate, compute per-REGIME-WINDOW (using the EXISTING src/convexity/panel/sleeve.py
    CRYPTO_REGIMES labels: 2021_bull, 2022_bear, 2023_recovery, 2024_bull, 2025_2026) the
    Sharpe/CAGR/maxDD delta vs the no-stop series, exactly as overlay.py's docstring compares
    carry's overlaid vs raw series.
@@ -943,7 +943,7 @@ Every REGIME parameter is exactly one bucket.
 - **AMBER — supplied metadata.** The BTC symbol used for `V_t`
   (`market_symbol="BTCUSDT"`, matching `overlay.py`'s default), the
   `CRYPTO_REGIMES` window boundaries (already AMBER-equivalent constants in
-  `research/xsec/universe.py`, reused not reforked), the weekly rebalance
+  `src/convexity/panel/sleeve.py`, reused not reforked), the weekly rebalance
   clock (Friday close, matching the xsec engine).
 - **RED — shared economic/modelling constants.** `Δ_target`, `ARL_0_target`,
   the resulting `(k, h)` per statistic, `h_warn` (the WATCH sub-threshold
@@ -988,7 +988,7 @@ Every REGIME parameter is exactly one bucket.
 REGIME's own directory tree already anticipates this
 (`docs/ARCHITECTURE.md` §2: `regime/validate/{threshold_stability,baselines,
 ablation,backtest}.py`). The validation reuses SYSTEM's machinery exactly as
-`research/xsec/cpcv.py`/`validate.py` already do for the momentum family —
+`src/convexity/system/cpcv.py`/`validate.py` already do for the momentum family —
 REGIME does not reimplement CPCV, DSR, or block-bootstrap CIs.
 
 ### 7.1 Threshold stability (`threshold_stability.py`)
@@ -1110,7 +1110,7 @@ the one SYSTEM ledger, per SYSTEM's own Invariant SG ("every composed config
    delists while `g_t = 0` (`HALT`), REGIME's own detector is unaffected (it
    operates on the eligible cross-section, not on individual open positions);
    the position-level unwind is the engine/accounting layer's concern
-   (`research/xsec/accounting.py`), not REGIME's — REGIME's firewall (P2)
+   (`src/convexity/cost/accounting.py`), not REGIME's — REGIME's firewall (P2)
    means it never reaches into position management.
 
 ---
@@ -1197,7 +1197,7 @@ build-contract described above, out of the detector's declared scope.
 ## 10. What REGIME is NOT (non-goals)
 
 - **Not a signal.** REGIME never proposes a trade, a side, or an instrument.
-  It scales exposure the momentum signal (`research/xsec/signals.py`) already
+  It scales exposure the momentum signal (`src/convexity/signal/signals.py`) already
   decided on.
 - **Not a sizing engine.** `g_t` is a single multiplicative scalar on gross,
   not a per-instrument weight adjustment (P2). Within-leg weighting
@@ -1283,7 +1283,7 @@ build-contract described above, out of the detector's declared scope.
   `src/convexity/system/validate/{deflated,cpcv}.py`.
 - Bailey, D. H., & López de Prado, M. (2014). "The probability of backtest
   overfitting" — the logit-of-relative-rank PBO construction reused
-  unmodified from `research/xsec/cpcv.py`'s existing `compute_pbo`, cited
+  unmodified from `src/convexity/system/cpcv.py`'s existing `compute_pbo`, cited
   here because Section 5.4's ablation gate borrows the same CPCV split
   family for the stop-vs-no-stop comparison.
 

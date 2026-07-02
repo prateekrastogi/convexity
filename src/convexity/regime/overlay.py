@@ -33,9 +33,9 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from research.xsec.engine import XSecBook
-from research.xsec.metrics import PERIODS_PER_YEAR
-from research.xsec.panel import Panel
+from convexity.portfolio.engine import XSecBook
+from convexity.system.metrics import PERIODS_PER_YEAR
+from convexity.panel.panel import Panel
 
 
 def trailing_beta(

@@ -1,6 +1,6 @@
 """Combinatorial Purged CV over the xsec momentum LOOKBACK FAMILY (REUSE SYSTEM ``SystemCPCV``).
 
-The xsec engine (``research.xsec.engine.run``) already produces, for one config, the WEEKLY net-return
+The xsec engine (``convexity.portfolio.engine.run``) already produces, for one config, the WEEKLY net-return
 series with the point-in-time universe + no-lookahead baked in (per-day ``listed`` mask + per-signal
 trailing-window warmup + Friday-close cadence). One observation = one NON-overlapping week (label
 horizon 0 — a week is realized inside itself). So CPCV here operates directly on those weekly series:
@@ -34,7 +34,7 @@ import numpy as np
 
 from convexity.system.validate.cpcv import CPCVDistribution, SystemCPCV
 
-from research.xsec.metrics import PERIODS_PER_YEAR
+from convexity.system.metrics import PERIODS_PER_YEAR
 
 
 def _sharpe_ann(returns: np.ndarray) -> float:

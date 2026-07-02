@@ -13,7 +13,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from research.xsec.panel import Panel
+from convexity.panel.panel import Panel
 
 
 def make_panel(
@@ -33,7 +33,7 @@ def make_panel(
 def make_dvol(dvol_live: np.ndarray, listed: np.ndarray) -> np.ndarray:
     """Daily dollar-volume array aligned to a panel: ``dvol_live`` on listed cells, NaN off-span.
 
-    Matches ``research.xsec.panel.build_dollar_volume``'s post-condition (``np.where(listed, arr, nan)``)
+    Matches ``convexity.panel.panel.build_dollar_volume``'s post-condition (``np.where(listed, arr, nan)``)
     so ``trailing_dollar_volume`` behaves identically to production.
     """
     return np.where(listed, dvol_live, np.nan)

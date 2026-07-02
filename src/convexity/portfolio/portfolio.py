@@ -24,7 +24,7 @@ from typing import Literal
 
 import numpy as np
 
-from research.xsec.panel import Panel
+from convexity.panel.panel import Panel
 
 Quantile = Literal["quintile", "tercile"]
 # base engine weightings (equal, volscaled) + liquidity-aware within-leg schemes (research sweep).

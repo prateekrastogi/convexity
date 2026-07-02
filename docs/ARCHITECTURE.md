@@ -42,7 +42,7 @@ states this plainly: `scipy: closed-form (NOT ML)`.
 | CUSUM sequential change-detection + average-run-length calibration (Page 1954) | REGIME's market-state detector, OPS's kill-switch | `REGIME.md` §3, `OPS.md` §4 |
 | Moving-block bootstrap (Künsch 1989), block length per Politis & White (2004) | SYSTEM's confidence intervals on weekly Sharpe | `SYSTEM.md` §7 |
 | Deflated / Probabilistic Sharpe Ratio, closed-form (Bailey & López de Prado) | SYSTEM's promotion gate | `SYSTEM.md` §5 |
-| Combinatorial Purged CV + PBO, closed-form combinatorics (López de Prado 2014) | SYSTEM/`research/xsec/cpcv.py`'s lookback-band robustness check | `SYSTEM.md` §4 |
+| Combinatorial Purged CV + PBO, closed-form combinatorics (López de Prado 2014) | SYSTEM/`src/convexity/system/cpcv.py`'s lookback-band robustness check | `SYSTEM.md` §4 |
 | Cube-root law / Almgren-Chriss optimal execution (closed-form) | EXECUTION's rebalance-trajectory sizing | `EXECUTION.md` §2.4, §4.2 |
 
 **Why full mean-variance/Markowitz optimization is refused, specifically (not just "we prefer
@@ -66,19 +66,19 @@ downstream spec). One pass through the nine pillars turns `F_t` into next week's
 
 | # | Pillar | Spec | Answers | Implemented in |
 |---|---|---|---|---|
-| 1 | **UNIVERSE** | `docs/specs/UNIVERSE.md` | Which names is it legitimate to rank/trade this week, using only what was knowable strictly before `t`? | `research/xsec/panel.py` (point-in-time daily close/funding panel + listed mask), `research/xsec/universe.py` (candidate-table loader), `research/universe.py` (UNIVERSE.md JSON parser) |
-| 2 | **SIGNAL** | `docs/specs/SIGNAL.md` | Given the eligible universe, what is each name's cross-sectional rank (momentum, carry, combined)? | `research/xsec/signals.py` |
-| 3 | **PORTFOLIO** | `docs/specs/PORTFOLIO.md` | Given ranks, what dollar-neutral quantile weight vector realizes them? | `research/xsec/portfolio.py` (`quantile_weights`, `liquidity_weights`, `realized_vol`) |
+| 1 | **UNIVERSE** | `docs/specs/UNIVERSE.md` | Which names is it legitimate to rank/trade this week, using only what was knowable strictly before `t`? | `src/convexity/panel/panel.py` (point-in-time daily close/funding panel + listed mask), `src/convexity/panel/sleeve.py` (candidate-table loader), `src/convexity/panel/candidates.py` (UNIVERSE.md JSON parser) |
+| 2 | **SIGNAL** | `docs/specs/SIGNAL.md` | Given the eligible universe, what is each name's cross-sectional rank (momentum, carry, combined)? | `src/convexity/signal/signals.py` |
+| 3 | **PORTFOLIO** | `docs/specs/PORTFOLIO.md` | Given ranks, what dollar-neutral quantile weight vector realizes them? | `src/convexity/portfolio/portfolio.py` (`quantile_weights`, `liquidity_weights`, `realized_vol`) |
 | 4 | **LEVERAGE** | `docs/specs/LEVERAGE.md` | What gross exposure `G_t` should scale the unit-gross book this week (quarter-Kelly, confidence-adjusted)? | Sizing math specified; consumes `src/convexity/system/validate/deflated.py` (`SR_LCB_t`) and `robustness.py` (`block_bootstrap_ci`) |
-| 5 | **COST** | `docs/specs/COST.md` | What is the honest round-trip friction and signed funding cash flow for this week's turnover? | `research/xsec/accounting.py` (`round_trip_friction`, `settle_week`), reusing `src/convexity/cost/config/fee_schedule.py` (`BINANCE_USDM_FEE_SCHEDULE`, the ONE fee truth) |
-| 6 | **EXECUTION** | `docs/specs/EXECUTION.md` | How does the target book computed at the Friday close actually get filled — child-order trajectory, shortfall? | Specified only; **not yet built** — `research/xsec/accounting.py::settle_week` still assumes a frictionless instantaneous Friday-close fill (the decision-price benchmark, not a fill price) |
-| 7 | **REGIME** | `docs/specs/REGIME.md` | Should the book's gross be cut (or a defensive overlay applied) given the current cross-sectional market state? | `research/xsec/overlay.py` (`beta_hedge_returns`, `vol_target_scale`, `drawdown_stop_scale`) |
-| 8 | **SYSTEM** | `docs/specs/SYSTEM.md` | Does the resulting weekly return series survive the promotion gate (DSR, CPCV/PBO, purged walk-forward)? | `research/xsec/validate.py` (purged-WF + `DeflatedSharpe` wiring), `research/xsec/cpcv.py` (CPCV/PBO over the lookback family), reusing `src/convexity/system/validate/{deflated,cpcv,walkforward}.py` verbatim |
+| 5 | **COST** | `docs/specs/COST.md` | What is the honest round-trip friction and signed funding cash flow for this week's turnover? | `src/convexity/cost/accounting.py` (`round_trip_friction`, `settle_week`), reusing `src/convexity/cost/config/fee_schedule.py` (`BINANCE_USDM_FEE_SCHEDULE`, the ONE fee truth) |
+| 6 | **EXECUTION** | `docs/specs/EXECUTION.md` | How does the target book computed at the Friday close actually get filled — child-order trajectory, shortfall? | Specified only; **not yet built** — `src/convexity/cost/accounting.py::settle_week` still assumes a frictionless instantaneous Friday-close fill (the decision-price benchmark, not a fill price) |
+| 7 | **REGIME** | `docs/specs/REGIME.md` | Should the book's gross be cut (or a defensive overlay applied) given the current cross-sectional market state? | `src/convexity/regime/overlay.py` (`beta_hedge_returns`, `vol_target_scale`, `drawdown_stop_scale`) |
+| 8 | **SYSTEM** | `docs/specs/SYSTEM.md` | Does the resulting weekly return series survive the promotion gate (DSR, CPCV/PBO, purged walk-forward)? | `src/convexity/system/xsec_validate.py` (purged-WF + `DeflatedSharpe` wiring), `src/convexity/system/cpcv.py` (CPCV/PBO over the lookback family), reusing `src/convexity/system/validate/{deflated,cpcv,walkforward}.py` verbatim |
 | 9 | **OPS** | `docs/specs/OPS.md` | How is the live/paper book monitored operationally — reconciliation, kill-switch, SLA, forced-flatten? | Specified only; **not yet built** — no live/paper rebalancer exists yet to operate |
 
-Two supporting, non-pillar modules complete the picture: `research/xsec/engine.py` is the driver
+Two supporting, non-pillar modules complete the picture: `src/convexity/portfolio/engine.py` is the driver
 that composes panel → signal → portfolio → accounting into one weekly series per config, and
-`research/xsec/metrics.py` computes the raw (non-deflated) weekly Sharpe/CAGR/maxDD/turnover/cost
+`src/convexity/system/metrics.py` computes the raw (non-deflated) weekly Sharpe/CAGR/maxDD/turnover/cost
 summary that `validate.py` then deflates.
 
 Of the eight `src/convexity/<pillar>/` packages the pre-pivot architecture (Appendix A §2) laid
@@ -90,13 +90,13 @@ out, only **three survive as live, implemented code**, reused verbatim by the ne
   `core.types.Bars`/`InstrumentSpec`, and every spec's parameter-governance section still uses the
   four-bucket taxonomy defined here.
 * **`src/convexity/cost/`** — the fee schedule and friction structure. `BINANCE_USDM_FEE_SCHEDULE`
-  in `cost/config/fee_schedule.py` is the ONE fee truth `research/xsec/accounting.py` imports
+  in `cost/config/fee_schedule.py` is the ONE fee truth `src/convexity/cost/accounting.py` imports
   directly (`BINANCE_VIP0_TAKER = BINANCE_USDM_FEE_SCHEDULE.tier_for_volume(0.0).taker_rate`,
   5bp) — never a second, drifted fee table.
 * **`src/convexity/system/validate/{deflated,cpcv,walkforward}.py`** — the DSR/CPCV/purged-WF
   machinery. Bailey–López de Prado's mathematics does not care whether the return series is
-  1-minute trade R-multiples or weekly portfolio returns, so `research/xsec/validate.py` and
-  `research/xsec/cpcv.py` reuse these modules directly rather than reimplementing the math for a
+  1-minute trade R-multiples or weekly portfolio returns, so `src/convexity/system/xsec_validate.py` and
+  `src/convexity/system/cpcv.py` reuse these modules directly rather than reimplementing the math for a
   weekly cadence — they instead build a **weekly-tuned `SystemDefaults`** (`weekly_defaults`,
   overriding `ppy` and the observation-count floors) so only the *cadence*, never the *math*,
   changes (`SYSTEM.md` §5.2).
@@ -217,7 +217,7 @@ Every pillar spec classifies its parameters into the same four governance bucket
   lookback family) and promoted only through SYSTEM's deflated-Sharpe/CPCV gate; every BLUE grid's
   cardinality is counted into SYSTEM's trial ledger so multiple-testing deflation is honest.
   `SYSTEM.md`'s real code-level floor for the minimum group count in a CPCV split is
-  `k_min=3` (`research/xsec/validate.py::weekly_defaults`) — cite this, not any larger invented
+  `k_min=3` (`src/convexity/system/xsec_validate.py::weekly_defaults`) — cite this, not any larger invented
   figure.
 * **TEAL** — fitted per-name from strictly causal (`F_{t-1}`) past data at runtime: rolling
   realized vol, EWMA dispersion, Ledoit-Wolf shrinkage intensity. Never a hand knob, never
@@ -301,9 +301,9 @@ statement of each.
 * **Repo hygiene:** hatchling build backend, ruff line-length 100, pytest. Commit/push only when
   explicitly asked; never commit secrets (`.env` is gitignored).
 * **Data lake:** `data/` is the 137-instrument 1-min lake (gitignored, ~15G) — do not touch or
-  delete it. `research/data.py` (`load_bars`/`load_funding`) is the sole loader the xsec panel
+  delete it. `src/convexity/panel/data.py` (`load_bars`/`load_funding`) is the sole loader the xsec panel
   builds on. Symbology: the USDT-M perpetual is `BTCUSDT-PERP` in Nautilus terms; bare `BTCUSDT`
-  is spot. Funding only accrues if explicitly charged — `research/xsec/accounting.py` charges
+  is spot. Funding only accrues if explicitly charged — `src/convexity/cost/accounting.py` charges
   signed funding by side; there is no silent-zero-funding trap in the xsec path.
 * **Open-source-first, minimal custom surface** (the repo's core development principle, stated in
   full in `CLAUDE.md`): NautilusTrader for the eventual paper/live engine, its native Binance

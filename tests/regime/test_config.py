@@ -6,7 +6,7 @@ research/xsec/universe.CRYPTO_REGIMES and the §3.4 in-control-window choice.
 """
 
 from convexity.core.params import Bucket, assert_no_red_in_amber
-from research.xsec.universe import CRYPTO_REGIMES
+from convexity.panel.sleeve import CRYPTO_REGIMES
 from convexity.regime.config.asset_class import CRYPTO_REGIME_PRESET
 from convexity.regime.config.defaults import REGIME_PARAM_REGISTRY, RegimeDefaults
 from convexity.regime.config.resolve import ResolvedRegimeConfig, resolve_config

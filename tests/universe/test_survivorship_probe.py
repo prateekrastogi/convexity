@@ -1,7 +1,7 @@
 """Survivorship-probe surface tests — the §6/§11 provider (UNIVERSE.md §1.3, §1.5, §6).
 
 The auditor's gap 3: ``validate/survivorship_probe.py`` carried real delegated logic
-(``roster_effective_breadth`` -> ``research.xsec.universe.effective_breadth``) but had NO companion test,
+(``roster_effective_breadth`` -> ``convexity.panel.sleeve.effective_breadth``) but had NO companion test,
 so the reused-formula delegation was unverified. These tests pin the delegation to the proven engine and
 confirm the honest ``delist_return_signs`` stub raises (per §1.5 (A1)'s MEASURED-vs-asserted line) rather
 than fabricating a measurement this repo has not run.
@@ -12,7 +12,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from research.xsec.universe import effective_breadth
+from convexity.panel.sleeve import effective_breadth
 from convexity.universe.validate.survivorship_probe import (
     delist_return_signs,
     roster_effective_breadth,
@@ -21,7 +21,7 @@ from convexity.universe.validate.survivorship_probe import (
 
 def test_roster_effective_breadth_delegates_to_engine():
     """§6/§3.3: ``roster_effective_breadth`` is a thin pass-through to the PROVEN engine formula, not a
-    re-derivation. It must return EXACTLY ``research.xsec.universe.effective_breadth`` on the same input
+    re-derivation. It must return EXACTLY ``convexity.panel.sleeve.effective_breadth`` on the same input
     (bit-identical), so no divergent breadth notion is introduced (REUSE doctrine)."""
     rng = np.random.default_rng(7)
     contrib = rng.standard_normal((52, 30))

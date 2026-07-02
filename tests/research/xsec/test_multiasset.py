@@ -10,8 +10,8 @@ from __future__ import annotations
 
 import numpy as np
 
-from research.xsec.engine import XSecConfig, run, run_book
-from research.xsec.universe import (
+from convexity.portfolio.engine import XSecConfig, run, run_book
+from convexity.panel.sleeve import (
     COMMODITY_FRICTION,
     CRYPTO_FRICTION,
     EQUITY_FRICTION,

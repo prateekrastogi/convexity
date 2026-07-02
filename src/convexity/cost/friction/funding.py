@@ -32,7 +32,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from research.xsec.accounting import _week_funding
+from convexity.cost.accounting import _week_funding
 
 
 @dataclass(frozen=True)

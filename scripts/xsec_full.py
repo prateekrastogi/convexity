@@ -21,12 +21,12 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from research.universe import all_symbols
+from convexity.panel.candidates import all_symbols
 
-from research.xsec import metrics
-from research.xsec.engine import XSecConfig, XSecResult, run
-from research.xsec.panel import Panel, build_panel, universe_size_by_year
-from research.xsec.validate import deflated_sharpe, purged_walkforward
+from convexity.system import metrics
+from convexity.portfolio.engine import XSecConfig, XSecResult, run
+from convexity.panel.panel import Panel, build_panel, universe_size_by_year
+from convexity.system.xsec_validate import deflated_sharpe, purged_walkforward
 
 PERIODS_PER_YEAR = metrics.PERIODS_PER_YEAR
 

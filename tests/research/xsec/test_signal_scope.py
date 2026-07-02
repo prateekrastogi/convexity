@@ -23,8 +23,8 @@ import inspect
 import numpy as np
 import pandas as pd
 
-from research.xsec import signals as sig
-from research.xsec.panel import Panel
+from convexity.signal import signals as sig
+from convexity.panel.panel import Panel
 
 _SIGNAL_FNS = (
     sig.momentum_signal,

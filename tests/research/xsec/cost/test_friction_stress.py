@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from research.xsec.cost.friction_stress import (
+from convexity.cost.friction.friction_stress import (
     FRICTION_STRESS_MULTIPLIER,
     STRESS_FRAC_POS_MIN,
     STRESS_SHARPE_RETENTION,
@@ -16,11 +16,11 @@ from research.xsec.cost.friction_stress import (
     stressed_frac_pos,
     stressed_net,
 )
-from research.xsec.accounting import settle_week
-from research.xsec.cpcv import path_distribution
-from research.xsec.engine import XSecConfig
-from research.xsec.metrics import compute
-from research.xsec.panel import Panel
+from convexity.cost.accounting import settle_week
+from convexity.system.cpcv import path_distribution
+from convexity.portfolio.engine import XSecConfig
+from convexity.system.metrics import compute
+from convexity.panel.panel import Panel
 
 
 def _make_panel(n_days: int = 250, n_sym: int = 8, seed: int = 7) -> Panel:
@@ -182,7 +182,7 @@ def _recorded_baseline_like_weekly(n_weeks: int = 258, seed: int = 0) -> np.ndar
     real-lake promotion-time anchor (scripts/xsec_cpcv.py), verified there rather than on synthetic
     data — see the module note below.
     """
-    from research.xsec.metrics import PERIODS_PER_YEAR
+    from convexity.system.metrics import PERIODS_PER_YEAR
 
     target_ann = 0.95
     mu_week = (target_ann / np.sqrt(PERIODS_PER_YEAR)) * 0.01  # sd=0.01/wk -> weekly Sharpe
@@ -195,7 +195,7 @@ def test_stressed_frac_pos_lands_in_recorded_baseline_band():
     # SAME N=8/k=2/1wk-embargo partition returns frac_pos inside the recorded 0.85-1.00 band and a
     # small (<0.15) CPCV haircut with no OOS collapse — the qualitative parity the task specifies
     # ("if the pillar delegates to the same engine internals, parity should be near-exact").
-    from research.xsec.cpcv import path_distribution
+    from convexity.system.cpcv import path_distribution
 
     series = _recorded_baseline_like_weekly()
     fp = stressed_frac_pos(series)
@@ -213,7 +213,7 @@ def test_stressed_frac_pos_partition_matches_run_cpcv_family():
     # The task's provenance note: the recorded baselines came from run_cpcv, stressed_frac_pos uses
     # path_distribution; both share SystemCPCV internals. Assert the two agree on the partition family
     # (n_paths) on the SAME series and defaults, so the parity anchor is on one partition scheme.
-    from research.xsec.cpcv import path_distribution
+    from convexity.system.cpcv import path_distribution
 
     series = _recorded_baseline_like_weekly(seed=3)
     _, summary = path_distribution(series, n_groups=8, k_test=2, embargo=1, seed=0)

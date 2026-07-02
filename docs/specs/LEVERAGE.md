@@ -31,7 +31,7 @@ This module answers exactly one question, at exactly one cadence:
 > the live track record accumulates?
 
 LEVERAGE is a **sizer of the whole book**, not of a position. SELECTION/the
-signal layer (`research/xsec/signals.py`, `research/xsec/portfolio.py`)
+signal layer (`src/convexity/signal/signals.py`, `src/convexity/portfolio/portfolio.py`)
 already decides *which* ~50 names are long/short and in what *relative*
 proportion (quintile membership, inverse-realized-vol weighting within each
 leg). LEVERAGE decides the **one scalar** that scales that entire relative
@@ -70,7 +70,7 @@ Every formula in this file is stated on the book's per-week net-of-cost return
 series `R_t` (one observation per Friday-close rebalance), never on a single
 instrument's stop-to-target distance. There is no `d` (stop distance in this
 system) to divide by. A ceiling here bounds `G_t`, the scalar multiplier
-applied uniformly to the dollar-neutral book that `research/xsec/portfolio.py`
+applied uniformly to the dollar-neutral book that `src/convexity/portfolio/portfolio.py`
 already built.
 
 **P2 — Kelly sizing is on the BOOK's return distribution, using a
@@ -98,7 +98,7 @@ independently-tuned dials that could disagree. (Invariant SIZE-ONE.)
 This module sizes ONE scalar (`G_t`) applied uniformly to an already-built
 relative book. It never inverts a covariance matrix to reweight *within* the
 book — that risk-weighting is SELECTION's inverse-realized-vol job
-(`research/xsec/portfolio.py::quantile_weights`), a closed-form, diagonal,
+(`src/convexity/portfolio/portfolio.py::quantile_weights`), a closed-form, diagonal,
 per-name computation, not a joint fitted optimization. Justification: with
 `N≈50` names and `n_obs≈258` weekly observations, the sample cross-sectional
 covariance matrix has an eigenvalue spectrum spread governed by the
@@ -151,7 +151,7 @@ in this file on realized P&L (Section 3).
 Every symbol used below, collected in one place (each is re-defined at its
 first point of use in prose; this table is a lookup, not a substitute for
 those definitions). Week index `t` runs over Friday-close rebalances, the
-same clock SYSTEM/SELECTION use (`research/xsec/engine.py`).
+same clock SYSTEM/SELECTION use (`src/convexity/portfolio/engine.py`).
 
 | Symbol | Meaning | Bucket | Owning section |
 |---|---|---|---|
@@ -169,7 +169,7 @@ same clock SYSTEM/SELECTION use (`research/xsec/engine.py`).
 | `G_max` | Absolute circuit-breaker ceiling on `G_t` | RED | 3, 6.1 |
 | `κ` | Capacity tightness: max fraction of `ADV_i` a position may occupy | RED | 5.1 |
 | `C` | Liquidity-cap multiple (capacity dial, off by default) | RED | 5.2 |
-| `ADV_i`, `w_i^{ref}` | Instrument `i`'s trailing dollar-volume; its reference-gross (100%) dollar weight from `research/xsec/portfolio.py`'s book | TEAL, derived | 5.1 |
+| `ADV_i`, `w_i^{ref}` | Instrument `i`'s trailing dollar-volume; its reference-gross (100%) dollar weight from `src/convexity/portfolio/portfolio.py`'s book | TEAL, derived | 5.1 |
 | `h_vol`, `n_vol_min` | EWMA half-life (weeks) and event-count floor for `σ̂_t` | RED | 3, 4.1–4.2 |
 | `L_boot`, CI level | Block-bootstrap block length and confidence level for `SR_LCB_t` | RED (shared w/ SYSTEM) | 2.6, 3 |
 | `dd_t`, `m_t` | Running peak-to-trough book-equity drawdown; governor ladder multiplier | derived, RED-ladder | 6.4 |
@@ -188,10 +188,10 @@ same clock SYSTEM/SELECTION use (`research/xsec/engine.py`).
 | Old concept (per-trade stop-to-target) | New concept (portfolio-level, this file) |
 |---|---|
 | Risk unit = one trade's R-multiple (stop distance `d`) | Risk unit = next week's book return `R_t` |
-| `L_stop = (c − max(carry,0)) / d` | retired — no per-trade stop; carry is netted directly into the weekly return series by `research/xsec/accounting.py::settle_week` (signed funding cash flow), not clamped into a sizing ceiling |
+| `L_stop = (c − max(carry,0)) / d` | retired — no per-trade stop; carry is netted directly into the weekly return series by `src/convexity/cost/accounting.py::settle_week` (signed funding cash flow), not clamped into a sizing ceiling |
 | `L_kelly` = Kelly on one trade's win/loss distribution | `f*` = Kelly on the BOOK's weekly return distribution (Section 2) |
 | `L_tail` = per-position EVT on MAE | retired — no single position's adverse excursion; book-level tail risk shows up in the realized weekly-return distribution's skew/kurtosis, already consumed by SYSTEM's DSR (γ3, γ4) |
-| `L_portfolio` (MCTR ceiling across open positions) | retired as a *ceiling*; MCTR-style risk decomposition still exists but lives in SELECTION's within-book weighting (`research/xsec/portfolio.py`), not as a LEVERAGE min()-term |
+| `L_portfolio` (MCTR ceiling across open positions) | retired as a *ceiling*; MCTR-style risk decomposition still exists but lives in SELECTION's within-book weighting (`src/convexity/portfolio/portfolio.py`), not as a LEVERAGE min()-term |
 | `L_margin`, `L_liquidity` (per-position) | capacity ceiling `κ·ADV_i` (Section 5), evaluated on the SCALED book's per-name notional, same spirit, new unit |
 | Drawdown governor (ladder on equity peak-to-trough) | KEPT, re-derived on book equity (Section 6.4) — same shape, same citation lineage, new trigger reference (book-level DD, not per-trade) |
 | `min()` of seven ceilings | `min()` of THREE ceilings: Kelly/vol-target sizing (Section 2), capacity (Section 5), drawdown governor (Section 6.4) — fewer terms because the per-trade machinery (stop, per-trade tail, per-trade margin) has no referent in a weekly rebalanced book |
@@ -211,9 +211,9 @@ Let `F_t` be the information set available at the Friday-close rebalance
 decision `t` (all quantities below are `F_t`-measurable; no future weekly
 return enters `G_t`). Let `R_{t+1}` be the **book's dollar-neutral, 100%-gross
 reference weekly net return** for the week starting at rebalance `t` — i.e.
-the `net` series `research/xsec/engine.py::XSecResult.net` (price P&L + signed
-funding − turnover cost, as decomposed in `research/xsec/accounting.py`) at
-`gross=1.0`. Because the book is dollar-neutral (`research/xsec/portfolio.py`
+the `net` series `src/convexity/portfolio/engine.py::XSecResult.net` (price P&L + signed
+funding − turnover cost, as decomposed in `src/convexity/cost/accounting.py`) at
+`gross=1.0`. Because the book is dollar-neutral (`src/convexity/portfolio/portfolio.py`
 long leg `+gross/2`, short leg `−gross/2`), Sharpe is leverage-invariant:
 scaling gross by `G` scales every weekly return by `G`, so `Sharpe(G·R) =
 Sharpe(R)` for `G>0`, while CAGR and maxDD scale with `G` (documented in
@@ -495,7 +495,7 @@ deployment — SYSTEM §4.4/§6.1).
 **This is the exact, verified call path — the single most load-bearing
 pointer in this file, because the entire Kelly sizing rule (`G_t^{Kelly}`)
 is a function of `SR_LCB_t`.** `SR_LCB_t` is NOT read off
-`PathSharpeSummary` (`research/xsec/cpcv.py`) — `PathSharpeSummary` has no
+`PathSharpeSummary` (`src/convexity/system/cpcv.py`) — `PathSharpeSummary` has no
 bootstrap-CI field (its fields are `n_paths, mean, median, p05, minimum,
 frac_pos, frac_gt_half, naive_full_sharpe, haircut`; confirmed against the
 dataclass directly). The actual confidence interval is a SEPARATE
@@ -525,7 +525,7 @@ production via `RobustnessSuite.run(...)` (same file), which returns a
 `(ci_low, ci_high)`; LEVERAGE calls `block_bootstrap_ci` directly (or reuses
 `RobustnessSuite.run(...).sharpe_ci`, either is acceptable since they are
 the same code path) on the SAME `path_returns` series `SYSTEM
-§5.2`/`research/xsec/validate.py::deflated_sharpe` already uses as its
+§5.2`/`src/convexity/system/xsec_validate.py::deflated_sharpe` already uses as its
 `net_weekly` input — i.e. `SR_LCB_t` and the DSR gate are computed from
 IDENTICAL input data, just two different statistics of it (a bootstrap CI
 lower bound vs. a deflated point test), so there is no risk of the two
@@ -763,7 +763,7 @@ object the Marchenko–Pastur argument in P4 says is too noisy to invert at
 `N≈50, n_obs≈258` (`N/n_obs ≈ 0.19`; Marchenko & Pastur, 1967; empirical
 finance treatment in Laloux, Cizeau, Bouchaud & Potters, 1999). If a
 covariance term is ever needed for a future extension (e.g. blending crypto
-momentum with the equities/commodities sleeves `research/xsec/universe.py`
+momentum with the equities/commodities sleeves `src/convexity/panel/sleeve.py`
 already scaffolds), it MUST be Ledoit-Wolf shrunk toward a structured target
 (Ledoit & Wolf, 2004), never the raw sample covariance, and is out of scope
 for the crypto-only v1 sizing rule in this file.
@@ -794,7 +794,7 @@ G_t^{cap}  =  min_i  ( κ · ADV_i  /  |w_i^{ref}| )
 ```
 
 where `w_i^{ref}` is instrument `i`'s reference-gross (100%) dollar weight
-from `research/xsec/portfolio.py`'s already-built book. A name with
+from `src/convexity/portfolio/portfolio.py`'s already-built book. A name with
 `shortable = False` (AMBER) contributes `ADV_i = 0` on the short side of this
 computation regardless of its measured liquidity, so an unshortable name
 cannot silently inflate capacity via the long-only side of a two-sided
@@ -803,11 +803,11 @@ liquidity estimate.
 ### 5.2 The liquidity-capping dial — a CAPACITY tool, never a default
 
 The EMPIRICAL BASELINE is explicit and must be encoded literally: **liquidity-
-capped within-leg weighting (`research/xsec/portfolio.py`'s `liqcap_volscaled`
+capped within-leg weighting (`src/convexity/portfolio/portfolio.py`'s `liqcap_volscaled`
 scheme) was tested and LOSES vs plain inverse-vol weighting** — because
 crypto majors are simultaneously low-vol AND high-liquidity, a liquidity-
 share cap paradoxically gives majors the LARGEST weight ceiling, so effective
-breadth (inverse-HHI, `research/xsec/universe.py::effective_breadth`) FALLS
+breadth (inverse-HHI, `src/convexity/panel/sleeve.py::effective_breadth`) FALLS
 under capping (**~40 → 28–34**), not rises. Capping only buys CAPACITY:
 **median deployable book ~$3M uncapped → ~$12–23M at cap tightness `C=2–3`**,
 at a cost of **~0.4–0.6 Sharpe**. Therefore:
@@ -836,7 +836,7 @@ sizing choice. Turning it on is logged as a reason code
 This is a boundary case worth being precise about: LEVERAGE (this file) owns
 the CEILING math (`G_t^{cap}` above); WHICH within-leg weighting scheme is
 active is technically a SELECTION/portfolio-construction choice
-(`research/xsec/portfolio.py`), but because the choice is capacity-driven and
+(`src/convexity/portfolio/portfolio.py`), but because the choice is capacity-driven and
 must be gated on the SAME book-size number LEVERAGE computes (`equity ×
 G_t`), LEVERAGE is the module that owns the trigger threshold and emits the
 `liquidity_cap_engaged` directive; `portfolio.py` consumes it as a config
@@ -1056,7 +1056,7 @@ EMPIRICAL BASELINE by name — no invented constants.
 
 | Input | Value | Source |
 |---|---|---|
-| `σ̂_t` (weekly, EWMA) | `0.0389` (3.89%) | derived from cited **~28% annualized vol** ÷ `√52.18` (`research/xsec/metrics.py::PERIODS_PER_YEAR = 365.25/7 ≈ 52.18`) |
+| `σ̂_t` (weekly, EWMA) | `0.0389` (3.89%) | derived from cited **~28% annualized vol** ÷ `√52.18` (`src/convexity/system/metrics.py::PERIODS_PER_YEAR = 365.25/7 ≈ 52.18`) |
 | `SR_LCB_t` (per-observation, deflated lower bound) | `0.091` | illustrative CI-low draw consistent with CPCV mean OOS path Sharpe **≈0.91** annualized ÷ `√52.18` ≈ 0.126 per-obs, shaded down for the bootstrap CI margin per Section 2.6 — the ACTUAL number at deploy time is `max(0, ci_low)` from `convexity.system.validate.robustness.block_bootstrap_ci(path_returns, ...)`, gated by `DeflatedSharpe.deflate(...).passed` (Section 2.6); this row is a worked-example placeholder consistent with the cited magnitude, not a real bootstrap draw |
 | `c_t` | `0.25` (quarter-Kelly, cold start) | Section 6.2 |
 | `dd_t` | `0.0` (no drawdown at deploy) | — |
@@ -1143,7 +1143,7 @@ where the empirically-anchored ladder bites.
   from the bootstrap CI as normal; it is Gate 1 (`n_true_distinct >= k_min`,
   `k_min=3` per SYSTEM §6.1 — NOT the fabricated `>=30` floor an earlier
   SYSTEM.md draft stated and has since retracted; the correct citation is
-  `research/xsec/validate.py::weekly_defaults(k_min=3)`) and Gate 6
+  `src/convexity/system/xsec_validate.py::weekly_defaults(k_min=3)`) and Gate 6
   (cost-stress) being OPEN (SYSTEM §6.2) — not Gate 2 — that would
   currently block a live promotion if either resolves to a fail once run.
 - **Drawdown governor ladder tuned too aggressively collapses realized
@@ -1207,7 +1207,7 @@ where the empirically-anchored ladder bites.
   structurally impossible because `μ, σ, SR_LCB_t` are all estimated at the
   fixed reference gross of 1.0, per Section 2.1's leverage-invariance
   argument, and `G_t` is applied exactly once at the position-translation
-  boundary, mirroring `research/xsec/portfolio.py`'s own "report at 100%
+  boundary, mirroring `src/convexity/portfolio/portfolio.py`'s own "report at 100%
   gross and note the scaling" convention).
 
 > **Invariant NO-DUP-EWMA — one EWMA form, two independent instantiations,
@@ -1351,12 +1351,12 @@ sequences only; no live layer (`vol/`, `edge/`, `ceilings/`, `ratchet/`,
 ## 11. Non-goals (belong to sibling modules)
 
 - **Which instruments are long/short and their within-book relative
-  weights** — SELECTION / `research/xsec/signals.py` +
-  `research/xsec/portfolio.py`. LEVERAGE consumes the reference-gross book
+  weights** — SELECTION / `src/convexity/signal/signals.py` +
+  `src/convexity/portfolio/portfolio.py`. LEVERAGE consumes the reference-gross book
   as given and only scales it.
 - **Signal construction (the momentum lookback band, quintile vs tercile,
   the universe size N)** — the signal/universe layer
-  (`research/xsec/signals.py`, `research/xsec/universe.py`). LEVERAGE does
+  (`src/convexity/signal/signals.py`, `src/convexity/panel/sleeve.py`). LEVERAGE does
   not choose or validate the lookback band `L ∈ [12,16]` days or the
   universe size `N≈50` — those are cited inputs from the EMPIRICAL BASELINE,
   not decisions this file makes. In particular, the decision to deploy the
@@ -1370,7 +1370,7 @@ sequences only; no live layer (`vol/`, `edge/`, `ceilings/`, `ratchet/`,
   produces a wider/lower CI and therefore a smaller `G_t` — the PBO evidence
   is consumed only through that channel, never re-validated here.
 - **Cost/funding modelling** — COST (`src/convexity/cost/`). LEVERAGE reads
-  the ALREADY-NETTED weekly return series (`research/xsec/accounting.py`'s
+  the ALREADY-NETTED weekly return series (`src/convexity/cost/accounting.py`'s
   `settle_week`, which nets signed funding and turnover friction into `net`)
   — it does not re-derive fee tiers, spread, impact, or funding forecasts.
 - **The DSR/PSR/bootstrap machinery itself** — SYSTEM
@@ -1426,7 +1426,7 @@ sequences only; no live layer (`vol/`, `edge/`, `ceilings/`, `ratchet/`,
   Financial Machine Learning* (2018); Bailey, D. H., Borwein, J., López de
   Prado, M. & Zhu, Q. J. (2014), "The Probability of Backtest Overfitting,"
   *Journal of Computational Finance* — the CPCV path-Sharpe distribution
-  (`research/xsec/cpcv.py`, SYSTEM §4) and the PBO logit-of-relative-rank
+  (`src/convexity/system/cpcv.py`, SYSTEM §4) and the PBO logit-of-relative-rank
   estimator cited for the lookback-band overfitting evidence (**PBO = 0.357,
   range [0.31, 0.47] under alternative partitionings, `L=12` winning 21/28
   splits — SYSTEM §4.4**) this file's Section 2.5 numeric grounding draws on

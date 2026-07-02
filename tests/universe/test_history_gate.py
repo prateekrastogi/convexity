@@ -8,7 +8,7 @@ import pandas as pd
 from convexity.universe.config.defaults import DEFAULT_UNIVERSE_CONFIG, UniverseConfig
 from convexity.universe.eligibility.history_gate import base_eligible, history_warmup, tau_history
 from convexity.universe.eligibility.stopping_times import in_tradeable_life
-from research.xsec.panel import Panel
+from convexity.panel.panel import Panel
 
 
 def _panel(listed: np.ndarray, symbols: tuple[str, ...]) -> Panel:

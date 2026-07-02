@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import numpy as np
 
-from research.xsec.accounting import settle_week
-from research.xsec.panel import trailing_dollar_volume
+from convexity.cost.accounting import settle_week
+from convexity.panel.panel import trailing_dollar_volume
 
 
 def _flat_panel(n_days: int, n_sym: int):

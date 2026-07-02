@@ -44,8 +44,8 @@ exceeds the cost of doing so."** Every formula in this file is stated over a reb
 spirit, remapped: here it is one *rebalance unit*, not one *trade unit*.)
 
 **P2 — EXECUTION is a PROVIDER of a trajectory and a REPORTER of shortfall, never a signal
-decider.** EXECUTION does not decide *what* to hold — `research/xsec/signals.py` and
-`research/xsec/portfolio.py` already emit `w_target` at the Friday close. EXECUTION decides only
+decider.** EXECUTION does not decide *what* to hold — `src/convexity/signal/signals.py` and
+`src/convexity/portfolio/portfolio.py` already emit `w_target` at the Friday close. EXECUTION decides only
 *how* to get from the currently-held drifted book `w_carried` to `w_target` (or, under the no-trade
 band of §6, to *not* trade a name at all) and *how fast*. It never overrides a rank, a quantile
 membership, or a vol-scaled weight. (Direct analogue of COST.md's P2 "provider, never decider,"
@@ -106,7 +106,7 @@ Invariant W).
 Every symbol used below, collected in one place (each is re-defined at its first point of use in
 prose; this table is a lookup, not a substitute for those definitions) — same discipline as
 LEVERAGE.md §0.1 / SYSTEM.md §0.1. Rebalance index `t_0` runs over Friday-close rebalances, the
-same clock SYSTEM/SELECTION use (`research/xsec/engine.py`).
+same clock SYSTEM/SELECTION use (`src/convexity/portfolio/engine.py`).
 
 | Symbol | Meaning | Bucket | Owning section |
 |---|---|---|---|
@@ -166,7 +166,7 @@ have to reconstruct this mapping from Section 10's prose.
 | Already exists / owned elsewhere                                   | EXECUTION consumes it as                                  |
 |----------------------------------------------------------------------|-------------------------------------------------------------|
 | `research/xsec/portfolio.quantile_weights` — `w_target` at `t` (already the resolved `L∈{12,14,16}` ensemble score's output, §2.1a — ONE vector, never per-lookback) | the trajectory's TERMINAL condition (must reach `w_target` by `t+Δ`) |
-| Universe/eligibility layer (`research/universe.py`, `research/xsec/universe.py`) — per-name shortable flag at `t` | a REQUIRED companion field to `w_target`'s short-side entries (Invariant SHORTABLE-GATE, §13); EXECUTION does not compute shortability, only gates on it |
+| Universe/eligibility layer (`src/convexity/panel/candidates.py`, `src/convexity/panel/sleeve.py`) — per-name shortable flag at `t` | a REQUIRED companion field to `w_target`'s short-side entries (Invariant SHORTABLE-GATE, §13); EXECUTION does not compute shortability, only gates on it |
 | `research/xsec/accounting.round_trip_friction` — flat per-unit cost | the risk-neutral (λ=0) cost floor; EXECUTION adds impact curvature on top |
 | COST §5.2–5.4 (`SpreadImpactModel`) — sqrt-law half-spread anchor + fitted Amihud-based `k_amihud`, per-name `Amihud_i` | the `η` (temporary) / `γ` (permanent) impact coefficients feeding Almgren–Chriss (§2.2) |
 | COST §6 (`FundingModel`) | funding accrual during the execution window is a COST input, not re-derived here |
@@ -194,7 +194,7 @@ including `t_0` — and emit `w_target ∈ R^N`, the dollar-neutral target weigh
 EXECUTION does not redefine `U_t`, it only inherits its cardinality via `w_target`'s support — see
 §15 for the explicit non-goal boundary). The book currently holds the **drifted** prior week's weights
 `w_carried` (COST.md's accounting note: a name that ran up carries a larger weight into the
-rebalance even with no rank change — `research/xsec/accounting.py` docstring). Define the **required
+rebalance even with no rank change — `src/convexity/cost/accounting.py` docstring). Define the **required
 trade vector**:
 
 ```
@@ -768,7 +768,7 @@ attempt at unification has a concrete, checkable target rather than an open-ende
 per-name **realized weight-drift volatility** — the standard deviation of name `i`'s week-over-week
 *drift* `w_carried,i,t − w_target,i,t-1` (the quantity that accumulates between rebalances), **not**
 `portfolio.realized_vol`'s statistic, which is the trailing standard deviation of name `i`'s daily
-*price* returns (`research/xsec/portfolio.py::realized_vol`, confirmed by inspection: `np.std` of
+*price* returns (`src/convexity/portfolio/portfolio.py::realized_vol`, confirmed by inspection: `np.std` of
 `panel.close`-derived daily returns over a 28-day trailing window). An earlier draft of this spec
 conflated the two ("already estimated causally by `portfolio.realized_vol`, reused verbatim") — that
 is corrected here: price-return vol and weight-drift vol are different statistics because weight
@@ -834,7 +834,7 @@ below).
 
 ## 5. Salvaged math from COST.md (re-derived under the new risk unit)
 
-### 5.1 The flat friction floor (already implemented, `research/xsec/accounting.py`)
+### 5.1 The flat friction floor (already implemented, `src/convexity/cost/accounting.py`)
 
 ```
 round_trip_friction = 2 · (taker + half_spread + impact)
@@ -843,7 +843,7 @@ round_trip_friction = 2 · (taker + half_spread + impact)
 
 `taker` = Binance USDT-M VIP0 taker rate, read from `convexity.cost.config.fee_schedule
 .BINANCE_USDM_FEE_SCHEDULE` — the SAME one fee truth COST.md §5.2 defines (`BINANCE_VIP0_TAKER =
-0.0005`, `research/xsec/accounting.py`). `half_spread` and `impact` are the crypto-major research
+0.0005`, `src/convexity/cost/accounting.py`). `half_spread` and `impact` are the crypto-major research
 fallbacks (1.0bp, 0.5bp), matching COST §5.3/5.4's conservative fallback discipline (P6) rather than
 a per-name fit, because the backtest scores the *book-level* honest Sharpe, not a per-name TCA. This
 13.0 bp constant is EXECUTION's **cost floor** — the minimum a trajectory must reconcile to when
@@ -863,7 +863,7 @@ Corwin-Schultz subsection), and is cross-referenced identically in `docs/specs/U
 `docs/specs/PORTFOLIO.md` §7.4 — all three specs point at the same COST-owned derivation, none
 re-derive it. Restated here because EXECUTION is exactly the pillar that would be tempted to
 re-derive its own microstructure cost model: **Corwin–Schultz on 1-minute-aggregated daily high/low
-was tried and rejected** (COST Invariant CS-REJECT, `research/xsec/cost/validate/corwin_schultz_reject.py`
+was tried and rejected** (COST Invariant CS-REJECT, `src/convexity/cost/friction/validate/corwin_schultz_reject.py`
 kept as a standing regression test) — it conflates realized intrabar volatility with the bid-ask
 spread and produced ~135bp / ~40%-drag garbage, an order of magnitude off the real Amihud-based
 cost. Any future change to the impact estimator underlying this pillar's `η`/`γ` must go through
@@ -872,7 +872,7 @@ COST.md's own validation battery (COST §12), not be re-fit locally inside EXECU
 ### 5.3 DSR / CPCV — reused verbatim for the execution-adjusted series (SYSTEM.md §5, §4)
 
 The post-execution honest Sharpe (the weekly net-return series AFTER live shortfall is subtracted,
-§7 below) is validated with the SAME machinery `research/xsec/validate.py` and `cpcv.py` already
+§7 below) is validated with the SAME machinery `src/convexity/system/xsec_validate.py` and `cpcv.py` already
 apply to the frictionless backtest series: `convexity.system.validate.deflated.DeflatedSharpe` — PSR
 per SYSTEM §5.2's series/units contract (the `path_returns`/`ppy`/`SR_pp`/`n_obs` pinned inputs) and
 §5.3's worked DSR example (Vintage-2 real-Amihud-cost numbers: `DSR=0.807`, `PSR=0.994` against
@@ -893,7 +893,7 @@ instead of net-of-backtest-friction-constant) to the same validated functions (�
 
 ### 6.1 Calendar-triggered (PRIMARY)
 
-The validated edge is a **Friday-close, `rebalance_days=7`** cadence (`research/xsec/engine.py`'s
+The validated edge is a **Friday-close, `rebalance_days=7`** cadence (`src/convexity/portfolio/engine.py`'s
 `XSecConfig.rebalance_days` default; `docs/EDGE.md`'s entire CPCV/DSR/walk-forward battery is scored
 on this cadence). EXECUTION's calendar trigger fires the trajectory of §2 **once per week, at the
 Friday close**, computing `x = w_target − w_carried` from that week's signal output. This is the
@@ -968,7 +968,7 @@ trajectory to the paper return of the DECISION — here, the Friday-close print 
 IS_i  =  (P_decision,i − P̄_fill,i) · sign(x_i) · |x_i|·NAV        (long trade: pay MORE than decision price = cost)
 ```
 
-where `P_decision,i` is the Friday-close print (`panel.close` at row `d`, `research/xsec/panel.py`
+where `P_decision,i` is the Friday-close print (`panel.close` at row `d`, `src/convexity/panel/panel.py`
 — the exact price the backtest's `_asset_week_return` uses as the week's starting mark) and
 `P̄_fill,i` is the realized, notional-weighted average fill price across all child orders executed
 for name `i` during `[t_0, t_0+Δ]`. Summed and normalized by total traded notional, this decomposes
@@ -1046,10 +1046,10 @@ isolation — it is "does the realized-shortfall-adjusted weekly net-return seri
 SAME validation battery `docs/EDGE.md` reports for the frictionless backtest series." Concretely,
 re-run, on the execution-adjusted series:
 
-- **Purged walk-forward** (`research/xsec/validate.py`'s `weekly_defaults` + SYSTEM's
+- **Purged walk-forward** (`src/convexity/system/xsec_validate.py`'s `weekly_defaults` + SYSTEM's
   `PurgedWalkForward`) — no OOS collapse expected, same as the frictionless series (`docs/EDGE.md`
   §c).
-- **CPCV** (`research/xsec/cpcv.py`, N=8/k=2/28 paths/1-week embargo) — compare
+- **CPCV** (`src/convexity/system/cpcv.py`, N=8/k=2/28 paths/1-week embargo) — compare
   `frac_pos`/mean-path-Sharpe on the execution-adjusted series against the frictionless baseline
   (0.91 mean path Sharpe, 0.85–1.00 `frac_pos`, per `docs/EDGE.md`). A material `frac_pos` drop
   under realistic execution is the signal that this pillar's trajectory/band design needs
@@ -1172,14 +1172,14 @@ optimizer search), pandas, pytest, NautilusTrader (child-order submission only).
 ### 11.1 Build contract: exact function signatures
 
 > **SPECIFICATION — not yet implemented.** Nothing below this line is a citation to existing code.
-> `research/xsec/execution.py` and `research/xsec/execution/` do not exist on disk today (verified:
-> no `src/convexity/execution/*`, no `research/xsec/execution.py` — the prior adversarial review's
+> `src/convexity/execution/execution.py` and `research/xsec/execution/` do not exist on disk today (verified:
+> no `src/convexity/execution/*`, no `src/convexity/execution/execution.py` — the prior adversarial review's
 > finding stands). Every signature below is a BUILD CONTRACT — the precise, typed interface a future
 > implementer must satisfy — written in the same style as the REAL, already-merged
-> `research/xsec/accounting.py::settle_week` and `research/xsec/portfolio.py::quantile_weights` (read
+> `src/convexity/cost/accounting.py::settle_week` and `src/convexity/portfolio/portfolio.py::quantile_weights` (read
 > on the VM to match style exactly: module-level docstring stating the accounting identity, then a
 > dataclass for the decomposed result, then the function with a docstring that states units and
-> causality inline). Proposed module path: **`research/xsec/execution.py`** (a single module,
+> causality inline). Proposed module path: **`src/convexity/execution/execution.py`** (a single module,
 > mirroring `accounting.py`'s single-file scope, rather than the `execution/` package sketched in
 > §11's directory layout — the package layout in §11 is the eventual production shape if this
 > pillar graduates into `src/convexity/execution/`; the signatures below are what a first
@@ -1322,7 +1322,7 @@ def implementation_shortfall(
 ) -> ShortfallReport:
     """Decompose realized shortfall vs. the Friday-close decision price (EXECUTION.md Sec 7.1).
 
-    ``decision_price`` -- shape (N,) `panel.close` at rebalance row `d` (`research/xsec/panel.py`), the
+    ``decision_price`` -- shape (N,) `panel.close` at rebalance row `d` (`src/convexity/panel/panel.py`), the
                            EXACT price `accounting._asset_week_return` uses as the week's starting mark.
     ``fill_price`` -- shape (N,) notional-weighted average realized fill price per name across all child
                        orders executed in `[t_0, t_0+Delta]`.
@@ -1587,8 +1587,8 @@ section states the Protocol-level shape only, matching `core/protocols.py`'s own
 
 ## 15. Non-goals (belong to sibling modules)
 
-- **What to hold.** Signal computation (`research/xsec/signals.py`), quantile/weighting portfolio
-  construction (`research/xsec/portfolio.py`) — EXECUTION consumes `w_target`, never computes it.
+- **What to hold.** Signal computation (`src/convexity/signal/signals.py`), quantile/weighting portfolio
+  construction (`src/convexity/portfolio/portfolio.py`) — EXECUTION consumes `w_target`, never computes it.
 - **Whether to reduce gross book-wide.** REGIME's defensive-overlay decision and its arming
   threshold are REGIME-owned; EXECUTION only consumes the resulting boolean (§8).
 - **Fee tier, spread, funding, and impact ESTIMATION.** All owned by COST (COST.md §5); EXECUTION
@@ -1597,7 +1597,7 @@ section states the Protocol-level shape only, matching `core/protocols.py`'s own
 - **DSR/CPCV/purged-walk-forward statistical machinery.** Owned by `convexity.system.validate`;
   EXECUTION supplies a different input series to the same machinery (§9), never a new test.
 - **Universe eligibility / shortability filtering.** Owned by the universe-selection layer
-  (`research/universe.py`, `research/xsec/universe.py`); EXECUTION trades only what that layer has
+  (`src/convexity/panel/candidates.py`, `src/convexity/panel/sleeve.py`); EXECUTION trades only what that layer has
   already confirmed tradeable in both directions (§13 edge case).
 - **The engine.** Order plumbing, position/account/portfolio state, restart reconciliation, data
   transport, backtest↔live parity are NautilusTrader's; EXECUTION emits child `OrderCommand`s

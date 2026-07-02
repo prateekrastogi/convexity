@@ -14,7 +14,7 @@ the only sleeve with a live cross-sectional-momentum edge (UNIVERSE.md §0 Scope
 
 from __future__ import annotations
 
-from research.universe import all_symbols
+from convexity.panel.candidates import all_symbols
 
 
 def crypto_candidates() -> tuple[str, ...]:
@@ -23,7 +23,7 @@ def crypto_candidates() -> tuple[str, ...]:
     Curated once for sector/market-cap diversity (see ``research/UNIVERSE.md``'s "Crypto (50) — by
     sector" table), explicitly excluding low-mcap pump coins by sector representativeness, NOT by
     realized return (§6) — so it is NOT the survivorship-flattered ``R``-style backward roster §1.3
-    proves is biased. REUSES ``research.universe.all_symbols`` (the one reader of the ```json block).
+    proves is biased. REUSES ``convexity.panel.candidates.all_symbols`` (the one reader of the ```json block).
     """
     return tuple(all_symbols(sleeves=("crypto",)))
 
@@ -32,6 +32,6 @@ def candidate_symbols(sleeves: tuple[str, ...] = ("crypto",)) -> tuple[str, ...]
     """Flat candidate pool across the requested sleeves (AMBER; UNIVERSE.md §6, §8).
 
     Defaults to crypto only — the sole sleeve UNIVERSE.md §0 scopes an edge to. Thin pass-through to
-    ``research.universe.all_symbols``; the point-in-time refinement to ``U_t`` happens downstream.
+    ``convexity.panel.candidates.all_symbols``; the point-in-time refinement to ``U_t`` happens downstream.
     """
     return tuple(all_symbols(sleeves=sleeves))

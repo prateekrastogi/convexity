@@ -6,7 +6,7 @@ import inspect
 
 import numpy as np
 
-from research.xsec.portfolio import (
+from convexity.portfolio.portfolio import (
     _leg_count,
     _leg_liq_cap,
     liquidity_weights,

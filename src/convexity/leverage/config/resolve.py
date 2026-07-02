@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 
-from research.xsec.validate import weekly_defaults as _weekly_defaults
+from convexity.system.xsec_validate import weekly_defaults as _weekly_defaults
 
 from convexity.leverage.config.defaults import LeverageDefaults
 

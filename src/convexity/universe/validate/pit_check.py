@@ -22,7 +22,7 @@ from __future__ import annotations
 import numpy as np
 
 from convexity.universe.types import EligibilitySnapshot
-from research.xsec.panel import Panel
+from convexity.panel.panel import Panel
 
 
 def corrupt_future(panel: Panel, t: int, *, seed: int = 0) -> Panel:

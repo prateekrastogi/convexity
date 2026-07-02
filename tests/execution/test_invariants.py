@@ -10,7 +10,7 @@ import inspect
 import numpy as np
 import pytest
 
-from research.xsec.execution import (
+from convexity.execution.execution import (
     CostFacts,
     ExecTarget,
     ExecutionDefaults,

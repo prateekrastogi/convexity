@@ -23,7 +23,7 @@ from functools import lru_cache
 from typing import Literal
 
 from convexity.core.types import AssetClass
-from research.universe import load_universe
+from convexity.panel.candidates import load_universe
 
 # Coarse sleeve bucket used for pooled-per-class report rows.
 Sleeve = Literal["crypto", "equity", "commodity"]

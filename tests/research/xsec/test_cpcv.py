@@ -8,7 +8,7 @@ import numpy as np
 
 from convexity.system.validate.cpcv import CPCVDistribution
 
-from research.xsec.cpcv import (
+from convexity.system.cpcv import (
     _group_bounds,
     _split_weeks,
     compute_pbo,

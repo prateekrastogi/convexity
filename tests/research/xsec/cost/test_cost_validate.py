@@ -14,25 +14,25 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from research.xsec.accounting import round_trip_friction
-from research.xsec.cost.validate.amihud_calibration import (
+from convexity.cost.accounting import round_trip_friction
+from convexity.cost.friction.validate.amihud_calibration import (
     calibrate_window,
     participation_rate,
     walk_forward_drift,
 )
-from research.xsec.cost.validate.baselines import (
+from convexity.cost.friction.validate.baselines import (
     flat_bps_friction,
     no_impact_friction,
     perfect_foresight_friction,
 )
-from research.xsec.cost.validate.stats import (
+from convexity.cost.friction.validate.stats import (
     cost_drag_ci,
     net_sharpe_ci,
     win_rate_by_funding_sign,
 )
-from research.xsec.metrics import PERIODS_PER_YEAR, compute
-from research.xsec.cost.spread_impact import ANCHOR_NOTIONAL, SpreadImpactModel
-from research.xsec.universe import CRYPTO_FRICTION
+from convexity.system.metrics import PERIODS_PER_YEAR, compute
+from convexity.cost.friction.spread_impact import ANCHOR_NOTIONAL, SpreadImpactModel
+from convexity.panel.sleeve import CRYPTO_FRICTION
 
 ADV_MEDIAN = 40_000_000.0
 AMIHUD_MEDIAN = 1.0e-10
@@ -140,7 +140,7 @@ def test_calibrate_window_is_causal_and_reproduces_anchor():
     assert cal.amihud_median > 0.0
     # a name at the window's median ADV/Amihud reproduces the flat anchors under this calibration.
     m = SpreadImpactModel(c=cal.c, k_amihud=cal.k_amihud)
-    from research.xsec.accounting import HALF_SPREAD_FRAC, IMPACT_FRAC
+    from convexity.cost.accounting import HALF_SPREAD_FRAC, IMPACT_FRAC
 
     assert m.half_spread(cal.adv_median) == pytest.approx(HALF_SPREAD_FRAC, rel=1e-9)
     assert m.impact_frac(cal.amihud_median, ANCHOR_NOTIONAL) == pytest.approx(
@@ -226,8 +226,8 @@ def test_walk_forward_drift_on_real_lake_reports_large_governance_drift():
     # empirically-grounded reference numbers: on the real universe the liquidity distribution moved
     # by more than an order of magnitude, so c_rel_range and k_amihud_rel_range are BOTH ~1+, well
     # above the stationary-input sanity ceilings of test_walk_forward_drift_small_on_a_STATIONARY_input.
-    from research.universe import all_symbols
-    from research.xsec.panel import build_dollar_volume, build_panel
+    from convexity.panel.candidates import all_symbols
+    from convexity.panel.panel import build_dollar_volume, build_panel
 
     syms = tuple(all_symbols(sleeves=("crypto",)))
     panel = build_panel(syms)

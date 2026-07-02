@@ -26,16 +26,16 @@ from typing import Literal
 import numpy as np
 import pandas as pd
 
-from research.xsec import signals as sig
-from research.xsec.accounting import (
+from convexity.signal import signals as sig
+from convexity.cost.accounting import (
     WeekResult,
     _asset_week_return,
     _week_funding,
     round_trip_friction,
     settle_week,
 )
-from research.xsec.panel import Panel
-from research.xsec.portfolio import Quantile, Weighting, quantile_weights, realized_vol
+from convexity.panel.panel import Panel
+from convexity.portfolio.portfolio import Quantile, Weighting, quantile_weights, realized_vol
 
 SignalKind = Literal["momentum", "carry", "combined"]
 

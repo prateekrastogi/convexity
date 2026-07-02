@@ -31,23 +31,23 @@ from collections import Counter
 
 import numpy as np
 
-from research.universe import all_symbols
-from research.xsec import metrics
-from research.xsec.accounting import round_trip_friction
-from research.xsec.cost.friction_stress import friction_stress_run, stressed_frac_pos
-from research.xsec.cpcv import compute_pbo, run_cpcv
-from research.xsec.engine import (
+from convexity.panel.candidates import all_symbols
+from convexity.system import metrics
+from convexity.cost.accounting import round_trip_friction
+from convexity.cost.friction.friction_stress import friction_stress_run, stressed_frac_pos
+from convexity.system.cpcv import compute_pbo, run_cpcv
+from convexity.portfolio.engine import (
     XSecConfig,
     _rank_at,
     band_configs,
     run,
     run_ensemble,
 )
-from research.xsec.execution import CostFacts, ExecTarget, ExecutionDefaults, ExecutionEngine
-from research.xsec.overlay import apply_scale, drawdown_stop_scale, vol_target_scale
-from research.xsec.panel import Panel, build_dollar_volume, build_panel
-from research.xsec.portfolio import quantile_weights, realized_vol
-from research.xsec.validate import deflated_sharpe, purged_walkforward
+from convexity.execution.execution import CostFacts, ExecTarget, ExecutionDefaults, ExecutionEngine
+from convexity.regime.overlay import apply_scale, drawdown_stop_scale, vol_target_scale
+from convexity.panel.panel import Panel, build_dollar_volume, build_panel
+from convexity.portfolio.portfolio import quantile_weights, realized_vol
+from convexity.system.xsec_validate import deflated_sharpe, purged_walkforward
 
 from convexity.leverage.engine_api import LeverageEngine
 from convexity.leverage.types import CapacityInput

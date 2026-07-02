@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from research.xsec.panel import Panel
+from convexity.panel.panel import Panel
 
 
 def short_permitted(

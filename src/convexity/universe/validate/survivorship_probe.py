@@ -19,14 +19,14 @@ from __future__ import annotations
 
 import numpy as np
 
-from research.xsec.universe import effective_breadth
+from convexity.panel.sleeve import effective_breadth
 
 
 def roster_effective_breadth(contrib: np.ndarray) -> float:
     """Effective number of contributing names for a roster (UNIVERSE.md §3.3, §6; REUSES universe.py).
 
     ``contrib`` -- (n_weeks, n_symbols) per-name price(+funding) contribution to the book return. Thin
-    pass-through to ``research.xsec.universe.effective_breadth`` (inverse-HHI on total |contribution|);
+    pass-through to ``convexity.panel.sleeve.effective_breadth`` (inverse-HHI on total |contribution|);
     §6 uses this to characterize a roster, NOT to certify point-in-time-ness (that is ``pit_check``). A
     low breadth relative to the roster size is one symptom (never proof) of a concentrated/flattered set.
     """
