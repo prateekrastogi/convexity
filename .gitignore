@@ -14,3 +14,13 @@ logs/
 .pytest_cache/
 .ruff_cache/
 ._*
+
+# run artifacts (regenerable — never commit)
+.coverage
+htmlcov/
+_ckpt/
+research/_ckpt/
+research/_cache/
+research/_figs/
+_logs*
+*.DONE

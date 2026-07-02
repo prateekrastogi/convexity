@@ -20,7 +20,7 @@ rebalance to the first Friday at/after the warmup, then step 7 days; every rebal
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Literal
 
 import numpy as np
@@ -139,6 +139,19 @@ def run(panel: Panel, cfg: XSecConfig) -> XSecResult:
         warmup = cfg.lookback + cfg.skip + step
     warmup = max(warmup, cfg.vol_window + 1)
 
+    # SCALAR flat-cost path (research baseline): one round-trip rate for every name.
+    # TODO(COST-integration, engine/PORTFOLIO-owned, not COST-owned): the DERIVED per-name cost model
+    # of COST.md Section 5.2-5.3 is built and unit-tested in
+    # research/xsec/cost/spread_impact.py::SpreadImpactModel.friction_vector(adv, amihud, ...) but is
+    # NOT yet consumed here — the production crypto book still runs on flat cfg.taker/half_spread/impact.
+    # To wire it: per rebalance day d, compute causal trailing ADV_i / Amihud_i from
+    # panel.build_dollar_volume + spread_impact.amihud_ratio over panel.py's window=30, build the
+    # SpreadImpactModel via .anchor(median ADV, median Amihud), and pass friction_vector(...,
+    # notional_leg=|dw_i|*NAV, is_shortable=<UNIVERSE flag>, in_short_leg=(w_target<0)) as
+    # settle_week(..., friction=<that array>) (settle_week already supports the per-symbol array path).
+    # BLOCKED on UNIVERSE exposing per-symbol-per-date is_shortable (COST.md Section 7 item 2, N50) so
+    # the ~15-unshortable-tail cost is priced (inf) rather than silently finite for universes > N~50.
+    # Until then the flat scalar below is the live cost truth and the CPCV parity anchor.
     friction = round_trip_friction(taker=cfg.taker, half_spread=cfg.half_spread, impact=cfg.impact)
     start = _first_friday_index(panel, warmup)
 
@@ -202,6 +215,19 @@ def run_book(
         warmup = cfg.lookback + cfg.skip + step
     warmup = max(warmup, cfg.vol_window + 1)
 
+    # SCALAR flat-cost path (research baseline): one round-trip rate for every name.
+    # TODO(COST-integration, engine/PORTFOLIO-owned, not COST-owned): the DERIVED per-name cost model
+    # of COST.md Section 5.2-5.3 is built and unit-tested in
+    # research/xsec/cost/spread_impact.py::SpreadImpactModel.friction_vector(adv, amihud, ...) but is
+    # NOT yet consumed here — the production crypto book still runs on flat cfg.taker/half_spread/impact.
+    # To wire it: per rebalance day d, compute causal trailing ADV_i / Amihud_i from
+    # panel.build_dollar_volume + spread_impact.amihud_ratio over panel.py's window=30, build the
+    # SpreadImpactModel via .anchor(median ADV, median Amihud), and pass friction_vector(...,
+    # notional_leg=|dw_i|*NAV, is_shortable=<UNIVERSE flag>, in_short_leg=(w_target<0)) as
+    # settle_week(..., friction=<that array>) (settle_week already supports the per-symbol array path).
+    # BLOCKED on UNIVERSE exposing per-symbol-per-date is_shortable (COST.md Section 7 item 2, N50) so
+    # the ~15-unshortable-tail cost is priced (inf) rather than silently finite for universes > N~50.
+    # Until then the flat scalar below is the live cost truth and the CPCV parity anchor.
     friction = round_trip_friction(taker=cfg.taker, half_spread=cfg.half_spread, impact=cfg.impact)
     start = _first_friday_index(panel, warmup)
     mkt_col = panel.symbols.index(market_symbol) if market_symbol in panel.symbols else -1
@@ -278,3 +304,221 @@ def run_book(
         mkt_ret=np.asarray(mkt_rows),
     )
     return result, book
+
+
+# ----------------------------------------------------------------------------------------------
+# PORTFOLIO.md §6.2 / §13 — the deployed lookback-band ensemble driver.
+# ----------------------------------------------------------------------------------------------
+
+# The deployable momentum lookback band (PORTFOLIO.md §6.2, Invariant B-band): a SPARSE set of
+# individually-tested lookbacks, never a dense fill of [12, 16]. L=13 / L=15 appear in neither the
+# peak-width refinement grid nor the CPCV/PBO validation grid (§6.1) — no backtest was ever run at
+# those lookbacks, so deploying them would interpolate untested configs into the live ensemble.
+LOOKBACK_BAND: tuple[int, ...] = (12, 14, 16)
+
+
+def band_configs(
+    lookbacks: tuple[int, ...] = LOOKBACK_BAND,
+    *,
+    base: XSecConfig | None = None,
+) -> list[XSecConfig]:
+    """Build the deployed lookback-band ensemble configs (PORTFOLIO.md §6.2, Invariant B-band).
+
+    One momentum ``XSecConfig`` per lookback ``L`` in the band, identical in every other field,
+    ready to hand to ``run_ensemble``. Invariant B-band: the deployable set is EXACTLY
+    ``{12, 14, 16}`` — sizing or reporting off a single fitted ``L``, or off a widened band that
+    contains a lookback with no tested Sharpe figure in the §6.1 evidence grids (e.g. ``L=13`` /
+    ``L=15``), is a policy violation of P6, so any other ``lookbacks`` set raises ``ValueError``
+    rather than constructing an unevidenced ensemble. Membership is order-insensitive, but a
+    DUPLICATED member (e.g. ``(12, 12, 14, 16)``) is rejected too: silently de-duplicating it to
+    the canonical band would double a single ``L``'s vote in a later averaging step (§6.2 assumes
+    exactly ``|𝓛|`` distinct, equal-weight members), so B-band is checked on the multiset —
+    length AND value — not on the de-duplicated set.
+
+    ``base`` supplies every non-lookback field; the default is the canonical deployed config —
+    momentum / quintile / vol-scaled / weekly Friday-close (PORTFOLIO.md §4, ``docs/EDGE.md``
+    §(b)). Per §11 E7 the band's PBO evidence is momentum-lookback-specific and does not transfer
+    to a carry/combined lookback without its own CPCV re-run, so a non-momentum ``base`` raises.
+    """
+    # B-band on the MULTISET (sorted values, no de-dup): a widened/substituted/dropped set is
+    # rejected, and so is a duplicated-canonical set — collapsing (12, 12, 14, 16) to the band
+    # would silently over-weight one L in the §6.2 equal-weight average.
+    if tuple(sorted(lookbacks)) != LOOKBACK_BAND:
+        raise ValueError(
+            "Invariant B-band (PORTFOLIO.md §6.2): the deployed lookback band is exactly "
+            f"{LOOKBACK_BAND}, got {tuple(lookbacks)}; a lookback without a tested Sharpe figure "
+            "in the §6.1 evidence grids (or a duplicated member) may not be deployed"
+        )
+    if base is None:
+        base = XSecConfig(signal="momentum", quantile="quintile", weighting="volscaled")
+    if base.signal != "momentum":
+        raise ValueError(
+            "the lookback-band ensemble is momentum-only (PORTFOLIO.md §6.2; §11 E7: the PBO/band "
+            f"evidence does not transfer to signal={base.signal!r} without its own CPCV re-run)"
+        )
+    return [replace(base, lookback=lb) for lb in LOOKBACK_BAND]
+
+
+def run_ensemble(panel: Panel, cfgs: list[XSecConfig]) -> XSecResult:
+    """Average the dollar-neutral weight vectors of |cfgs| independently-run configs (§6.2).
+
+    Each ``cfg`` in ``cfgs`` (typically one per lookback L in the band 𝓛 = {12, 14, 16}, §6.1)
+    is run against the SAME ``panel`` object via ``run_book(panel, cfg)`` — never a separately
+    constructed Panel per cfg, even from identical underlying data (Invariant E-align;
+    ``run_book``'s ``XSecResult`` is byte-identical to ``run``'s, §11 E8 sanctions either driver).
+    The returned ``XSecResult`` is the equal-weight average of the per-cfg weight paths,
+    re-settled through ``accounting.settle_week`` at the averaged weight (not an average of
+    the per-cfg net returns, which would NOT equal the return of the averaged book whenever
+    turnover/cost is nonlinear in the weight path).
+
+    §13 raise-clause, reconciled with §11 E5: the bare §13 docstring states the driver raises
+    "if any two cfgs yield XSecResult objects whose dates are not identical". That literal
+    check is IMPLEMENTED as E5-front-trim-then-E8-residual-raise below: a pure warmup OFFSET on
+    the shared Friday grid (a member with a longer lookback, §11 E5) is a legitimate difference
+    that §13's bare wording predates §11's edge-case analysis for, so it is trimmed (not
+    raised on);
+    only a RESIDUAL post-trim date/row mismatch (a genuine cadence/universe break, §11 E8) is
+    the "dates not identical" case §13 means to fail loudly. For the canonical band {12,14,16}
+    all three members warm on the identical first Friday (warmup is vol_window-dominated), so
+    the trim removes zero rows and §13's literal "dates identical" path holds exactly.
+
+    §11 E5 (warmup TIMING): members with different lookbacks warm up on different first Fridays,
+    but — sharing one ``panel`` and one weekly Friday cadence — their rebalance grids are nested
+    suffixes of the panel's Friday sequence (each is ``first_friday>=warmup`` then ``+step`` rows).
+    The ensemble is therefore computed only from the first rebalance at which ALL members are warm
+    (``d_start = max_L d_index^{(L)}[0]``, the max over the band), trimming a few extra days off
+    the front relative to any single ``L`` — the small, deterministic cost of ensembling that E5
+    names. Each member is front-trimmed to that common start; the averaged/re-settled book runs
+    over the shared suffix, and ``w_prev`` starts flat at the first common rebalance (the ensemble
+    holds nothing before it is live).
+
+    §11 E8 (genuine misalignment — RAISES): trimming repairs only a warmup OFFSET on a shared
+    grid. It cannot repair a cadence/universe mismatch, so after trimming to the common start the
+    members' rebalance rows and dates must be IDENTICAL — if they are not (e.g. a member on an
+    off-grid, non-weekly cadence), ``run_ensemble`` raises ``ValueError`` rather than mis-adding
+    misaligned weeks by position. It also raises if members disagree on the settle parameters
+    (cadence / gross / friction — the averaged book is settled once, at one rate) or on ``symbols``
+    ordering (E8's corrupted-input regression case).
+    """
+    if not cfgs:
+        raise ValueError("run_ensemble requires at least one config (PORTFOLIO.md §13)")
+
+    head = cfgs[0]
+    for cfg in cfgs[1:]:
+        if (
+            cfg.rebalance_days != head.rebalance_days
+            or cfg.gross != head.gross
+            or cfg.taker != head.taker
+            or cfg.half_spread != head.half_spread
+            or cfg.impact != head.impact
+        ):
+            raise ValueError(
+                "ensemble members disagree on settle parameters (rebalance_days/gross/friction): "
+                f"{head.label!r} vs {cfg.label!r} — the averaged book settles once, at one rate "
+                "(PORTFOLIO.md §6.2/§7)"
+            )
+
+    # Invariant E-align: every member runs against the SAME Panel object, passed by reference —
+    # run_ensemble constructs no Panel internally.
+    members = [run_book(panel, cfg) for cfg in cfgs]
+
+    for cfg, (_res, book) in zip(cfgs, members, strict=True):
+        if book.symbols != panel.symbols:
+            raise ValueError(
+                f"ensemble member {cfg.label!r} settled on a different symbol ordering than the "
+                "shared panel (E8: refusing to average misaligned weight vectors)"
+            )
+
+    # §11 E5: front-trim each member to the first rebalance at which ALL members are warm —
+    # d_start = max over the band of each member's first rebalance row. On a shared panel + shared
+    # weekly Friday cadence the per-L grids are nested suffixes, so this is a pure front-trim.
+    d_start = max(int(book.d_index[0]) for _res, book in members)
+    trimmed: list[tuple[int, XSecResult, XSecBook]] = []
+    for cfg, (res, book) in zip(cfgs, members, strict=True):
+        off = int(np.searchsorted(book.d_index, d_start, side="left"))
+        if off >= book.d_index.shape[0] or int(book.d_index[off]) != d_start:
+            raise ValueError(
+                f"ensemble member {cfg.label!r} has no rebalance at the common warmup row "
+                f"{d_start} (E8: cadence/universe mismatch, not a mere warmup offset — trimming "
+                "cannot align members that rebalance on different rows)"
+            )
+        trimmed.append((off, res, book))
+
+    # §11 E8: after the front-trim the members must rebalance on IDENTICAL rows/dates. Trimming
+    # repairs a warmup OFFSET on the shared Friday grid; it cannot repair a genuine cadence
+    # mismatch (off-grid rebalances), which surfaces here as a residual row disagreement.
+    off0, ref_res, ref_book = trimmed[0]
+    ref_rows = ref_book.d_index[off0:]
+    ref_dates = ref_res.dates[off0:]
+    for cfg, (off, res, book) in zip(cfgs, trimmed, strict=True):
+        rows = book.d_index[off:]
+        if not np.array_equal(rows, ref_rows):
+            raise ValueError(
+                f"ensemble members {head.label!r} and {cfg.label!r} rebalance on different panel "
+                "rows after trimming to the common warmup (E8: cadence mismatch; refusing to "
+                "average misaligned weight paths)"
+            )
+        if not res.dates[off:].equals(ref_dates):
+            raise ValueError(
+                f"ensemble members {head.label!r} and {cfg.label!r} yield different rebalance "
+                "dates after trimming to the common warmup (E8: failing loudly, never mis-adding)"
+            )
+
+    # §6.2: equal-weight average of the per-cfg TARGET weight paths over the common suffix. Each
+    # member row is dollar-neutral, so the convex combination is zero-sum at every t (long leg =
+    # -short leg); realized gross can sit BELOW cfg.gross wherever members disagree on leg
+    # membership (a name long under one L and short under another partially cancels — §6.2's
+    # independence property).
+    w_avg = np.mean(
+        np.stack([book.weights[off:] for off, _res, book in trimmed], axis=0), axis=0
+    )
+
+    # Re-settle the AVERAGED path through the same accounting seam (§7): cost is charged on the
+    # averaged book's own turnover (<= the members' mean turnover by the triangle inequality),
+    # which is exactly why this is NOT the mean of the members' net series.
+    # SCALAR flat-cost path (see the TODO(COST-integration) note in run() above — the derived per-name
+    # friction_vector of COST.md Section 5.2-5.3 is built+tested but not yet wired into the ensemble
+    # averaged-path settle either; blocked on UNIVERSE is_shortable for the N50 gate).
+    friction = round_trip_friction(
+        taker=head.taker, half_spread=head.half_spread, impact=head.impact
+    )
+    step = head.rebalance_days
+    net: list[float] = []
+    gp: list[float] = []
+    fnd: list[float] = []
+    trn: list[float] = []
+    cst: list[float] = []
+    # The ensemble holds nothing before its first common rebalance, so w_prev starts flat at the
+    # trimmed front (no phantom turnover from a member's pre-trim position).
+    w_prev = np.zeros(panel.n_symbols)
+    for j in range(w_avg.shape[0]):
+        d = int(ref_rows[j])
+        res_j: WeekResult
+        res_j, w_prev = settle_week(
+            panel.close, panel.funding, panel.listed,
+            d0=d, d1=d + step, w_target=w_avg[j], w_prev=w_prev, friction=friction,
+        )
+        net.append(res_j.net)
+        gp.append(res_j.gross_price)
+        fnd.append(res_j.funding)
+        trn.append(res_j.turnover)
+        cst.append(res_j.cost)
+
+    # §11 E5: the ensemble is only live where EVERY member is warm/eligible, so over the common
+    # suffix the reported eligible count is the conservative element-wise MIN across members
+    # (not max/first/last/mean). §11 E5 fixes the aggregation as "only live where every member
+    # is warm", so min is the direct reading; pinned by test_ensemble_universe_size_is_the_min
+    # _across_members + the trim-path assertion in the E5 front-trim test (would fail on drift).
+    usz = np.min(
+        np.stack([res.universe_size[off:] for off, res, _book in trimmed], axis=0), axis=0
+    )
+
+    return XSecResult(
+        dates=ref_dates,
+        net=np.asarray(net),
+        gross_price=np.asarray(gp),
+        funding=np.asarray(fnd),
+        turnover=np.asarray(trn),
+        cost=np.asarray(cst),
+        universe_size=usz.astype(int),
+    )

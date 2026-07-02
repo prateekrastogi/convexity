@@ -14,6 +14,7 @@ are structurally unreachable from live composition.
   * baselines.py   — buy&hold, random-matched, ablations, 16 coalition off-semantics (Invariant BL)
   * trials.py      — the PERSISTENT trial ledger → effective N_sys (Invariants SG, RP)
   * promotion.py   — re-promotion cadence + held-out PAIRED block-bootstrap forward gate (Inv RP)
+  * promotion_gate.py — the SYSTEM §6 six-gate PROMOTABLE conjunction (§6.1-6.2, name per §6.2)
   * budget.py      — overnight per-stage cost model + K_max/T_night cap (Invariant CB-BUDGET)
   * cache.py       — the EvidenceCache (Invariant CA)
   * reports.py     — SystemReport assembly (headline = DSR | n_obs vs MinTRL)

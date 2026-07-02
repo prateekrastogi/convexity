@@ -17,6 +17,10 @@ difference must EXCLUDE ZERO and its lower bound clear round-trip cost; iid boot
 (use the §8.1 dependence-preserving block length). The forward window is embargoed from the search
 window by ``H_sys`` (Invariant HC), and ``τ_forward`` must yield ``n_obs ≥ max(MinTRL, n_obs_floor)``
 or the swap DEFERS with ``insufficient_forward_track``.
+
+The SYSTEM §6 six-gate PROMOTABLE conjunction is a SEPARATE promotion-time gate battery and lives in
+its own §6.2-named module :mod:`convexity.system.validate.promotion_gate`; this module implements
+only the §7.5 forward/cadence gate that SYSTEM §11's directory layout assigns to ``promotion.py``.
 """
 
 from __future__ import annotations

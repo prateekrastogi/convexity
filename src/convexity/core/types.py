@@ -57,11 +57,44 @@ ExecUrgency = Literal["PATIENT", "NORMAL", "URGENT", "IMMEDIATE"]
 TrendActionKind = Literal["continue", "reduce", "exit"]
 Tactic = Literal["POST_ONLY_MAKER", "LIMIT_IOC", "MARKETABLE_LIMIT", "MARKET"]
 
-# REGIME's four ordered global states + its multiplier floor.
-RegimeStateName = Literal["CALM", "NORMAL", "STRESSED", "CRISIS"]
+# REGIME's four ordered market-state labels (REGIME.md §4.1, post-pivot). Ordered by severity
+# HEALTHY < WATCH < STRESSED < HALT. Migrated from the pre-pivot CALM/NORMAL/STRESSED/CRISIS
+# ladder (which was tuned for a single-instrument directional-breakout book that is now proven
+# dead); the cross-sectional momentum book gates on a continuous g_t floored at exactly 0 (HALT),
+# not the old discrete {1,.75,.5,.25}-floored-.25 ladder (REGIME.md §0 P7, §4.1).
+RegimeStateName = Literal["HEALTHY", "WATCH", "STRESSED", "HALT"]
 
-# OPS kill-switch state, ordered RUN < DEGRADE < HALT for max-severity precedence.
-KillState = Literal["run", "degrade", "halt"]
+# Which detector drove the current g_t (REGIME.md §3.3/§4 reason-chain vocabulary). The live
+# g_t-affecting CUSUMs are the dispersion up/down and BTC-vol up sides (§3.3: S_V^- is retained
+# for diagnostics only and never gates g_t); the drawdown state machine (§5) is the fourth source.
+RegimeDetector = Literal[
+    "dispersion_cusum_upper",
+    "dispersion_cusum_lower",
+    "btc_vol_cusum_upper",
+    "drawdown_stop",
+    "insufficient_breadth",
+    "none",
+]
+
+# OPS operational state, totally ordered RUN < DEGRADE < HALT for max-severity precedence
+# (OPS.md sec 9). Migrated in place from the pre-pivot ``KillState`` alias
+# (``Literal["run","degrade","halt"]``, single-instrument-governor era) — the cross-sectional
+# book emits UPPER-cased states matching this spec's OpsDirective shape (OPS.md sec 9 step 1-2).
+OpsState = Literal["RUN", "DEGRADE", "HALT"]
+
+# The fired-alarm taxonomy OPS attributes every directive to (OPS.md sec 9 Alarm.kind). One
+# closed set shared by reconciliation (sec 1.4), the CUSUM kill-switch (sec 4.3-4.4), the SLA
+# monitor (sec 5.3), and the heartbeat trigger (sec 2).
+AlarmKind = Literal[
+    "RECON_BREACH",
+    "RECON_STALE",
+    "CUSUM_ALARM",
+    "CUSUM_WARN",
+    "SLA_BREACH",
+    "SLA_BREACH_SEVERE",
+    "ANOMALOUS_OUTPERFORMANCE",
+    "HEARTBEAT_SILENCE",
+]
 
 
 # --------------------------------------------------------------------------- market data
@@ -358,35 +391,71 @@ class RoundTripCost:
 
 @dataclass(frozen=True)
 class RegimeState:
-    """REGIME's only output (REGIME §8). ``g_t`` in {1.00,0.75,0.50,0.25}, floored at 0.25 (Inv FLOOR).
+    """REGIME's only output (REGIME.md §4, §8), post-pivot cross-sectional-momentum shape.
 
-    Enters LEVERAGE through the SINGLE H_book channel (``g_t * H_book``) — never a second min() term
-    or post-min scalar (LEVERAGE Inv R / REGIME Inv NODOUBLE2). ``binding_sub`` names which of the
-    four measures bound the min(); a regime cut is legible via ``binding_sub`` + reason_codes.
+    A single scalar de-risking multiplier ``g_t`` on the book's target gross exposure for the NEXT
+    weekly rebalance, plus the labeled market state and a decomposable reason chain (§0 P7). This
+    supersedes the pre-pivot shape (``g_t`` in {1,.75,.5,.25} floored .25, ``binding_sub`` over
+    vol/corr/turb/liq, bar-indexed) which was tuned for a single-instrument directional-breakout
+    book (proven dead). Key contract changes, per REGIME.md §4.1 / §0 P2:
+
+      * ``g_t`` is CONTINUOUS in ``[0, 1]`` and floored at exactly ``0`` on HALT (§4.1), not a
+        four-value ladder floored at .25. The state's band FLOOR is the conservative live value
+        emitted (§4.1: HEALTHY=1.00, WATCH=0.75, STRESSED=0.40, HALT=0.00).
+      * Enters the downstream sizing layer through the SINGLE ``g_t`` channel, consumed exactly
+        once multiplicatively (``gross_live = g_t · gross_target``; once LEVERAGE is built,
+        ``gross_live = g_t · G_t``) — never a second ceiling, never a per-instrument value,
+        never additive (§0 P2).
+      * The risk unit is NEXT WEEK's portfolio return; ``as_of`` indexes the weekly Friday-close
+        rebalance grid (``t``), NOT a bar count (§0 P1, notation note).
+
+    ``binding_detector`` names which detector drove the current state (§4 reason chain). ``s_stat``
+    is the triggering CUSUM statistic value, ``h_threshold`` the decision interval it crossed
+    (both 0.0 when HEALTHY / no alarm). ``dwell_weeks`` counts consecutive weeks in the current
+    state (§4.2 re-arm hysteresis). ``transition`` records the last state move.
     """
 
     g_t: float
     state: RegimeStateName
-    binding_sub: Literal["vol", "corr", "turb", "liq"]
-    dwell_bars: int
-    transition: Literal["escalate", "deescalate", "hold", "cost_gated"]
-    cost_gate_passed: bool
-    rebalance_cost_hat: float
+    binding_detector: RegimeDetector
+    s_stat: float
+    h_threshold: float
+    dwell_weeks: int
+    transition: Literal["escalate", "deescalate", "hold"]
     reason_codes: tuple[str, ...]
-    asof_bar: int
+    as_of: int
     engine_version: str
 
 
 # --------------------------------------------------------------------------- OPS output
 
 @dataclass(frozen=True)
-class OpsDirective:
-    """OPS's only output (OPS types.py, P1). A {run,degrade,halt} state by precedence (never a
-    blended health score, Inv KILL) + the binary flatten/cancel flags + the full trigger-reason
-    chain. Holds NO size/edge/exit parameter (Inv PROV)."""
+class Alarm:
+    """One fired OPS alarm, fully attributed (OPS.md sec 9).
 
-    state: KillState
-    flatten: bool
-    cancel_entries: bool
-    reason_codes: tuple[str, ...]
-    engine_version: str
+    ``detail`` is human-readable attribution (which instrument / value / threshold); ``value`` is
+    the triggering statistic's value and ``threshold`` the limit it crossed. Frozen because it
+    crosses the OPS -> live-loop boundary as part of ``OpsDirective.alarms``."""
+
+    kind: AlarmKind
+    detail: str
+    value: float
+    threshold: float
+    as_of: int
+
+
+@dataclass(frozen=True)
+class OpsDirective:
+    """The one thing OPS emits (OPS.md sec 9, P3). Totally ordered RUN < DEGRADE < HALT.
+
+    SUPERSEDES the pre-pivot ``OpsDirective`` (``state: KillState`` + ``flatten``/
+    ``cancel_entries``/``reason_codes``/``engine_version``) that the retired single-instrument
+    governor emitted — migrated in place per OPS.md sec 9 step 1 so ``core/protocols.py``'s
+    ``OpsEngine`` Protocol and every consumer resolve to ONE shape, never two same-named classes.
+    ``gross_multiplier`` is 1.0 at RUN, ``g_degrade`` at DEGRADE, 0.0 at HALT; ``alarms`` is the
+    reason chain (empty at RUN); ``as_of`` is epoch-ms of the producing observation."""
+
+    state: OpsState
+    gross_multiplier: float
+    alarms: tuple["Alarm", ...]
+    as_of: int

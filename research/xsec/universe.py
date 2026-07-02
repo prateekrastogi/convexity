@@ -54,6 +54,17 @@ class ClassFriction:
         return 2.0 * (self.taker + self.half_spread + self.impact) * 1.0e4
 
 
+# TODO(N50, UNIVERSE-owned): COST.md Section 7 item 2 / Invariant N50 requires this module to expose a
+# per-symbol-per-date ``is_shortable: bool`` (borrow/short-interest availability, sourced from the
+# exchange metadata) so the derived cost model can price an unshortable short-leg name at math.inf
+# rather than a silently-finite liquidity cost. The consumer already exists and is unit-tested:
+# research/xsec/cost/spread_impact.py::SpreadImpactModel.round_trip_friction_i / friction_vector take
+# is_shortable + in_short_leg and return inf for an unshortable short. Until this field is added, the
+# ~15-effectively-unshortable-tail cost (concentrated in the +50 names beyond the validated N~50 core)
+# is UNPRICED for any universe > N~50, and any N=50-vs-N=100 comparison MUST carry the Section 7
+# optimistic-in-the-larger-universe caveat. No behavior change to the N~50 production book (its short
+# leg is shortable), so this is a widen-the-universe prerequisite, not a live-book bug.
+#
 # CRYPTO: the Binance USDT-M VIP0 taker truth (5 bp) + 1 bp half-spread + 0.5 bp impact (matches the
 # committed crypto ``accounting`` defaults) -> 13 bp round-trip. Kept here so the driver reads ONE table.
 CRYPTO_FRICTION = ClassFriction(taker=5.0e-4, half_spread=1.0e-4, impact=0.5e-4)

@@ -23,6 +23,10 @@ Signals:
 
   * COMBINED — equal-weight average of the momentum rank and the carry rank, re-ranked cross-sectionally.
 
+  * ENSEMBLE (the DEPLOYABLE core) — equal-weight average of the momentum ranks across the
+    validated lookback BAND {12, 14, 16}, re-ranked. Carry is NOT blended into the deployable
+    rank (w_carry = 0; SIGNAL.md §6.2) — it stays a separately-monitored satellite.
+
 RANKING — a cross-sectional percentile rank over the ELIGIBLE symbols at D (ties averaged), scaled to
 [0, 1]. A single eligible symbol ranks 0.5 (neutral). Symbols ineligible at D are NaN and excluded.
 """
@@ -124,4 +128,58 @@ def combined_signal(
     both = np.isfinite(mom) & np.isfinite(car)
     avg = np.full(panel.n_symbols, np.nan)
     avg[both] = 0.5 * (mom[both] + car[both])
+    return _pct_rank(avg)
+
+
+def ensemble_momentum_signal(
+    panel: Panel,
+    d: int,
+    *,
+    lookbacks: tuple[int, ...] = (12, 14, 16),
+    skip: int = 0,
+    weights: tuple[float, ...] | None = None,
+) -> np.ndarray:
+    """Rank-average of ``momentum_signal`` across the lookback BAND, re-ranked. No lookahead.
+
+    THE DEPLOYABLE CORE SIGNAL (SIGNAL.md §4.3/§6.2): the signal PORTFOLIO consumes for the
+    live/paper book is this ensemble with ``w_carry = 0`` — funding is never read here (Invariant
+    CARRY-ZERO); ``carry_signal`` stays a separately-monitored satellite and ``combined_signal``
+    stays research/diagnostic-only. The default band ``{12, 14, 16}`` (trading days), ``skip = 0``
+    and equal weights ``v_L = 1/3`` are RED constants (SIGNAL.md §7): fixed BEFORE any realized
+    Sharpe was observed (Invariant NO-FIT — never a regressed/IC-fitted combination), and never
+    per-symbol. Deploying a single fitted lookback instead of the band is Invariant BAND's bug
+    (PBO = 0.31-0.47 across CPCV partitions says the argmax-L is partition-unstable, SIGNAL.md
+    §4.1-4.2); a single-member call is still well-defined for research/diagnostics and reduces
+    exactly to that member's ``momentum_signal`` (SIGNAL.md §9 step 3).
+
+    Mechanics — SIGNAL.md §4.4's general rank-ensemble operator (``combined_signal``'s pattern
+    generalized from m=2 sub-signals to m=len(lookbacks) lookbacks):
+
+      1. ``rank^(s) = momentum_signal(panel, d, lookback=L_s, skip=skip)`` per band member;
+      2. ``avg_i = sum_s v_s * rank^(s)_i`` only where ``i`` is finite in EVERY component —
+         intersection eligibility (SIGNAL.md §8 case 5): a symbol not yet eligible for the longest
+         lookback is excluded entirely, never scored on a partial band;
+      3. ``_pct_rank(avg)`` — the final re-rank (an average of uniform ranks is not uniform,
+         SIGNAL.md §8 case 7), restoring the flat [0, 1] percentile contract.
+
+    Causality (Invariant NLA) and point-in-time ranking (Invariant RANK) are inherited from
+    ``momentum_signal``/``_pct_rank``; nothing here reads a panel row ``> d``. ``weights`` must
+    match ``lookbacks`` in length and be finite, non-negative, with a positive sum (a negative
+    weight is nonsensical for a rank-average — SIGNAL.md §8 case 9); they are normalized to sum
+    to 1 (the re-rank is invariant to positive rescaling, so normalization is cosmetic but keeps
+    the convex-combination contract of §4.4 explicit).
+    """
+    m = len(lookbacks)
+    if m == 0:
+        raise ValueError("lookbacks must be a non-empty tuple (SIGNAL.md §4.3)")
+    v = np.full(m, 1.0 / m) if weights is None else np.asarray(weights, dtype=float)
+    if v.shape != (m,):
+        raise ValueError(f"weights length {v.size} != lookbacks length {m}")
+    if not np.isfinite(v).all() or (v < 0).any() or v.sum() <= 0.0:
+        raise ValueError("weights must be finite, non-negative, with a positive sum (§8 case 9)")
+    v = v / v.sum()
+    ranks = np.vstack([momentum_signal(panel, d, lookback=lb, skip=skip) for lb in lookbacks])
+    band_eligible = np.isfinite(ranks).all(axis=0)  # intersection across the WHOLE band
+    avg = np.full(panel.n_symbols, np.nan)
+    avg[band_eligible] = v @ ranks[:, band_eligible]
     return _pct_rank(avg)

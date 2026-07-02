@@ -361,12 +361,22 @@ and `V_t`.
 > over more than a handful of series MUST apply Ledoit-Wolf shrinkage before
 > any inversion or eigendecomposition; a raw `np.cov`/`np.corrcoef` feeding
 > directly into a Mahalanobis distance or an absorption ratio is the bug (the
-> Marchenko-Pastur argument of Section 2.4). Test: on a synthetic panel with
-> `N=50, T=50` i.i.d. returns (no true structure), the unshrunk absorption
-> ratio/Mahalanobis distance must be shown (in the validation report, Section
-> 7) to fire spuriously at a materially higher rate than the shrunk version at
-> the same nominal ARL — this is the empirical demonstration that motivates
-> defaulting to Section 2.2/2.3's univariate statistics instead.
+> Marchenko-Pastur argument of Section 2.4). Test (two halves, BOTH binding in
+> the detector scope): (i) the STRUCTURAL half — the v1 live detector
+> (`measures/absorption.py`, `measures/vol_regime.py`) contains NO `np.cov`/
+> `np.corrcoef` feeding an absorption ratio / Mahalanobis distance
+> (`tests/regime/test_measures.py::test_v1_detector_uses_no_unshrunk_covariance`);
+> (ii) the EMPIRICAL DEMONSTRATION — on a synthetic `N=50, T=50` i.i.d. panel
+> (no true structure; `regime/synth/generate.py::iid_no_structure_panel`), the
+> UNSHRUNK sample absorption ratio (`regime/measures/turbulence.py`) fires above
+> a nominal threshold (3×`1/N`, i.e. 3× the population absorption ratio) on
+> essentially every draw, while the Ledoit-Wolf-SHRUNK estimate fires on almost
+> none, at the same threshold — this is the empirical demonstration that
+> motivates defaulting to Section 2.2/2.3's univariate statistics instead
+> (`tests/regime/test_mp_demonstration.py`). The full §7 validation report
+> (`regime/validate/threshold_stability.py` etc.) remains the scoped-out
+> reporting layer; the invariant's DEMONSTRATION itself is now binding in the
+> detector scope via `turbulence.py` + `synth/generate.py` (§9).
 
 ---
 
@@ -1032,9 +1042,18 @@ the one SYSTEM ledger, per SYSTEM's own Invariant SG ("every composed config
 > never a private one.** A REGIME calibration promoted without its
 > `config_hash` appearing in SYSTEM's persistent ledger (Invariant SG) is the
 > bug SYSTEM's four-green-modules trap exists to catch, applied to REGIME
-> specifically. Test: the number of distinct `(Δ_target, ARL_0_target,
-> dd_trigger, dd_reset)` tuples REGIME's `backtest.py` has ever scored equals
-> the count of REGIME-tagged entries in the SYSTEM ledger.
+> specifically. Test (two halves, BOTH binding in the detector scope): (i) the
+> CARDINALITY half — REGIME's BLUE-grid product (`(Δ_target, ARL_0_target)` =
+> `3×3 = 9` detector tuples) never exceeds `K_regime_max`, the overnight compute
+> cap (`tests/regime/test_config.py::test_k_regime_max_bounds_the_blue_grid_cardinality_fed_to_the_system_ledger`);
+> (ii) the EQUALITY half — the number of distinct `(Δ_target, ARL_0_target[,
+> dd_trigger, dd_reset])` tuples `regime/validate/backtest.py` scores equals the
+> count of REGIME-tagged entries it appends to the ONE shared
+> `system/validate/trials.TrialLedger` (never a private one), and a tuple scored
+> without a matching ledger row breaks the equality
+> (`tests/regime/test_ledger.py`). `backtest.py`'s per-tuple net-return
+> BACKTEST is injected (`score_fn`) and remains the scoped-out reporting layer
+> (§9); the LEDGER BOOKKEEPING equality is now binding in the detector scope.
 
 ---
 
@@ -1140,6 +1159,38 @@ content — see the bracket note above), `state/{bands,machine,emit}.py`, and
 against the tree `docs/ARCHITECTURE.md` §2 already reserves for this pillar;
 nothing under this tree currently exists as code (the pillar brief: "DOES NOT
 EXIST YET"), so this is the from-scratch build target, not a migration.
+
+**Detector-scope status of the `validate/`+`synth/` subtrees (what is built vs.
+deferred).** The DETECTOR is 10/10 for its declared scope: the two named
+invariants that reference these subtrees — **MP** (§2.4) and **LEDGER** (§7.4)
+— each now have a BINDING test in the detector scope, backed by the minimal
+seeds of these subtrees:
+
+- `synth/generate.py::iid_no_structure_panel` — the single `N×T` i.i.d.
+  no-structure generator Invariant MP's empirical demonstration needs (the full
+  adversarial suite — dispersion spikes/collapses, vol-regime shifts,
+  persistent-bleed drawdowns for STOP-XFER, §7.2 baselines — is the explicit
+  FUTURE build-contract: each is a labelled generator added to this same file,
+  none required for the detector's own correctness).
+- `measures/turbulence.py` — the closed-form Ledoit-Wolf (2004) shrunk
+  covariance + Kritzman-Li absorption ratio, the "accepted fallback
+  construction" §2.4 reserves this file for. It is NOT a v1 live detector path
+  (Invariant MP still forbids any unshrunk covariance in a LIVE statistic, and
+  `absorption.py`/`vol_regime.py` remain covariance-free); it exists to make
+  the MP DEMONSTRATION binding and as the BLUE-only research fallback.
+- `validate/backtest.py` — the LEDGER-bookkeeping half of §7.4: it enumerates
+  the BLUE-grid tuples and appends one REGIME-tagged `TrialRecord` per scored
+  tuple to the ONE shared `system/validate/trials.TrialLedger`, with the
+  per-tuple net-return backtest INJECTED (`score_fn`). The equality Invariant
+  LEDGER states is now binding; the per-tuple net-return backtest ENGINE, plus
+  `validate/{threshold_stability,baselines,ablation}.py`, are the explicit
+  FUTURE build-contract (the §7 reporting layer), out of the detector scope.
+
+`measures/vol_regime.py`, `measures/absorption.py` (repurposed name, new
+content), `state/{bands,machine,emit}.py`, `config/*`, `cusum.py`,
+`engine_api.py`, plus the seeds above are BUILT; the remaining `validate/`
+reporting modules and the extended `synth/` adversarial suite are the deferred
+build-contract described above, out of the detector's declared scope.
 
 ---
 

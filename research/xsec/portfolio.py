@@ -72,16 +72,19 @@ def quantile_weights(
     rank: np.ndarray,
     *,
     quantile: Quantile,
-    weighting: Weighting,
+    weighting: Weighting = "volscaled",
     gross: float = 1.0,
     vol: np.ndarray | None = None,
 ) -> np.ndarray:
     """Dollar-neutral quantile weights from a rank vector. Long leg sums +gross/2, short leg -gross/2.
 
     ``rank`` — cross-sectional rank in [0, 1], NaN for ineligible symbols.
+    ``weighting`` — within-leg scheme; the resolved default is ``'volscaled'`` (PORTFOLIO.md §5.4,
+                Invariant L: the deployed within-leg scheme is inverse-vol risk-parity, never the
+                liquidity-capped variant, absent an explicit logged AUM-threshold override).
     ``gross`` — total gross exposure (1.0 == 100% gross == 50% long + 50% short).
-    ``vol``   — trailing realized vol per symbol (required for ``weighting='volscaled'``); a name with
-                no finite vol falls back to equal weight within its leg.
+    ``vol``   — trailing realized vol per symbol (used for ``weighting='volscaled'``); a name with
+                no finite vol falls back to the leg's mean inverse-vol (PORTFOLIO.md §11 E2).
 
     Returns a weight vector aligned to ``rank`` (0.0 for non-selected / ineligible names). If fewer
     than 2 names are eligible the book is all-flat (zeros).

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import inspect
+
 import numpy as np
 
 from research.xsec.portfolio import (
@@ -51,6 +53,40 @@ def test_volscaled_favors_low_vol_names():
     assert abs(w.sum()) < 1e-12
     # still dollar-neutral, still 100% gross
     assert abs(np.abs(w).sum() - 1.0) < 1e-12
+
+
+def test_volscaled_is_the_resolved_keyword_default():
+    # PORTFOLIO.md §13 EXISTING gate / Invariant L (§5.4): 'volscaled' is the resolved within-leg
+    # default absent an explicit override — asserted on the FUNCTION'S OWN keyword default, not a
+    # caller convention. A regression here would mean the deployed default silently drifted (e.g.
+    # to 'equal' or to the liquidity-capped variant Invariant L forbids as a default).
+    default = inspect.signature(quantile_weights).parameters["weighting"].default
+    assert default == "volscaled"
+
+
+def test_volscaled_nan_vol_name_falls_back_to_leg_mean_inverse_vol():
+    # PORTFOLIO.md §11 E2: a name with non-finite vol still participates, at the leg's MEAN
+    # inverse-vol — never dropped (which would break dollar-neutrality) nor given zero weight.
+    # Fixture: quintile at n=10 -> 2 names/leg, with EXACTLY ONE NaN-vol name in EACH leg.
+    rank = np.linspace(0.05, 0.95, 10)  # strictly increasing -> deterministic leg membership
+    vol = np.array([0.03, np.nan, 0.05, 0.04, 0.02, 0.06, 0.03, 0.05, np.nan, 0.02])
+    #                short leg = idx {0,1}     ...        ...      long leg = idx {8,9}
+    # idx 1 (short) and idx 8 (long) have NaN vol -> one NaN-vol name per leg.
+    w = quantile_weights(rank, quantile="quintile", weighting="volscaled", gross=1.0, vol=vol)
+
+    # dollar-neutral and full gross despite the NaN-vol names (they were NOT dropped).
+    assert abs(w.sum()) < 1e-12
+    assert abs(np.abs(w).sum() - 1.0) < 1e-12
+    # both legs carry exactly 2 non-zero names -> the NaN-vol name participates in each leg.
+    assert np.count_nonzero(w > 0) == 2
+    assert np.count_nonzero(w < 0) == 2
+    assert w[1] != 0.0 and w[8] != 0.0  # the NaN-vol names carry weight
+
+    # the NaN-vol long name (idx 8) got the long leg's MEAN inverse-vol, so its magnitude equals
+    # that of its finite-vol leg-mate scaled by (mean_iv / iv_mate) — concretely, since the finite
+    # long-leg name (idx 9, vol=0.02) has iv=50 and the fallback mean-iv = (50 + 50)/2 = 50, the
+    # two long names carry EQUAL weight here (mean of a single finite iv == that iv).
+    assert abs(w[8] - w[9]) < 1e-12
 
 
 def test_flat_book_when_too_few_names():

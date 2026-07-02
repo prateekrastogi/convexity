@@ -607,11 +607,32 @@ SR_0     = 0.85                                                          [MEASUR
                     #   drift the CUSUM is built to catch
 mu_0     = SR_0 / sqrt(52.18)                                             [DERIVED]
                     # per-week mean return under the null, in return units
-sigma_0  = 0.28 / sqrt(52.18)                                             [DERIVED]
-                    # realized weekly-return std-dev under the validated backtest;
-                    # 0.28 = ~28% ANNUALIZED vol at 100% gross            [MEASURED]
-                    #   (from the SAME weekly_net_return series the honest Sharpe
-                    #    was computed on, research/xsec/metrics.py, per EDGE.md/EVIDENCE)
+ann_vol_0 = 0.28                                                          [DERIVED]
+                    # ~28% ANNUALIZED book vol at 100% gross, DERIVED (not
+                    #   asserted) from TWO primary figures in EDGE.md sec b's
+                    #   "Honest performance" table — the SAME two EDGE.md numbers
+                    #   that already anchor SR_0 and are cited immediately above:
+                    #     * net Sharpe ~0.8-1.0  (lower bound 0.85, == SR_0)  [MEASURED, EDGE.md sec b]
+                    #     * CAGR @100% gross ~20-25%  (lower bound 0.20)      [MEASURED, EDGE.md sec b]
+                    #   The annualized-Sharpe identity SR = arith_mean / vol and
+                    #   the geometric<->arithmetic return relation
+                    #       arith_mean = CAGR + 0.5 * vol^2      (lognormal drift correction)
+                    #   combine into a fixed point in vol:
+                    #       vol = ( CAGR + 0.5 * vol^2 ) / SR
+                    #   Solving at the SAME conservative lower-band inputs the null
+                    #   already uses (SR = SR_0 = 0.85, CAGR = 0.20) gives
+                    #       vol* = 0.28211  ->  0.28  (rounded).
+                    #   Round-trip check: vol=0.28, SR=0.85 => arith_mean=0.2380,
+                    #   implied CAGR=0.2380-0.5*0.28^2=0.1988 ~= EDGE.md's 0.20 lower
+                    #   CAGR bound. So 0.28 is the UNIQUE book vol consistent with
+                    #   EDGE.md's own lower-band (Sharpe, CAGR) pair; it is not a
+                    #   free number. (EDGE.md's maxDD ~25% @100% gross is a coherent
+                    #   third leg: Calmar = CAGR/maxDD = 0.20/0.25 = 0.80 ~= SR_0.)
+                    #   Using the LOWER Sharpe AND LOWER CAGR makes the null wider
+                    #   (larger vol => smaller |z_k|) and thus HARDER to false-alarm,
+                    #   the same conservatism SR_0's lower-bound choice states above.
+sigma_0  = ann_vol_0 / sqrt(52.18)                                        [DERIVED]
+                    # per-week return std-dev under the null, in return units
 
 z_k      = ( r_k − mu_0 ) / sigma_0     # standardized weekly innovation, mean 0 / var 1 under H0
 ```
@@ -1365,11 +1386,13 @@ unhealthy episodes, at the calibrated false-alarm rate."
       by a near-zero denominator.
 
 ### Kill-switch
-- [ ] `mu_0`, `sigma_0` derived from the stated EVIDENCE numbers (`SR_0 =
-      0.85`, annualized vol `0.28`), cited in code comments back to
-      `docs/EDGE.md` §b (NOT `SYSTEM.md` — these two specific numbers are
-      EDGE.md's; see the References-section note on which spec owns which
-      number).
+- [ ] `mu_0`, `sigma_0` derived from EDGE.md §b's honest column: `SR_0 = 0.85`
+      is EDGE.md's lower Sharpe bound [MEASURED]; `ann_vol_0 = 0.28` is
+      [DERIVED] from EDGE.md's lower (Sharpe 0.85, CAGR 0.20) pair via the
+      Sharpe identity + geometric↔arithmetic relation (§4.2's fixed-point
+      solve, `vol* = 0.2821`), NOT read off EDGE.md as a literal vol and NOT
+      from `SYSTEM.md`. Code comments must show the derivation, not assert the
+      number; see the References-section note on which spec owns which number.
 - [ ] `frac_pos` (0.85-1.00), CPCV mean OOS path Sharpe (≈0.91 vs naive
       ≈0.98), and PBO (0.357, range [0.31, 0.47]) referenced in code
       comments/docstrings are cited to `SYSTEM.md` §4.2-§4.4, never to
@@ -1553,9 +1576,16 @@ unhealthy episodes, at the calibrated false-alarm rate."
   `delta_target = 1.0`; OPS does not compute or re-derive PBO itself.
 - `docs/EDGE.md` — the empirical baseline this spec's honest-Sharpe / vol /
   maxDD / win-rate anchors are grounded against: honest net Sharpe
-  **~0.8–1.0** (§4.2 `mu_0`), annualized vol **~28%** at 100% gross (§4.2
-  `sigma_0`), maxDD **~25%**, weekly win-rate **~60%**, universe **~50–75**
-  names (owned by `UNIVERSE.md`), lookback band **12–16d**. EDGE.md does
+  **~0.8–1.0** (§4.2 `SR_0`, lower bound 0.85), CAGR **~20–25%** at 100% gross
+  (§4.2, lower bound 0.20), maxDD **~25%**, weekly win-rate **~60%**, universe
+  **~50–75** names (owned by `UNIVERSE.md`), lookback band **12–16d**. The
+  annualized vol **~28%** (§4.2 `ann_vol_0`/`sigma_0`) is **not a fourth
+  primary EDGE.md number** — EDGE.md prints Sharpe, CAGR, maxDD and win-rate
+  but no literal vol — it is **[DERIVED]** from EDGE.md's own lower-band
+  (Sharpe 0.85, CAGR 0.20) pair via the Sharpe identity plus the
+  geometric↔arithmetic return relation (§4.2 shows the fixed-point solve,
+  `vol* = 0.2821 → 0.28`), and cross-checks against EDGE.md's maxDD 25%
+  (Calmar ≈ 0.8 ≈ SR_0). EDGE.md does
   **NOT** contain the CPCV path-Sharpe or `frac_pos`/PBO figures — those are
   cited to `SYSTEM.md` immediately below; do not re-cite them to this file.
 - `docs/specs/SYSTEM.md` §4.2–§4.4 — the CPCV/PBO validation results this

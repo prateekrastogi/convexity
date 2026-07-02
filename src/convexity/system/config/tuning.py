@@ -92,3 +92,79 @@ class CompositionGrid:
     @property
     def cardinality(self) -> int:
         return len(self.tau_sel) * len(self.deadband) * len(self.delta_rank) * len(self.budget_priority)
+
+
+# ------------------------------------------------------------------ xsec search grid (SYSTEM §5.1)
+
+# The Section 5.1 enumerable cross-sectional search grid (BLUE: finite, enumerated, ledger-tracked,
+# never fitted continuously or per-symbol on raw P&L; SYSTEM §10). The Cartesian product of these
+# axes is telemetry ONLY (``n_sys_nominal``) — it is NEVER fed to SR*₀ (SYSTEM §5.6, Invariant DSR);
+# only configs actually scored against a validation fold enter the ledger (Invariant SG).
+XSEC_LOOKBACK_BAND: tuple[int, ...] = (12, 14, 16)  # sparse band anchored on TESTED points (§5.1)
+XSEC_SIGNAL_GRID: tuple[str, ...] = (
+    "momentum_L12", "momentum_L14", "momentum_L16", "carry", "combined",
+)
+XSEC_QUANTILE_GRID: tuple[str, ...] = ("quintile", "decile", "tercile")
+XSEC_WEIGHTING_GRID: tuple[str, ...] = ("inverse_realized_vol", "liquidity_capped", "equal_weight")
+XSEC_UNIVERSE_GRID: tuple[int, ...] = (50, 60, 75, 100)
+
+
+def xsec_nominal_grid_cardinality() -> int:
+    """The §5.1 Cartesian product (3 lookbacks folded into the signal axis) — telemetry ONLY.
+
+    Recorded as ``n_sys_nominal``; never fed to ``SR*₀`` (SYSTEM §5.6 consistency law / Invariant
+    DSR). Most cells were never composed and scored; only the persistent ledger feeds deflation.
+    """
+    return (
+        len(XSEC_SIGNAL_GRID)
+        * len(XSEC_QUANTILE_GRID)
+        * len(XSEC_WEIGHTING_GRID)
+        * len(XSEC_UNIVERSE_GRID)
+    )
+
+
+# ------------------------------------------------------- promotion-gate RED constants (SYSTEM §6/§10)
+
+# The committed CPCV partition (SYSTEM §4.2) and the PRE-REGISTERED, ledger-independent alternative
+# partitions for the PBO sensitivity range (SYSTEM §4.4 / §12 edge case 9). Fixed BEFORE any
+# sensitivity check is run — a promotion report whose alternatives differ from this list is rejected
+# exactly as one missing the range entirely (Invariant PBO-RANGE).
+COMMITTED_CPCV_PARTITION: tuple[int, int] = (8, 2)
+PREREGISTERED_PBO_PARTITIONS: tuple[tuple[int, int], ...] = ((6, 2), (10, 3))
+
+
+@dataclass(frozen=True)
+class PromotionGateDefaults:
+    """RED constants of the SYSTEM §6.1 PROMOTABLE conjunction (§10 parameter governance).
+
+    Every threshold here is RED and shared — unreachable from any per-instrument or per-signal-cell
+    config (Invariant C). ``k_min=3`` is the ``research/xsec/validate.py::weekly_defaults`` floor
+    (the value this book actually runs with) — NOT ``SystemDefaults.k_min=8`` (the unrelated
+    1-min/directional-era default) and NOT the retracted, never-grounded ``n_true_distinct >= 30``
+    of an earlier spec draft (SYSTEM §6 constant-reconciliation note). The Gate 6 constants
+    (``stress_multiplier=1.5``, ``stress_retention=0.5``, ``stressed_frac_pos_floor=0.75``) are the
+    ONE RED constant set shared with COST.md §8.1–8.2, restated, not independently re-derived
+    (SYSTEM §6.1 Gate 6) — the spec itself flags the 0.5×/0.75 pair as judgment-call constants.
+    """
+
+    # GATE 1 — trial floor (SYSTEM §6.1 Gate 1; weekly_defaults' k_min, a deliberately LOW floor).
+    k_min: int = 3
+    # GATE 2 — edge (SYSTEM §6.1 Gate 2; branch 2a clean DSR pass, branch 2b track-length).
+    dsr_threshold: float = 0.95
+    psr_zero_threshold: float = 0.95
+    # GATE 3 — CPCV robustness (SYSTEM §6.1 Gate 3; frac_pos, NEVER p05 — Invariant CPCV-STAT).
+    frac_pos_threshold: float = 0.8
+    # GATE 4 — overfitting (SYSTEM §6.1 Gate 4 / §4.4 three-zone convention, Invariant PBO-RANGE).
+    pbo_threshold: float = 0.5   # upper bound of the reported range must be strictly below this
+    pbo_band_floor: float = 0.2  # PBO in [band_floor, threshold) forces ensemble/band deployment
+    # GATE 5 — regime breadth (SYSTEM §6.1 Gate 5: positive Sharpe in >= 4 of 5 tested regimes).
+    regime_pos_required: int = 4
+    regime_total: int = 5
+    # GATE 6 — cost stress (SYSTEM §6.1 Gate 6 == COST.md §8.1–8.2, the shared RED constants).
+    stress_multiplier: float = 1.5
+    stress_retention: float = 0.5
+    stressed_frac_pos_floor: float = 0.75
+    # §12 edge cases 8+9 — ledger/PBO snapshot cross-consistency (in scoring cycles).
+    max_snapshot_skew: int = 1
+    committed_partition: tuple[int, int] = COMMITTED_CPCV_PARTITION
+    preregistered_alternatives: tuple[tuple[int, int], ...] = PREREGISTERED_PBO_PARTITIONS

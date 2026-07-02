@@ -659,6 +659,30 @@ COST/SYSTEM).
     the same order of magnitude as the `ARL_0≈52`-week false-promotion
     budget above, so the floor and the sequential test are calibrated on a
     consistent time unit);
+  - the CUSUM ratchet's **down-step (de-lever) threshold**
+    `demote_z_threshold = -k_ref = -0.25`. This is NOT a new free number: it
+    is the SYMMETRIC MIRROR of the promotion CUSUM's own reference offset,
+    derived from the identical Hawkins & Olwell (1998) one-sided-Gaussian-CUSUM
+    framework used for `h_promote`. The promotion side is an UPPER CUSUM
+    `S_k^+ = max(0, S_{k-1}^+ + z_k − k_ref)`; the de-lever side is the
+    corresponding LOWER CUSUM `S_k^- = min(0, S_{k-1}^- + z_k + k_ref)` that
+    alarms at `S_k^- ≤ −h_demote`. The §6.2 / §8 design mandate is that
+    demotion be IMMEDIATE and asymmetric (fast to demote, slow to promote) —
+    NOT gated by an accumulation — which is exactly the degenerate lower-CUSUM
+    case `h_demote = 0`: with no accumulation buffer the lower CUSUM alarms on
+    a single step whenever `z_k + k_ref < 0`, i.e. `z_k < −k_ref = −0.25`. So
+    the same `k_ref = 0.25` that sets "half the target shift" on the promotion
+    side pins the demotion trip at `−0.25` on the de-lever side; the value is
+    the reference offset, not an independent quantity. The closed-form ARL of
+    this `h_demote = 0` lower CUSUM is `ARL_0 ≈ exp(2·k_ref·0)/(2·k_ref²) =
+    1/(2·0.25²) = 8` weeks — an order of magnitude FASTER than the promotion
+    side's `ARL_0 ≈ 52`, which is precisely the "fast to demote, slow to
+    promote" asymmetry §6.2 requires, now quantified rather than asserted
+    (RED, BLUE-searchable offline only against this same formula, never against
+    realized demotions). The injection path is retained: an OPS governance
+    layer MAY override this default (e.g. `0.0` to demote on ANY negative
+    surprise, a stricter user preference) — but the spec-cited default is the
+    framework-derived `−0.25`, so it is no longer an unassigned constant;
   - `G_max = 1.5` (absolute gross-exposure ceiling independent of the Kelly
     computation — a circuit breaker for a data glitch, not a sizing
     target). Rationale for `1.5` specifically: it sits ABOVE `c=0.50 ·
@@ -848,10 +872,20 @@ term is recorded on every decision (`binding_ceiling ∈ {'kelly', 'capacity',
 `c_t ∈ {0.25, 0.50}` (RED, Section 2.3), starting at `c_t = 0.25`
 (quarter-Kelly) on cold start and for every newly-promoted config, per P7.
 `c_t` steps to `0.50` (half-Kelly) ONLY after the sequential test of Section
-6.3 passes, and steps back DOWN to `0.25` immediately if the live weekly
-Sharpe falls back below the demotion threshold (asymmetric: fast to demote,
-slow to promote — a standard risk-control asymmetry, not a special
-statistical claim).
+6.3 passes, and steps back DOWN to `0.25` immediately if the latest
+standardized weekly surprise `z_k` falls below the demotion threshold
+`demote_z_threshold = −k_ref = −0.25` (asymmetric: fast to demote, slow to
+promote — a standard risk-control asymmetry, not a special statistical
+claim). The demotion threshold is NOT a free constant: it is the symmetric
+mirror of the SAME Section 6.3 CUSUM framework, taken in its degenerate
+IMMEDIATE (`h_demote = 0`) form so that no accumulation is required — the
+lower-CUSUM step `S_k^- = min(0, S_{k-1}^- + z_k + k_ref)` alarms on a single
+observation exactly when `z_k + k_ref < 0`, i.e. `z_k < −k_ref = −0.25`.
+Section 3 states the RED value and its full derivation (including the
+`ARL_0 ≈ 8`-week de-lever run length this `h_demote = 0` case implies, an
+order of magnitude below the promotion side's `ARL_0 ≈ 52`, quantifying the
+"fast to demote" half of the asymmetry). The value is overridable by an OPS
+governance layer (the injection path is kept), but is no longer unassigned.
 
 ### 6.3 The ratchet as a sequential test (CUSUM), not a vibes-based judgment call
 

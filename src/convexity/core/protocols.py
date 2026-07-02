@@ -132,26 +132,33 @@ class CostEngine(Protocol):
 
 @runtime_checkable
 class RegimeEngine(Protocol):
-    """REGIME's surface (REGIME engine_api). Pure function of (panel, exec_state, cost_state, book,
-    prev, cfg). Emits ``g_t``/``s_t`` only (Inv SCOPE); enters LEVERAGE through ``g_t·H_book`` alone
-    (Inv NODOUBLE2). ``panel``/``book`` are pillar/neighbour-owned, typed ``object``."""
+    """REGIME's surface (REGIME.md §9 ``engine_api``), post-pivot cross-sectional-momentum shape.
 
-    def regime_state(
-        self,
-        panel: object,
-        exec_state: object,
-        cost_state: object,
-        book: object,
-        prev: RegimeState | None,
-        cfg: object,
-    ) -> RegimeState: ...
+    Answers ONE question per week at the Friday-close rebalance clock ``t``: given the market state
+    observable at ``F_t``, should NEXT week's book run at full/reduced/flat risk (REGIME.md §0). A
+    pure, causal function of the point-in-time ``panel`` and the weekly grid index ``t`` — uses only
+    closes/dispersion up to and including week ``t``'s Friday close (§0 P4). Emits a single
+    ``RegimeState`` carrying the scalar ``g_t`` only (never a signal, size, or per-instrument value —
+    §0 P2, §10); the caller multiplies gross by ``g_t`` at the one call site (``g_t·G_t``, §0 P2).
+
+    Migrated from the pre-pivot 6-argument surface (``exec_state``/``cost_state``/``book``/``prev``/
+    ``cfg``) to the spec's two-argument ``regime_state(panel, t)`` contract (§9). ``panel`` is
+    ``research.xsec.panel.Panel``, typed ``object`` here to keep this module import-light and
+    pillar-agnostic; ``t`` is the weekly rebalance-grid index.
+    """
+
+    def regime_state(self, panel: object, t: int) -> RegimeState: ...
 
 
 @runtime_checkable
 class OpsEngine(Protocol):
-    """OPS's surface (OPS §3). Consumes one causal ``StreamObs`` per call, emits the
-    ``OpsDirective`` ({run,degrade,halt} + flatten/cancel flags + reason chain). Monitors only,
-    never trades (Inv PROV); the only size/exposure output is the binary state by precedence."""
+    """OPS's surface (OPS.md sec 9). Consumes one causal realized observation per call and emits
+    the post-pivot ``OpsDirective`` (``state: RUN|DEGRADE|HALT`` totally ordered by precedence,
+    ``gross_multiplier`` in {1.0, g_degrade, 0.0}, and the fully-attributed ``alarms`` reason
+    chain). Monitors only, never trades (Inv PROV); its only exposure output is the graded gross
+    multiplier the state carries — never a weight, never a per-instrument veto. Migrated from the
+    pre-pivot flatten/cancel-flag shape when ``core/types.py``'s ``OpsDirective`` was reconciled to
+    this spec's (OPS.md sec 9 steps 1-3; sec 12 cross-consistency gate)."""
 
     def on_obs(self, obs: object) -> OpsDirective: ...
 
