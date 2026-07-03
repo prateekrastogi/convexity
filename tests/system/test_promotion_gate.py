@@ -52,7 +52,7 @@ def _dsr_result(
     """A synthetic DSRResult with only the Gate-2-relevant fields varied (SYSTEM §5.3 shapes).
 
     ``n_obs_sufficient`` defaults to the ENGINE's own formula ``n_obs >= max(min_trl, n_obs_floor)``
-    with ``n_obs_floor=24`` (deflated.py:255-256, research/xsec/validate.py::weekly_defaults), so
+    with ``n_obs_floor=24`` (deflated.py:255-256, src/convexity/system/xsec_validate.py::weekly_defaults), so
     the synthetic result matches what ``DeflatedSharpe.deflate`` would produce; the override exists
     only to pin the ``MinTRL < n_obs_floor`` divergence seam that the raw ``n_obs < MinTRL`` gloss
     would get WRONG (see test_gate2_branch_2b_reads_engine_sufficiency_not_raw_min_trl).
@@ -173,7 +173,7 @@ def test_gate1_two_config_ledger_fails_regardless_of_stellar_dsr():
 
 
 def test_gate1_floor_is_the_weekly_defaults_k_min_not_the_retracted_30():
-    """k_min=3 is research/xsec/validate.py::weekly_defaults' floor (§6 constant reconciliation)."""
+    """k_min=3 is src/convexity/system/xsec_validate.py::weekly_defaults' floor (§6 constant reconciliation)."""
     g = PromotionGateDefaults()
     assert g.k_min == 3 == weekly_defaults().k_min
     assert g.k_min != 30  # the retracted, never-grounded draft constant

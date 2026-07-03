@@ -6,7 +6,7 @@ peak-to-trough decline that walks the drawdown governor down its ladder, §6.4),
 series (a mid-series vol/mean shift the short-half-life EWMA must track, §4.1/§6.3). These are
 TEST FIXTURES only — a ``synth/`` module, never imported by a live layer — used so the governor,
 vol-floor, and CUSUM tests run against explicit, reproducible series rather than ad-hoc inline
-arrays (mirrors ``research/xsec``'s synthetic-panel test discipline).
+arrays (mirrors ``src/convexity``'s synthetic-panel test discipline).
 
 NOTE: the CUSUM ARL Monte-Carlo (``validate/arl.py``) draws its own ``N(0,1)`` surprises directly
 (the stated in-control model, §6.3); these generators produce book-RETURN series for the vol and

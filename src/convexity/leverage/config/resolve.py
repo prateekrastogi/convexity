@@ -4,7 +4,7 @@ RED constants (``LeverageDefaults``) are unreachable from any per-instrument fie
 only via ``resolve_config(defaults=...)`` (§3). This module is the ONE place that constructs the
 resolved config, mirroring COST/SYSTEM's ``resolve_config`` discipline. It also exposes the
 weekly-cadence ``SystemDefaults`` shim that the DSR gate (``edge/lcb.py``) reads — reused verbatim
-from ``research/xsec/validate.weekly_defaults`` (§2.6 reuses SYSTEM's deflation machinery, never
+from ``src/convexity/system/xsec_validate.weekly_defaults`` (§2.6 reuses SYSTEM's deflation machinery, never
 re-implements it).
 """
 
@@ -41,7 +41,7 @@ def resolve_config(*, defaults: LeverageDefaults | None = None) -> ResolvedLever
 def weekly_dsr_defaults(*, dsr_threshold: float = 0.95, k_min: int = 3, n_obs_floor: int = 24):
     """The weekly-cadence ``SystemDefaults`` the DSR gate reads (LEVERAGE.md §2.6).
 
-    Thin pass-through to ``research/xsec/validate.weekly_defaults`` — the SAME weekly-tuned
+    Thin pass-through to ``src/convexity/system/xsec_validate.weekly_defaults`` — the SAME weekly-tuned
     ``SystemDefaults`` (ppy≈52, k_min=3) that ``deflated_sharpe`` uses, so LEVERAGE's DSR gate and
     SYSTEM's promotion gate deflate on IDENTICAL cadence/floors (§2.6). LEVERAGE never re-derives
     any part of the SYSTEM §5.3–§5.5 test (Invariant K-CI/K-LCB).

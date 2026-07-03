@@ -2,7 +2,7 @@
 
 AMBER is "supplied metadata": the BTC symbol used for ``V_t`` (§2.3, matching ``overlay.py``'s
 ``market_symbol="BTCUSDT"`` default), the ``CRYPTO_REGIMES`` window boundaries (reused, NOT reforked,
-from ``research/xsec/universe.py`` — §6 AMBER: "already AMBER-equivalent constants ... reused not
+from ``src/convexity/panel/sleeve.py`` — §6 AMBER: "already AMBER-equivalent constants ... reused not
 reforked"), and the Friday-close weekly rebalance clock (matching the xsec engine). No RED constant
 (Delta_target, ARL_0_target, k, h, n_confirm, DD-stop params) may appear here — that leak is exactly
 what Invariant C-cfg (§3.4, §6) forbids.
@@ -19,7 +19,7 @@ from convexity.panel.sleeve import CRYPTO_REGIMES
 class RegimeAssetClassPreset:
     """AMBER per-sleeve metadata (REGIME.md §6). ``market_symbol`` is the asset whose realized vol
     feeds ``V_t`` (§2.3); ``regime_windows`` are the ex-post-labeled calibration windows reused from
-    ``research/xsec/universe.py`` (§3.4 designates ``2023_recovery``/``2024_bull`` as the in-control
+    ``src/convexity/panel/sleeve.py`` (§3.4 designates ``2023_recovery``/``2024_bull`` as the in-control
     training windows, NOT ``2022_bear`` which is itself a stress regime)."""
 
     market_symbol: str

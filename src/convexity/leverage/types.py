@@ -42,8 +42,7 @@ class CapacityInput:
     """Per-instrument inputs to the capacity ceiling (LEVERAGE.md §5.1).
 
     ``adv`` is the TEAL trailing dollar-volume ``ADV_i`` (causal, no lookahead); ``w_ref`` the
-    instrument's reference-gross (100%) dollar weight ``w_i^{ref}`` from ``research/xsec/
-    portfolio.py``'s already-built book; ``shortable`` the AMBER venue flag — an unshortable name
+    instrument's reference-gross (100%) dollar weight ``w_i^{ref}`` from ``src/convexity/portfolio/portfolio.py``'s already-built book; ``shortable`` the AMBER venue flag — an unshortable name
     contributes ``ADV_i = 0`` on the short side (§5.1) so it cannot silently inflate capacity.
     """
 

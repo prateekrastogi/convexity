@@ -181,13 +181,13 @@ them:
 | Round-trip friction rate (fee + half-spread + impact, per leg)    | `round_trip_friction()` (`src/convexity/cost/accounting.py`, backed by COST's `BINANCE_USDM_FEE_SCHEDULE`) |
 | Signed funding cash-flow accrual                                  | `_week_funding` (`src/convexity/cost/accounting.py`) |
 | Realized-vol estimator infrastructure (EWMA / trailing-std)       | `realized_vol` (`src/convexity/portfolio/portfolio.py`) — PORTFOLIO's own estimator, but the closed-form doctrine is shared with COST/SYSTEM |
-| DSR / CPCV / purged walk-forward machinery                        | `convexity.system.validate.{deflated,cpcv,walkforward}` reused by `research/xsec/{validate,cpcv}.py` |
+| DSR / CPCV / purged walk-forward machinery                        | `convexity.system.validate.{deflated,cpcv,walkforward}` reused by `src/convexity/system/{xsec_validate.py,cpcv.py}` |
 
 > **Invariant N-port — no re-derivation of sibling math.** PORTFOLIO does not
 > compute a momentum or carry signal (that is SIGNAL's job, already implemented
 > in `src/convexity/signal/signals.py`), does not compute a friction rate in bps (that
 > is COST's job), and does not implement its own DSR/CPCV estimator (that is
-> SYSTEM's job, reused via `research/xsec/{validate,cpcv}.py`). A test asserts
+> SYSTEM's job, reused via `src/convexity/system/{xsec_validate.py,cpcv.py}`). A test asserts
 > PORTFOLIO's turnover-cost number equals `turnover * round_trip_friction()`
 > called with COST's own constants — not a locally reinvented fee/spread/impact
 > triple.
@@ -1271,14 +1271,17 @@ sequence, one `n_symbols`) as a parameter rather than building it internally,
 so the natural way to run the ensemble is to construct one `Panel` once and
 call `run(panel, cfg)` three times (once per `cfg.lookback ∈ 𝓛`) against that
 same object — there is no code path inside `run` that could give two calls a
-different universe if they are handed the same `panel`. **What is NOT yet
-implemented, and is exactly the gap this edge case flags:** the §6.2
-ensemble-averaging driver itself (the loop that calls `run`/`run_book` three
-times and averages the resulting `w_t^{(L)}` vectors) does not exist yet in
-`research/xsec/` as of this spec — §6.2 is a construction PORTFOLIO's
-contract requires, not yet a built and tested code path (§13's acceptance
-gate for this exact driver states the precise build contract — signature,
-file path, and test — a future implementer must satisfy). **Invariant
+different universe if they are handed the same `panel`. **Status update: this
+is now implemented.** The §6.2 ensemble-averaging driver (the loop that calls
+`run`/`run_book` three times and averages the resulting `w_t^{(L)}` vectors)
+is built at `src/convexity/portfolio/engine.py::run_ensemble` (verified by
+reading the file: a complete, documented implementation matching this exact
+contract — accepts one `Panel` and a list of `XSecConfig`, raises `ValueError`
+on settle-parameter mismatch, handles the E5/E8 edge cases below) — superseding
+the "does not exist yet" status this section originally recorded (§13's
+acceptance gate for this exact driver states the precise build contract —
+signature, file path, and test — that the real implementation satisfies).
+**Invariant
 E-align** (build obligation for that future driver): it must construct a
 single `Panel` once and pass that same object (not three independently-built
 panels, even if built from the same underlying data) to every `L` in the
@@ -1299,24 +1302,25 @@ multiple independently-parameterized `w_t^{(L)}` vectors must be combined.
 ## 12. Directory layout (implemented; this spec documents, does not restructure)
 
 ```text
-research/
-  xsec/
-    panel.py          # UNIVERSE: point-in-time daily close/funding panel + listed mask
-    signals.py         # SIGNAL: momentum / carry / combined cross-sectional rank
-    portfolio.py        # PORTFOLIO (this spec): quantile_weights, liquidity_weights, realized_vol
-    accounting.py       # turnover + friction + signed funding -> WeekResult.net (§7, seam to COST)
-    engine.py           # driver: panel -> signal -> portfolio -> accounting, per config, per week
-    overlay.py           # beta-hedge / drawdown-stop overlays (post-PORTFOLIO; not this spec's scope)
-    cpcv.py              # CPCV path distribution + PBO over the lookback family (§6, §9)
-    metrics.py            # weekly Sharpe/CAGR/maxDD/turnover-drag/funding-income summary
-    validate.py            # purged walk-forward + DeflatedSharpe reuse (SYSTEM pillar, §9)
-    universe.py             # (thin) UNIVERSE.md loader
-  assetclass.py                # sleeve config (friction/regimes) + effective_breadth (§5.3)
-  data.py                       # bar/funding loaders panel.py builds on
-  universe.py                    # UNIVERSE.md parser
 src/convexity/
-  cost/                           # COST pillar: fee schedule PORTFOLIO's accounting.py imports (§7.3)
-  system/validate/{deflated,cpcv,walkforward}.py   # SYSTEM pillar: DSR/CPCV/walk-forward reused by research/xsec/{validate,cpcv}.py
+  panel/
+    panel.py          # UNIVERSE: point-in-time daily close/funding panel + listed mask
+    candidates.py       # UNIVERSE.md loader (load_universe, all_symbols)
+    sleeve.py            # sleeve config (friction/regimes; ClassFriction) + effective_breadth (§5.3)
+  signal/
+    signals.py         # SIGNAL: momentum / carry / combined cross-sectional rank
+  portfolio/
+    portfolio.py         # PORTFOLIO (this spec): quantile_weights, liquidity_weights, realized_vol
+    engine.py             # driver: panel -> signal -> portfolio -> accounting, per config, per week; run_ensemble (§6.2)
+  cost/
+    accounting.py          # turnover + friction + signed funding -> WeekResult.net (§7, seam to COST)
+  regime/
+    overlay.py               # beta-hedge / drawdown-stop overlays (post-PORTFOLIO; not this spec's scope)
+  system/
+    cpcv.py                   # CPCV path distribution + PBO over the lookback family (§6, §9)
+    metrics.py                 # weekly Sharpe/CAGR/maxDD/turnover-drag/funding-income summary
+    xsec_validate.py            # purged walk-forward + DeflatedSharpe reuse (SYSTEM pillar, §9)
+    validate/{deflated,cpcv,walkforward}.py   # SYSTEM pillar: DSR/CPCV/walk-forward reused by system/{xsec_validate.py,cpcv.py}
 ```
 
 PORTFOLIO's own logic is `src/convexity/portfolio/portfolio.py` (quantile bucketing +
@@ -1324,8 +1328,11 @@ within-leg weighting, §4–§5) plus the turnover half of `accounting.py` (§7)
 the remaining files above are the sibling pillars it composes with, listed
 for orientation, not because this spec governs them.
 
-**Whole-system placement.** This tree is the `research/xsec/` half of the
-xsec-momentum system; how it composes with the three surviving
+**Whole-system placement.** This tree is the cross-sectional-momentum half of the
+xsec-momentum system (the `research/xsec/` package this was originally
+prototyped in has since been folded into `src/convexity/{panel,signal,
+portfolio,cost,regime,system}/` by the promotion refactor, per the tree
+above); how it composes with the three surviving
 `src/convexity/{core,cost,system}/` pillars and the other new pillar specs
 (SIGNAL, UNIVERSE, LEVERAGE, REGIME, EXECUTION, OPS) end-to-end is mapped in
 `docs/ARCHITECTURE.md` §1–§2 ("The nine pillars, the weekly rebalance, and
@@ -1368,17 +1375,19 @@ default (Invariant L) — a static check asserts no call site sets
 `weighting="liqcap_volscaled"` without an explicit, logged AUM-threshold
 justification string.
 
-### Ensemble-averaging driver (`src/convexity/portfolio/engine.py::run_ensemble`) — SPECIFICATION, NOT YET BUILT
-**Status: this function does not exist in `research/xsec/` as of this spec
-(Invariant E-align, §11, E8).** The signature, file path, and test below are
-PORTFOLIO's build contract for a future implementer — they are written with
-the same type-annotation style as the real, existing `run(panel, cfg) ->
-XSecResult` in `src/convexity/portfolio/engine.py` (verified against that file's
-current contents) so the contract is drop-in compatible with the module it
-extends, not a hypothetical API invented independently of the real code.
+### Ensemble-averaging driver (`src/convexity/portfolio/engine.py::run_ensemble`) — IMPLEMENTED
+**Status update: this function is now implemented** at
+`src/convexity/portfolio/engine.py::run_ensemble` (Invariant E-align, §11, E8;
+verified by reading the file — a complete, documented function satisfying the
+signature, file path, and test contract below), superseding the "does not
+exist" status this section originally recorded. The signature below matches
+the same type-annotation style as `run(panel, cfg) -> XSecResult` in
+`src/convexity/portfolio/engine.py` (verified against that file's current
+contents), and the real implementation is drop-in compatible with the module
+it extends, not a hypothetical API invented independently of the real code.
 
 ```python
-# src/convexity/portfolio/engine.py  (proposed addition — does not exist yet)
+# src/convexity/portfolio/engine.py  (implemented)
 
 def run_ensemble(panel: Panel, cfgs: list[XSecConfig]) -> XSecResult:
     """Average the dollar-neutral weight vectors of |cfgs| independently-run configs (§6.2).
@@ -1397,7 +1406,10 @@ def run_ensemble(panel: Panel, cfgs: list[XSecConfig]) -> XSecResult:
 ```
 
 Pass when (the exact test a future implementer must satisfy, in
-`tests/research/xsec/test_ensemble.py` — this file also does not exist yet):
+`tests/research/xsec/test_ensemble.py` — this file now exists, 417 lines,
+covering exactly the E5/E8/dollar-neutrality assertions below; note its own
+path was not renamed off `research/xsec` during the promotion refactor even
+though `src/` was — flagged as a judgment call, out of `docs/specs/` scope):
 (i) `run_ensemble` constructs no `Panel` internally and accepts exactly one
 `Panel` instance, passed by reference to every per-`cfg` call — a test
 asserts `id(panel)` (or, since `Panel` is a frozen dataclass, an equality
@@ -1435,7 +1447,7 @@ a parallel reimplementation with its own drift risk.
   is charged against (P7, §7.3).
 - **DSR / CPCV / purged walk-forward machinery** — implemented once in
   `convexity.system.validate` and reused, never reimplemented, by
-  `research/xsec/{validate,cpcv}.py` (Invariant N-port).
+  `src/convexity/system/{xsec_validate.py,cpcv.py}` (Invariant N-port).
 - **Post-construction overlays** (beta-hedging residual market exposure,
   causal drawdown-stops) — `src/convexity/regime/overlay.py`. EVIDENCE (task digest,
   cross-referenced in `docs/specs/REGIME.md` §5.3 (the tested carry instance;
@@ -1550,7 +1562,7 @@ a parallel reimplementation with its own drift risk.
   authoritative source for the rejected Corwin-Schultz ~135bp/~40%-drag
   figure cited in this spec's §7.4.
 - `docs/specs/SYSTEM.md` (this repo) — the DSR/CPCV centerpiece math (its
-  §7) that `research/xsec/{validate,cpcv}.py` reuse without reimplementation
+  §7) that `src/convexity/system/{xsec_validate.py,cpcv.py}` reuse without reimplementation
   (Invariant N-port); this spec's §9 table cites SYSTEM's PSR/DSR/MinTRL
   vocabulary directly.
 - `docs/ARCHITECTURE.md` (this repo, §1–§2) — "The nine pillars, the weekly

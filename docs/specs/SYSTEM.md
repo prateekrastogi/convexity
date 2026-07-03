@@ -294,8 +294,8 @@ silently defaulted to the conservative extreme).
 
 > **Invariant EMBARGO-W — the weekly embargo is at least one rebalance period.** For every
 > walk-forward fold and every CPCV split, `embargo_weeks ≥ 1`, so no training week sits adjacent to
-> a test week without at least one full rebalance period of separation. Test: `research/xsec/
-> validate.py::purged_walkforward` and `src/convexity/system/cpcv.py::_split_weeks` both reject
+> a test week without at least one full rebalance period of separation. Test: `src/convexity/system/
+> xsec_validate.py::purged_walkforward` and `src/convexity/system/cpcv.py::_split_weeks` both reject
 > `embargo=0` for any fold construction feeding the DSR gate.
 
 ### 3.3 Purged walk-forward — mechanics (reused verbatim)
@@ -1025,17 +1025,22 @@ GATE 4  PBO < 0.5                  : PBO ≈ 0.36 (docs/EDGE.md), illustrative r
                                       upper bound 0.47 < 0.5.  PASS, in the mandatory-band sub-zone
                                       (deploy L in {12,14,16}, not a point).
 GATE 5  regime breadth >= 4/5      : 5/5.  PASS.
-GATE 6  cost stress                : CANNOT BE RUN YET — not merely "open," but its dependency CODE
-                                      DOES NOT EXIST in this repo as of this spec. Gate 6 as
+GATE 6  cost stress                : Status update — the dependency CODE now EXISTS. Gate 6 as
                                       specified requires `src/convexity/cost/friction/friction_stress.py` and
                                       `src/convexity/cost/friction/spread_impact.py` (COST.md §3/§8's cited
-                                      module layout); `src/convexity/cost/friction/` has no such directory yet
-                                      (confirmed by directory listing at the time of this spec's
-                                      writing — `research/xsec/` contains only
-                                      `panel/portfolio/validate/universe/cpcv/signals/accounting/
-                                      engine/metrics/overlay.py`, no `cost/` subpackage). OPEN, and
-                                      or a NEW-CODE item, not a re-run of something that already
-                                      exists.
+                                      module layout); both are now present and implemented (verified by
+                                      reading the files: `friction_stress.py` has `net_sharpe_ex_funding`,
+                                      `friction_stress_run`, `friction_stress_gate`; `spread_impact.py`
+                                      has `SpreadImpactModel`, `amihud_ratio`) — superseding the
+                                      "CODE DOES NOT EXIST" status this row originally recorded (that
+                                      status was written when the pre-promotion-refactor `research/xsec/`
+                                      package contained only `panel/portfolio/validate/universe/cpcv/
+                                      signals/accounting/engine/metrics/overlay.py`, no `cost/`
+                                      subpackage). This gate's numeric pass/fail has not been re-run as
+                                      part of this docs-accuracy pass — only the code-existence
+                                      precondition is corrected here; whether Gate 6 itself now PASSES
+                                      is a separate judgment call left open (running it is a SYSTEM/COST
+                                      validation task, not a documentation fix).
 
 OVERALL: NOT YET FULLY PROMOTABLE, and this spec is explicit about WHY it cannot yet be checked
 end-to-end, not just THAT it cannot:
@@ -1316,22 +1321,24 @@ system/                              # UNCHANGED location; scope narrowed (Secti
 |   +-- baselines.py      # buy&hold, random-matched-frequency, cost-stress (Gate 6)
 |   +-- budget.py, cache.py, reports.py   # unchanged in kind from the old spec
 +-- types.py
-research/xsec/                       # THE ADAPTER LAYER that calls into system/validate/ above
-+-- validate.py           # weekly_defaults(), purged_walkforward(), deflated_sharpe() --
+system/                               # THE ADAPTER LAYER that calls into system/validate/ above
++-- xsec_validate.py      # weekly_defaults(), purged_walkforward(), deflated_sharpe() --
 |                          #   thin wrappers that feed the weekly series into the SAME classes
 +-- cpcv.py                # path_distribution(), compute_pbo(), run_cpcv() -- CPCV + PBO for the
 |                          #   lookback family, built ON TOP OF SystemCPCV
 +-- metrics.py             # PERIODS_PER_YEAR, WeeklyMetrics -- the weekly-cadence reporting layer
-+-- panel.py, signals.py, portfolio.py, accounting.py, engine.py, overlay.py, universe.py
+panel/panel.py, signal/signals.py, portfolio/{portfolio.py,engine.py}, cost/accounting.py,
+regime/overlay.py, panel/candidates.py
                             # THE STRATEGY ITSELF -- not SYSTEM's concern; SYSTEM validates
                             #   whatever return series these produce
 ```
 
 The key structural fact this layout encodes: **`convexity/system/validate/` did not move and did
-not change its public contracts.** `research/xsec/` is a new, thin adapter package that feeds a
-differently-shaped (weekly, portfolio-level) return series into the *same* validation classes the
-old 1-minute directional book used. This is the concrete instantiation of "the math is unchanged;
-the risk unit is not" that this whole rewrite is about.
+not change its public contracts.** `src/convexity/system/{xsec_validate.py,cpcv.py}` is a thin adapter
+(originally prototyped as a sibling `research/xsec/` package, since folded into `src/convexity/system/`
+by the promotion refactor) that feeds a differently-shaped (weekly, portfolio-level) return series
+into the *same* validation classes the old 1-minute directional book used. This is the concrete
+instantiation of "the math is unchanged; the risk unit is not" that this whole rewrite is about.
 
 ---
 
@@ -1477,8 +1484,8 @@ reframing:
   2.2). Not used in the deployed cost model.
 - **Fama, E. F. & MacBeth, J. D. (1973).** *Risk, Return, and Equilibrium: Empirical Tests.* Journal
   of Political Economy — the general cross-sectional-ranking methodology (rank assets on a signal,
-  form long/short legs) that the quintile long-top/short-bottom construction (`research/xsec/
-  portfolio.py::quantile_weights`) instantiates.
+  form long/short legs) that the quintile long-top/short-bottom construction (`src/convexity/
+  portfolio/portfolio.py::quantile_weights`) instantiates.
 - **Jegadeesh, N. & Titman, W. (1993).** *Returns to Buying Winners and Selling Losers: Implications
   for Stock Market Efficiency.* Journal of Finance — the original cross-sectional trailing-return
   momentum anomaly this signal family (`src/convexity/signal/signals.py::momentum_signal`) is a direct

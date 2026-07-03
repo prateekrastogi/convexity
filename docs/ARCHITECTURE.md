@@ -4,8 +4,9 @@
 (weekly, dollar-neutral, quintile, vol-scaled) on Binance USDT-M perpetuals. The **specs in
 `docs/specs/{UNIVERSE,SIGNAL,PORTFOLIO,LEVERAGE,COST,EXECUTION,REGIME,SYSTEM,OPS}.md` are the
 authoritative source** for every formula, invariant, and parameter; this document is the map
-between those nine specs, the real `research/xsec/` + `src/convexity/{core,cost,system}/` code,
-and the weekly data-flow that ties them together. The fuller evidentiary narrative — what was
+between those nine specs, the real `src/convexity/{panel,universe,signal,portfolio,leverage,cost,
+execution,regime,system,ops}/` code, and the weekly data-flow that ties them together. The fuller
+evidentiary narrative — what was
 tried, what died, what survived, and why — lives in **`docs/EDGE.md`**; read it before this
 document if you have not already.
 
@@ -24,7 +25,7 @@ document's main sections.
 trained, or black-box model.** This is not an implementation detail buried in one pillar; it is a
 repo-wide constraint that every one of the nine specs independently upholds, and it is why the
 system is auditable end-to-end from the formulas in `docs/specs/*.md` to the code in
-`research/xsec/` and `src/convexity/{core,cost,system}/`.
+`src/convexity/{panel,universe,signal,portfolio,leverage,cost,execution,regime,system,ops}/`.
 
 **Forbidden, unconditionally:** neural networks, gradient-boosted trees, any learned/fitted
 black-box signal combiner, large hyperparameter grid search or walk-forward retraining loops, and
@@ -82,7 +83,9 @@ that composes panel → signal → portfolio → accounting into one weekly seri
 summary that `validate.py` then deflates.
 
 Of the eight `src/convexity/<pillar>/` packages the pre-pivot architecture (Appendix A §2) laid
-out, only **three survive as live, implemented code**, reused verbatim by the new system:
+out, two survive largely as-is and are reused verbatim by the new system; the rest were promoted
+or newly built into the ten per-pillar packages the table above lists
+(`{panel,universe,signal,portfolio,leverage,cost,execution,regime,system,ops}/`):
 
 * **`src/convexity/core/`** — shared types (`Bars`, `InstrumentSpec`, `AssetClass`), the
   RED/AMBER/BLUE/TEAL governance buckets (`params.py`), and the cross-pillar composition
@@ -101,11 +104,12 @@ out, only **three survive as live, implemented code**, reused verbatim by the ne
   overriding `ppy` and the observation-count floors) so only the *cadence*, never the *math*,
   changes (`SYSTEM.md` §5.2).
 
-The `breakout/`, `trend/`, `leverage/`, `execution/`, `ops/`, `regime/` package trees the old
-architecture (Appendix A §2) planned were never fully built for the directional system and are
-**not being built now** in that location — the cross-sectional LEVERAGE/EXECUTION/REGIME/OPS
-pillars are specified in `docs/specs/*.md` and, where implemented, live thin under `research/xsec/`
-rather than as new `src/convexity/<pillar>/` trees.
+The remaining `breakout/`, `trend/` package trees the old architecture (Appendix A §2) planned for
+the directional system were never fully built and are **not being built** — that thesis is dead
+(§0 above). The cross-sectional UNIVERSE/SIGNAL/PORTFOLIO/LEVERAGE/EXECUTION/REGIME/OPS pillars
+are specified in `docs/specs/*.md` and are now implemented as the `src/convexity/{panel,universe,
+signal,portfolio,leverage,execution,regime,ops}/` packages the table above cites, superseding the
+old `selection/` (folded into `panel/` + `universe/`) naming.
 
 ---
 
@@ -195,8 +199,8 @@ for its own exposure brakes (REGIME/LEVERAGE-governor/OPS-kill composing on disj
 than multiplying independently); it carries over unchanged to this graph.
 
 **Where the pipeline is genuinely incomplete today.** `EXECUTION.md` and `OPS.md` specify real
-pillars, but per `docs/EDGE.md` §(e) **the live/paper rebalancer is not yet built**. `research/xsec/`
-is research-and-validation-only: `accounting.settle_week` marks the whole week's P&L as if the book
+pillars, but per `docs/EDGE.md` §(e) **the live/paper rebalancer is not yet built**.
+`src/convexity/` is research-and-validation-only: `accounting.settle_week` marks the whole week's P&L as if the book
 re-weighted atomically at the Friday closing print, which is the correct *decision-price
 benchmark* but not a real fill price (`EXECUTION.md` §0 states this gap explicitly). A future
 `strategy/`-style composition layer, analogous to Appendix A §1/§4's Nautilus adapter pattern, is
@@ -282,7 +286,7 @@ discipline; what changed is the unit each layer operates on.
   against Nautilus (§2 above); this layer activates once EXECUTION's live rebalancer and OPS's
   monitoring loop are built.
 
-Every pillar's tests need **no external data** — `research/xsec/` reuses the same
+Every pillar's tests need **no external data** — the cross-sectional engine reuses the same
 seeded-synthetic-generator discipline the old architecture's §8 closing note required
 (`tests/research/xsec/conftest.py` fixtures), so invariant and worked-example tests never touch
 the 137-instrument production data lake.
@@ -309,7 +313,8 @@ statement of each.
   full in `CLAUDE.md`): NautilusTrader for the eventual paper/live engine, its native Binance
   USDT-M adapter for connectivity, pandas/numpy/pyarrow for the research dataframe layer, httpx +
   `data.binance.vision` for bulk historical backfill. The only code written from scratch is the
-  cross-sectional engine (`research/xsec/`), the data-layer backfill scripts
+  cross-sectional engine (`src/convexity/{panel,universe,signal,portfolio,leverage,cost,execution,
+  regime,system,ops}/`), the data-layer backfill scripts
   (`scripts/backfill_*_1m.py`), and — not yet built — the live/paper weekly rebalancer. Do not
   reimplement an engine, a broker connector, a dataframe layer, or a backtest framework; do not
   add competing engines (freqtrade/hummingbot/vectorbt/zipline) or raw `python-binance`.

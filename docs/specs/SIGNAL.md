@@ -1220,7 +1220,7 @@ weight, a trade, or a position itself (P1).
 
 So no constant here is ever mistaken for an invented or "reasonable-sounding" number. Every
 source below is either (a) a defaulted/implemented value read directly off a named function in
-`research/xsec/*.py`, or (b) a validation RESULT recorded in `docs/EDGE.md` (the repo's decision
+`src/convexity/{signal,panel,cost,portfolio}/*.py`, or (b) a validation RESULT recorded in `docs/EDGE.md` (the repo's decision
 memo synthesizing the CPCV/PBO/DSR/overlay validation runs) and cross-cited, where the underlying
 run lives, in `src/convexity/system/cpcv.py` / `src/convexity/regime/overlay.py`'s own docstrings and the
 sibling pillar specs that independently cite the same numbers from the same runs

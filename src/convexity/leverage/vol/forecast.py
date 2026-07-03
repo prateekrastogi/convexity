@@ -63,7 +63,7 @@ def sigma_hat_t(
     """Causal EWMA weekly book-vol ``σ̂_t`` with the §4.2 conservative floor (LEVERAGE.md §4).
 
     ``net_weekly`` is the book's realized 100%-gross reference weekly ``net`` series
-    (``research/xsec/engine.XSecResult.net``), most-recent-last. ``α = 1 − 2^(−1/h_vol)`` with
+    (``src/convexity/portfolio/engine.XSecResult.net``), most-recent-last. ``α = 1 − 2^(−1/h_vol)`` with
     half-life ``h_vol`` in WEEKS (§4.1). Below ``n_vol_min`` observations the estimate falls back,
     in priority order (§4.2):
 

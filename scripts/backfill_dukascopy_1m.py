@@ -34,7 +34,7 @@ import httpx
 import pandas as pd
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
-UNIVERSE_MD = REPO / "src" / "convexity" / "selection" / "UNIVERSE.md"
+UNIVERSE_MD = REPO / "src" / "convexity" / "panel" / "candidates.md"
 LAKE = REPO / "data" / "dukascopy"
 LOG = REPO / "data" / "backfill_dukascopy.log"
 START = dt.date(2021, 6, 1)  # 5-yr floor; per-instrument history floor is handled by empty hours

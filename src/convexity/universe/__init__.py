@@ -7,8 +7,8 @@ GATE, not a forecaster (P2, provider-not-decider): it emits a boolean eligibilit
 liquidity order statistic, never a trade, a size, or a lookback.
 
 This package is a thin, contract-enforcing layer over the already-validated point-in-time substrate
-in ``research/xsec/panel.py`` (the ``listed`` mask, ``trailing_dollar_volume``, ``build_dollar_volume``)
-and ``research/universe.py`` (the candidate symbol tables). It ADDS the mechanics UNIVERSE.md
+in ``src/convexity/panel/panel.py`` (the ``listed`` mask, ``trailing_dollar_volume``, ``build_dollar_volume``)
+and ``src/convexity/panel/candidates.py`` (the candidate symbol tables). It ADDS the mechanics UNIVERSE.md
 specifies but that did not exist in code: the minimum-history warmup gate (§1.4), the per-symbol
 hysteresis state machine (§2.2), the strict short-liquidity gate (§4.2), and the structural
 point-in-time invariant check (§7, Invariant PIT). It never reimplements the proven panel numerics.

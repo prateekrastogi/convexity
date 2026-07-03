@@ -46,7 +46,7 @@ if TYPE_CHECKING:
     from convexity.cost.friction.spread_impact import SpreadImpactModel
 
 # One rebalance period in hours — the operative scale of §2.1's upper regularity bound
-# ``Delta << 7 days`` (the weekly cadence of research/xsec/engine.py, EXECUTION.md §2.1/§6.1).
+# ``Delta << 7 days`` (the weekly cadence of src/convexity/portfolio/engine.py, EXECUTION.md §2.1/§6.1).
 WEEK_HOURS: float = 7.0 * 24.0
 
 # Per-name reason codes carried on a RebalancePlan (EXECUTION.md §11.1 "binding-gate/reason codes").
@@ -356,7 +356,7 @@ def implementation_shortfall(
 ) -> ShortfallReport:
     """Decompose realized shortfall vs. the Friday-close decision price (Perold 1988, §7.1).
 
-    ``decision_price`` — shape (N,) ``panel.close`` at rebalance row ``d`` (research/xsec/panel.py),
+    ``decision_price`` — shape (N,) ``panel.close`` at rebalance row ``d`` (src/convexity/panel/panel.py),
         the EXACT price ``accounting._asset_week_return`` uses as the week's starting mark.
     ``fill_price`` — shape (N,) notional-weighted average realized fill price per name across all
         child orders executed in ``[t_0, t_0+Delta]``.
@@ -516,7 +516,7 @@ def cost_facts_from_spread_impact(
     at the per-slice trade-size scale (Invariant N-exec, EXECUTION.md §2.2).
 
     COST's fitted impact law is the SQUARE-ROOT form ``impact_frac_i(Q) = k_amihud *
-    sqrt(Amihud_i * Q)`` (``research/xsec/cost/spread_impact.py::SpreadImpactModel.impact_frac``,
+    sqrt(Amihud_i * Q)`` (``src/convexity/cost/friction/spread_impact.py::SpreadImpactModel.impact_frac``,
     COST.md §5.3) — the model exposes ``k_amihud`` and the ``impact_frac`` method, NOT a pre-baked
     linear ``eta``/``gamma`` pair. Per EXECUTION.md §2.2, the LINEAR Almgren-Chriss ``eta`` used
     inside one sub-interval is the LOCAL LINEARIZATION of that same square-root curve around the
@@ -537,7 +537,7 @@ def cost_facts_from_spread_impact(
     ``model`` — COST's fitted ``SpreadImpactModel`` (read-only; ``k_amihud``/``impact_frac`` are the
         underlying fit, consumed byte-identical, Invariant N-exec).
     ``amihud`` — shape (N,) per-name ``Amihud_i`` illiquidity ratios (COST §5.3's AMBER trailing
-        statistic, ``research/xsec/cost/spread_impact.py::amihud_ratio``); passed to ``impact_frac``
+        statistic, ``src/convexity/cost/friction/spread_impact.py::amihud_ratio``); passed to ``impact_frac``
         exactly as ``settle_week``'s cost path passes it.
     ``theta`` — shape (N,) LINEAR fee+half-spread round-trip component (§4.2/§4.4, Invariant B-band).
     ``sigma`` — shape (N,) ``portfolio.realized_vol`` price-return vol (§2.5, NOT ``sigma_w,i``).

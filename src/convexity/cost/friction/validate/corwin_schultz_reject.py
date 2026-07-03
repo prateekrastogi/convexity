@@ -54,7 +54,7 @@ import numpy as np
 # 1-minute-aggregated daily OHLC, vs the measured empirical anchor (COST.md Section 5.5).
 CS_REJECTED_ROUND_TRIP_BP: float = 135.0  # ~135bp per round trip (wrong, volatility-conflated)
 CS_REJECTED_DRAG_PCT_PER_YEAR: float = 40.0  # ~40%/yr implied cost drag (wrong)
-MEASURED_ROUND_TRIP_BP: float = 13.0  # 2*(5 + 1 + 0.5)bp, research/xsec/accounting.py defaults
+MEASURED_ROUND_TRIP_BP: float = 13.0  # 2*(5 + 1 + 0.5)bp, src/convexity/cost/accounting.py defaults
 
 # COST.md Section 5.4.3 bounds the reproduction to the same ORDER OF MAGNITUDE as the documented
 # garbage: the rejected estimate is >= 10x the measured 13bp round-trip anchor. The runnable-estimator
@@ -62,9 +62,10 @@ MEASURED_ROUND_TRIP_BP: float = 13.0  # 2*(5 + 1 + 0.5)bp, research/xsec/account
 # check), never that it hits 135bp to the bp — the spec itself only claims order-of-magnitude ("~135bp").
 CS_REJECT_ORDER_OF_MAGNITUDE: float = 10.0
 
-# Source roots forming the cost path (repo-relative): the cross-sectional engine + cost pillar,
-# now all promoted under src/convexity (research/xsec retained so a pre-promotion reintroduction is
-# still caught). Tests are scanned too — a test EXERCISING Corwin-Schultz would itself be a reintro.
+# Source roots forming the cost path (repo-relative): the cross-sectional engine + cost pillar are
+# now fully promoted under src/convexity (research/xsec no longer exists on disk; the dead root is
+# kept in the tuple as a harmless no-op guard — is_dir() skips it below — in case of regression).
+# Tests are scanned too — a test EXERCISING Corwin-Schultz would itself be a reintro.
 COST_PATH_ROOTS: tuple[str, ...] = ("research/xsec", "src/convexity")
 
 _FORBIDDEN_TOKENS: tuple[str, ...] = ("corwin", "schultz")

@@ -14,7 +14,7 @@ DIFFERENT thing (a promotion-time gate battery, not a swap-cadence forward test)
 §6.2-named file rather than being appended below the §11-mandated ForwardGate.
 
 Everything here COMPOSES already-existing statistics (``DeflatedSharpe`` → ``DSRResult``,
-``TrialLedger.n_sys`` → ``n_true_distinct``, ``research/xsec/cpcv.py``'s
+``TrialLedger.n_sys`` → ``n_true_distinct``, ``src/convexity/system/cpcv.py``'s
 ``PathSharpeSummary.frac_pos`` / ``compute_pbo``, COST's ``friction_stress`` outputs) into ONE typed
 verdict; zero statistical machinery is reimplemented here (SYSTEM §6.2 reuse note).
 """
@@ -55,7 +55,7 @@ class PBOEvidence:
 class CostStressEvidence:
     """The Gate 6 input — the COST pillar's friction-stress outputs (COST.md §8.1–8.2, SYSTEM §6.1).
 
-    Produced by ``research/xsec/cost/friction_stress.py`` (COST.md §3): the 1.5×-round-trip-friction
+    Produced by ``src/convexity/cost/friction/friction_stress.py`` (COST.md §3): the 1.5×-round-trip-friction
     re-run through the identical ``settle_week`` machinery, re-scored on the SAME CPCV partition as
     the baseline. ``baseline_sharpe_ann_lower`` is the honest baseline's lower bound (the ~0.8 end
     of the 0.8–1.0 net band, COST.md §8.2). ``net_sharpe_ex_funding`` is REPORTED, never gated
@@ -76,12 +76,12 @@ class PromotionCandidate:
     """Everything the §6.1 conjunction reads — one typed bundle of ALREADY-COMPUTED evidence.
 
     ``dsr`` is the :class:`~convexity.system.types.DSRResult` from ``DeflatedSharpe.deflate`` (via
-    ``research/xsec/validate.py::deflated_sharpe``); ``n_true_distinct`` is the de-correlated
+    ``src/convexity/system/xsec_validate.py::deflated_sharpe``); ``n_true_distinct`` is the de-correlated
     cluster count — the INT (``k_distinct``) component of ``TrialLedger.n_sys(rho_cl)``'s
     ``tuple[float, int]`` return (trials.py:57), NOT the effective-float component — measured AT
     PROMOTION TIME on the ledger
     snapshot stamped ``ledger_as_of`` (§12 edge case 8: a stale report must never read as current);
-    ``frac_pos`` is ``PathSharpeSummary.frac_pos`` from ``research/xsec/cpcv.py`` — ``p05`` is
+    ``frac_pos`` is ``PathSharpeSummary.frac_pos`` from ``src/convexity/system/cpcv.py`` — ``p05`` is
     deliberately NOT a field of this contract (Invariant CPCV-STAT); ``regime_sharpes`` maps each
     of the five tested regimes (SYSTEM §6.1 Gate 5) to its annualized Sharpe; ``cost_stress`` is
     ``None`` while COST's friction-stress run is unavailable — Gate 6 then FAILS CLOSED (§6.2
@@ -138,7 +138,7 @@ class PromotionGate:
 
     Composes existing statistics only (SYSTEM §6.2's implementation-gap note): DSR/PSR/MinTRL from
     ``deflated.py``, ``n_true_distinct`` from ``trials.py``, ``frac_pos``/PBO from
-    ``research/xsec/cpcv.py``, the stressed run from COST's ``friction_stress``. Nothing here
+    ``src/convexity/system/cpcv.py``, the stressed run from COST's ``friction_stress``. Nothing here
     recomputes a statistic; it only compares them against the RED thresholds
     (:class:`~convexity.system.config.tuning.PromotionGateDefaults`, SYSTEM §10).
     """
@@ -317,7 +317,7 @@ class PromotionGate:
         """Gate 6: stressed Sharpe >= 0.5× honest baseline lower bound AND stressed frac_pos >= 0.75.
 
         Fails CLOSED when the COST friction-stress run is unavailable (SYSTEM §6.2 records Gate 6
-        as blocked on ``research/xsec/cost/friction_stress.py``), and rejects a stress run at any
+        as blocked on ``src/convexity/cost/friction/friction_stress.py``), and rejects a stress run at any
         multiplier other than the shared RED 1.5× (COST.md §8.1 / SYSTEM §6.1). The multiplier
         match uses :func:`math.isclose` rather than ``==``: the canonical 1.5 literal is exactly
         representable so the RED-constant intent (reject anything but a true 1.5× run) is preserved,

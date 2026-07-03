@@ -26,7 +26,7 @@ def test_impact_coeffs_match_cost_byte_for_byte():
     # tolerance, no stub. (Earlier version asserted only against a fabricated .eta/.gamma stub.)
     rng = np.random.default_rng(7)
     n = 6
-    # a REAL fitted COST model (research/xsec/cost/spread_impact.py), anchored to a median universe.
+    # a REAL fitted COST model (src/convexity/cost/friction/spread_impact.py), anchored to a median universe.
     model = SpreadImpactModel.anchor(adv_median=5e7, amihud_median=2e-9)
     amihud = rng.uniform(5e-10, 8e-9, n)  # per-name Amihud_i illiquidity (COST §5.3)
     slice_notional = rng.uniform(2e4, 2e5, n)  # per-slice dollar trade size (§2.2 linearization scale)

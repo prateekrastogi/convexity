@@ -1,7 +1,7 @@
 """Public UNIVERSE entry point — composes ``U_t`` and ``U_t^short`` (UNIVERSE.md §11).
 
 Wires the contract layers of §1-4 into the frozen ``EligibilitySnapshot`` (§11.1) and
-``ShortabilitySnapshot`` without changing any proven ``research/xsec/panel.py`` behavior:
+``ShortabilitySnapshot`` without changing any proven ``src/convexity/panel/panel.py`` behavior:
 
     base_eligible (§1.4 history gate, per-symbol)
       -> rank_i(t)           (§2.1 liquidity order statistic, REUSES panel.trailing_dollar_volume)

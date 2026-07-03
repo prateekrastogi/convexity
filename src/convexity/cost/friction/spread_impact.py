@@ -1,10 +1,10 @@
 """Per-name half-spread + Amihud impact estimator (COST.md Sections 5.2-5.4, 5.5).
 
-The DERIVED per-name cost model that supersedes ``research/xsec/accounting.py``'s flat
+The DERIVED per-name cost model that supersedes ``src/convexity/cost/accounting.py``'s flat
 ``HALF_SPREAD_FRAC`` / ``IMPACT_FRAC`` constants for the crypto production sleeve. It supplies the
 three per-leg friction components (``taker``, ``half_spread_i``, ``impact_frac_i``) that assemble
 into the ONE per-name round-trip rate ``round_trip_friction_i = 2*(taker + half_spread_i +
-impact_frac_i)`` — the exact signature ``research/xsec/accounting.py::round_trip_friction`` already
+impact_frac_i)`` — the exact signature ``src/convexity/cost/accounting.py::round_trip_friction`` already
 implements (Invariant N: this module supplies the rate INPUTS, it never re-derives the turnover /
 settlement arithmetic of ``settle_week``).
 
@@ -49,7 +49,7 @@ arithmetically instead of silently pricing it. Until UNIVERSE exposes that flag,
 PARTICIPATION (Invariant PARTICIPATION, COST.md Section 5.3). The anchors are calibrated at the
 realized small-single-digit-%-of-ADV participation of a ~50-name weekly dollar-neutral book. This
 model must NOT be applied unmodified at an order-of-magnitude larger book size without re-running the
-walk-forward calibration check (``research/xsec/cost/validate/amihud_calibration.py``).
+walk-forward calibration check (``src/convexity/cost/friction/validate/amihud_calibration.py``).
 """
 
 from __future__ import annotations

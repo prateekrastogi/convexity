@@ -58,7 +58,7 @@ class ClassFriction:
 # per-symbol-per-date ``is_shortable: bool`` (borrow/short-interest availability, sourced from the
 # exchange metadata) so the derived cost model can price an unshortable short-leg name at math.inf
 # rather than a silently-finite liquidity cost. The consumer already exists and is unit-tested:
-# research/xsec/cost/spread_impact.py::SpreadImpactModel.round_trip_friction_i / friction_vector take
+# src/convexity/cost/friction/spread_impact.py::SpreadImpactModel.round_trip_friction_i / friction_vector take
 # is_shortable + in_short_leg and return inf for an unshortable short. Until this field is added, the
 # ~15-effectively-unshortable-tail cost (concentrated in the +50 names beyond the validated N~50 core)
 # is UNPRICED for any universe > N~50, and any N=50-vs-N=100 comparison MUST carry the Section 7

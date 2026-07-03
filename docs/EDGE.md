@@ -141,7 +141,7 @@ This is the whole reason cross-sectional backtests lie, so the discipline was he
 - **Open items / not yet done:**
   - Exact real-cost CAGR reconciliation (nail down the Amihud size-cost → the ~20–25% figure).
   - The **live rebalancer is NOT built** — this repo is research + validation only. The live/paper
-    strategy slot is intentionally empty (see `research/xsec/` and the strategy note in
+    strategy slot is intentionally empty (see `src/convexity/` and the strategy note in
     `README.md`). Build it against NautilusTrader when papering starts; do not pre-build it now.
 
 ---

@@ -4,8 +4,11 @@ This file is the authoritative build spec for the EXECUTION module. Build to the
 contracts and invariants below. Where this file and your own instinct disagree,
 this file wins. Ask before deviating from any **Invariant**.
 
-**This pillar does not exist in code yet.** `research/xsec/{panel,signals,portfolio,accounting,engine}.py`
-back-test a **frictionless, instantaneous Friday-close fill**: `engine.run()` computes target
+**This pillar is now implemented** at `src/convexity/execution/execution.py` (verified: `solve_trajectory`,
+`band_width`, `implementation_shortfall`, `ExecutionEngine`, `cost_facts_from_spread_impact`, `reconcile`,
+etc. are all present and match the build contract below). The frictionless backtest this pillar closes the
+gap against is `src/convexity/{panel/panel.py, signal/signals.py, portfolio/{portfolio.py,engine.py},
+cost/accounting.py}`, which back-test a **frictionless, instantaneous Friday-close fill**: `engine.run()` computes target
 weights at rebalance day `d` and `accounting.settle_week` marks the whole week's P&L as if the
 entire book re-weighted atomically at the closing print, paying only a flat per-unit-turnover
 friction constant (`round_trip_friction()`, §5.1 below). That backtest answer is the **decision
@@ -165,9 +168,9 @@ have to reconstruct this mapping from Section 10's prose.
 
 | Already exists / owned elsewhere                                   | EXECUTION consumes it as                                  |
 |----------------------------------------------------------------------|-------------------------------------------------------------|
-| `research/xsec/portfolio.quantile_weights` — `w_target` at `t` (already the resolved `L∈{12,14,16}` ensemble score's output, §2.1a — ONE vector, never per-lookback) | the trajectory's TERMINAL condition (must reach `w_target` by `t+Δ`) |
+| `src/convexity/portfolio/portfolio.py::quantile_weights` — `w_target` at `t` (already the resolved `L∈{12,14,16}` ensemble score's output, §2.1a — ONE vector, never per-lookback) | the trajectory's TERMINAL condition (must reach `w_target` by `t+Δ`) |
 | Universe/eligibility layer (`src/convexity/panel/candidates.py`, `src/convexity/panel/sleeve.py`) — per-name shortable flag at `t` | a REQUIRED companion field to `w_target`'s short-side entries (Invariant SHORTABLE-GATE, §13); EXECUTION does not compute shortability, only gates on it |
-| `research/xsec/accounting.round_trip_friction` — flat per-unit cost | the risk-neutral (λ=0) cost floor; EXECUTION adds impact curvature on top |
+| `src/convexity/cost/accounting.py::round_trip_friction` — flat per-unit cost | the risk-neutral (λ=0) cost floor; EXECUTION adds impact curvature on top |
 | COST §5.2–5.4 (`SpreadImpactModel`) — sqrt-law half-spread anchor + fitted Amihud-based `k_amihud`, per-name `Amihud_i` | the `η` (temporary) / `γ` (permanent) impact coefficients feeding Almgren–Chriss (§2.2) |
 | COST §6 (`FundingModel`) | funding accrual during the execution window is a COST input, not re-derived here |
 | NautilusTrader — order plumbing, fills, position/account state, backtest↔live parity | EXECUTION emits child `OrderCommand`s; it does not track position itself (reads Nautilus's working-order snapshot) |
@@ -1171,21 +1174,19 @@ optimizer search), pandas, pytest, NautilusTrader (child-order submission only).
 
 ### 11.1 Build contract: exact function signatures
 
-> **SPECIFICATION — not yet implemented.** Nothing below this line is a citation to existing code.
-> `src/convexity/execution/execution.py` and `research/xsec/execution/` do not exist on disk today (verified:
-> no `src/convexity/execution/*`, no `src/convexity/execution/execution.py` — the prior adversarial review's
-> finding stands). Every signature below is a BUILD CONTRACT — the precise, typed interface a future
-> implementer must satisfy — written in the same style as the REAL, already-merged
-> `src/convexity/cost/accounting.py::settle_week` and `src/convexity/portfolio/portfolio.py::quantile_weights` (read
-> on the VM to match style exactly: module-level docstring stating the accounting identity, then a
-> dataclass for the decomposed result, then the function with a docstring that states units and
-> causality inline). Proposed module path: **`src/convexity/execution/execution.py`** (a single module,
-> mirroring `accounting.py`'s single-file scope, rather than the `execution/` package sketched in
-> §11's directory layout — the package layout in §11 is the eventual production shape if this
-> pillar graduates into `src/convexity/execution/`; the signatures below are what a first
-> research-grade implementation inside `research/xsec/` — matching how `accounting.py` and
-> `portfolio.py` themselves live in `research/xsec/`, not yet under `src/convexity/` — must expose to
-> be a faithful, testable realization of §2–§7 of this spec).
+> **Status update: this build contract is now implemented.** `src/convexity/execution/execution.py`
+> exists on disk (verified: 948 lines, containing `solve_trajectory`, `band_width`,
+> `implementation_shortfall`, `ExecutionEngine`, `cost_facts_from_spread_impact`, `reconcile`, etc.),
+> superseding the "does not exist on disk today" status this section originally recorded. The
+> signatures below remain the BUILD CONTRACT this spec lays out — written in the same style as
+> `src/convexity/cost/accounting.py::settle_week` and `src/convexity/portfolio/portfolio.py::quantile_weights`
+> (module-level docstring stating the accounting identity, then a dataclass for the decomposed
+> result, then the function with a docstring that states units and causality inline) — and the real
+> `src/convexity/execution/execution.py` implementation follows this same contract and style
+> (verified by reading the file). Module path: **`src/convexity/execution/execution.py`** (a single
+> module, mirroring `accounting.py`'s single-file scope, rather than the `execution/` package
+> sketched in §11's directory layout — the package layout in §11 remains the eventual production
+> shape if this pillar's scope grows beyond a single module).
 
 ```python
 """Weekly rebalance execution: Almgren-Chriss trajectory, cube-root no-trade band, implementation

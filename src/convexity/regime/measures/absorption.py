@@ -7,7 +7,7 @@ covariance over ~50 names and ~50 weekly obs is ill-conditioned). ``D_t`` is a s
 weekly scalar (§2.1), so it feeds one CUSUM without ever fitting a covariance matrix.
 
 Definition (§2.2), over the point-in-time ELIGIBLE cross-section ``U_tau = Panel.listed[tau]`` — the
-SAME eligibility mask ``research/xsec/signals.py`` uses for the momentum rank, so ``D_t`` and the
+SAME eligibility mask ``src/convexity/signal/signals.py`` uses for the momentum rank, so ``D_t`` and the
 momentum signal share an identical peer set by construction (§2.2, "no separate REGIME universe"):
 
     r_{i,tau} = close[tau,i]/close[tau-1,i] - 1        (daily simple return; supplied by panel/build)

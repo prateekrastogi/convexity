@@ -31,10 +31,11 @@ Tested here or in the `arbitrage`/`vol_research` lineage and bled — or superse
 ## CORE PRINCIPLE (non-negotiable): quality open-source first, minimal custom code
 Trading-infra bugs cost real money. Reuse battle-tested, actively-maintained, permissively-licensed
 libraries on EVERY critical path; write only the irreducible strategy surface. The cross-sectional
-engine (`research/xsec/`) is thin glue **on top of the intact `src/convexity` pillars** — it reuses
-their real math (the ONE Binance fee truth, `PurgedWalkForward`, `DeflatedSharpe`, CPCV) and does
-not reimplement any of it. We do not re-implement an engine, a broker connector, a dataframe layer,
-or a backtest framework — those are reused.
+engine is thin glue implemented as nine per-pillar packages under `src/convexity/{panel,universe,
+signal,portfolio,leverage,cost,execution,regime,system,ops}/` — it reuses their real math (the ONE
+Binance fee truth, `PurgedWalkForward`, `DeflatedSharpe`, CPCV) and does not reimplement any of it.
+We do not re-implement an engine, a broker connector, a dataframe layer, or a backtest framework —
+those are reused.
 
 ### Reuse table
 | Need | Use | Notes |
@@ -44,14 +45,15 @@ or a backtest framework — those are reused.
 | Dataframes / numerics / Parquet | **pandas / numpy / pyarrow** | Hard transitive deps of nautilus_trader — free to use. pyarrow backs the lake. |
 | Bulk historical klines + funding | **httpx** + stdlib over **data.binance.vision** | `data/futures/um/monthly\|daily/klines/` and `.../fundingRate/`. Free, no key. The `scripts/backfill_*` own a ~30-line resumable downloader. |
 | Recent-tail / metadata | **ccxt** | SECONDARY only — patch the unpublished tail; never multi-year backfill. |
-| Validation (DSR / purged-WF / CPCV) | `src/convexity/system/validate/` | REUSED by `research/xsec/validate.py` + `cpcv.py`. Do not fork. |
+| Validation (DSR / purged-WF / CPCV) | `src/convexity/system/validate/` | REUSED by `src/convexity/system/xsec_validate.py` + `cpcv.py`. Do not fork. |
 
 Do NOT add competing engines (freqtrade/hummingbot/vectorbt/zipline), raw python-binance
 (duplicates the adapter), or PyPI dump-downloader wrappers (we own the ~30-liner).
 
 ### Write ourselves ONLY (the irreducible surface)
-1. **Cross-sectional engine** (`research/xsec/`) — panel / signals / portfolio / accounting /
-   engine / validate / cpcv / metrics. No-lookahead + net-of-cost by construction. THIS EXISTS.
+1. **Cross-sectional engine** (`src/convexity/{panel,signal,portfolio,cost,execution,regime,
+   system,ops}/`) — panel / signals / portfolio / accounting / engine / validate / cpcv / metrics.
+   No-lookahead + net-of-cost by construction. THIS EXISTS.
 2. **Data-layer backfill** (`scripts/backfill_*_1m.py`, `stitch_tradfi_1m.py`) — resumable lake
    builders; self-contained, no convexity imports. THESE EXIST.
 3. **The live/paper weekly rebalancer** — NOT built. The strategy slot is intentionally empty.
@@ -75,8 +77,8 @@ Do NOT add competing engines (freqtrade/hummingbot/vectorbt/zipline), raw python
 
 ## Data lake (load-bearing)
 - `data/` is the 137-instrument 1-min lake (gitignored, ~15G). The xsec panel is built from it via
-  `research/data.py` (`load_bars` / `load_funding`). Do NOT touch or delete it.
+  `src/convexity/panel/data.py` (`load_bars` / `load_funding`). Do NOT touch or delete it.
 - Symbology: the USDT-M perpetual is `BTCUSDT-PERP` in Nautilus; bare `BTCUSDT` is SPOT.
-- Backtest funding only accrues if you feed it — `research/xsec/accounting.py` charges signed
+- Backtest funding only accrues if you feed it — `src/convexity/cost/accounting.py` charges signed
   funding explicitly. The scalp harness's silent-zero-funding trap does not apply here, but keep
   funding signed by side.

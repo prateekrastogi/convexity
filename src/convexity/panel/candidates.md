@@ -1,6 +1,6 @@
 # convexity trading universe
 
-The candidate universe consumed by the cross-sectional engine (`research/xsec/universe.py`). Target
+The candidate universe consumed by the cross-sectional engine (`src/convexity/panel/sleeve.py`). Target
 account ≈ **$1,000**, **1-minute** resolution, **5-year** history target. Built for diversification
 *within* each sleeve and *across* the whole book, not for raw volume.
 
@@ -91,7 +91,7 @@ Dukascopy codes below are **live-verified** (probed 200/404 on the datafeed). No
 
 ```python
 import json, re, pathlib
-def load_universe(path="src/convexity/selection/UNIVERSE.md"):
+def load_universe(path="src/convexity/panel/candidates.md"):
     block = re.search(r"```json\n(.*?)\n```", pathlib.Path(path).read_text(), re.S).group(1)
     return json.loads(block)
 

@@ -12,7 +12,7 @@ from __future__ import annotations
 import numpy as np
 
 # Annualization factor for DAILY realized vol (REGIME.md §2.3: sqrt(365.25)). Distinct from
-# research/xsec/metrics.PERIODS_PER_YEAR (52.18), which annualizes WEEKLY returns — V_t is built from
+# src/convexity/system/metrics.PERIODS_PER_YEAR (52.18), which annualizes WEEKLY returns — V_t is built from
 # the week's DAILY BTC returns, so the daily-to-annual factor sqrt(365.25) is the correct one (§2.3).
 _DAILY_ANNUALIZE = float(np.sqrt(365.25))
 

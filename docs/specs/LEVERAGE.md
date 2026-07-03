@@ -1292,7 +1292,7 @@ Pass when: `SR_LCB_t` calls `convexity.system.validate.robustness
 `max(0, ci_low)`, matching a fixture bit-for-bit at a fixed seed (Invariant
 K-CI); returns exactly `0` when `DeflatedSharpe.deflate(...).passed is
 False` (Invariant K-LCB); a static-analysis/import check asserts `edge/`
-never imports `research.xsec.cpcv.PathSharpeSummary` for this purpose and
+never imports `convexity.system.cpcv.PathSharpeSummary` for this purpose and
 never defines its own bootstrap routine (no `stats.py`/duplicate estimator
 anywhere under `leverage/`).
 

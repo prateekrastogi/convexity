@@ -11,7 +11,7 @@ trend/breakout was proven dead — **gross directional R ≈ 0** across every
 timeframe, exit, filter, leverage tier, three asset classes, and even inverted
 (`docs/EDGE.md` §a; cited here as background only, never as the subject of this
 spec). The live edge is **crypto cross-sectional momentum**
-(`docs/EDGE.md` §b, `research/xsec/`), and OPS is rebuilt around the risk unit
+(`docs/EDGE.md` §b, `src/convexity/{signal,portfolio}/`), and OPS is rebuilt around the risk unit
 that strategy actually produces: **next week's portfolio return**, not one
 trade's R-multiple. There is no BREAKOUT/TREND/LEVERAGE/EXECUTION to monitor
 fills or stops for; there is a weekly-rebalanced, dollar-neutral book whose
@@ -1137,7 +1137,7 @@ ops/
 |   +-- fills.py              # realized fill/completion-time adapter (§5)
 |   +-- cost_tca.py           # realized slippage adapter from COST's realized TCA (§5.2)
 |   +-- vol.py                # rolling sigma_0 estimator (TEAL, §7)
-|   +-- edge.py               # weekly_net_return adapter from research/xsec accounting (§2)
+|   +-- edge.py               # weekly_net_return adapter from src/convexity/cost/accounting.py (§2)
 |   +-- recon.py              # book vs exchange position snapshot (§1)
 |   +-- heartbeat.py          # liveness signal (§2)
 +-- reconcile/
@@ -1509,8 +1509,12 @@ unhealthy episodes, at the calibrated false-alarm rate."
 ## 14. Non-goals (belong to sibling modules)
 
 - **Deciding which instruments to hold, or their target weights.** That is
-  `research/xsec/{signals,portfolio}.py` (the live rebalancer, not yet
-  built per `EDGE.md` §e) and, eventually, a SYSTEM-equivalent orchestrator
+  `src/convexity/signal/signals.py` + `src/convexity/portfolio/engine.py` (the
+  live rebalancer: `signals.py`'s `momentum_signal`/`combined_signal`/
+  `ensemble_momentum_signal` and `engine.py`'s `run`/`run_book`/`run_ensemble`
+  driving the `XSecBook`, now implemented and tested — superseding the "not
+  yet built per `EDGE.md` §e" status this line originally recorded) and,
+  eventually, a SYSTEM-equivalent orchestrator
   for the cross-sectional book. OPS only gates the gross multiplier and the
   binary run/halt state.
 - **Modeling expected cost or expected funding.** That is `COST.md`; OPS
@@ -1529,7 +1533,7 @@ unhealthy episodes, at the calibrated false-alarm rate."
   caveat) in §4.4 and §13.
 - **The deflated-Sharpe / CPCV / PBO validation battery that establishes the
   edge is real in the first place.** That is `SYSTEM.md` §4-§5 and
-  `research/xsec/{cpcv,validate}.py`. OPS's `validate/oos.py` (§11.2)
+  `src/convexity/system/{cpcv.py,xsec_validate.py}`. OPS's `validate/oos.py` (§11.2)
   REUSES those historical paths for a sanity replay; it does not re-derive
   or duplicate the promotion gate.
 - **Universe construction, breadth/shortability trade-offs, and the exact

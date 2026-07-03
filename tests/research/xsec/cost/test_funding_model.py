@@ -159,7 +159,7 @@ def test_sep_permuting_funding_leaves_weights_gross_turnover_byte_identical():
 
 
 def test_sep_quantile_weights_take_no_funding_argument():
-    # Invariant SEP structurally: research/xsec/portfolio.py's weight builders take NO funding input,
+    # Invariant SEP structurally: src/convexity/portfolio/portfolio.py's weight builders take NO funding input,
     # so a funding rate physically cannot reach a weight. Asserted on the signatures themselves so a
     # future refactor that threads funding into weight formation trips this guard.
     import inspect

@@ -8,7 +8,7 @@ docstring, "SELECTED for modern liquidity").
 
 This module provides the probe §11's directory layout names but that did not exist: given a per-name
 contribution matrix, report the effective breadth (inverse-Herfindahl, REUSES
-``research/xsec/universe.py::effective_breadth`` — the SAME formula §3.3's crypto liquidity-cap finding
+``src/convexity/panel/sleeve.py::effective_breadth`` — the SAME formula §3.3's crypto liquidity-cap finding
 uses, factored here, not re-derived). §1.5 (A1): the empirical half of §1.3's monotonicity assumption —
 that crypto delistings are preceded by price collapse, not a rally — is NOT verified anywhere in this
 repo; ``delist_return_signs`` is the not-yet-runnable stub §1.5 (A1) names as the check that WOULD close

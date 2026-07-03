@@ -5,7 +5,7 @@ friction rates a validation run holds the derived ``SpreadImpactModel`` (Section
 against, each expressed as a per-unit-turnover round-trip rate consumable by ``settle_week(...,
 friction=<rate>)`` (Invariant N: the rate is an INPUT, the settlement stays in accounting.py):
 
-  * ``flat_bps_friction`` — ``research/xsec/universe.py::CRYPTO_FRICTION``'s flat conservative
+  * ``flat_bps_friction`` — ``src/convexity/panel/sleeve.py::CRYPTO_FRICTION``'s flat conservative
     per-class rate (the research comparator the derived model supersedes for the crypto sleeve,
     COST.md Section 1 table). A scalar; feeds the scalar cost path.
   * ``no_impact_friction`` — the derived model with the impact term ZEROED (fee + half-spread only),

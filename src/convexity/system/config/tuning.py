@@ -138,7 +138,7 @@ class PromotionGateDefaults:
     """RED constants of the SYSTEM §6.1 PROMOTABLE conjunction (§10 parameter governance).
 
     Every threshold here is RED and shared — unreachable from any per-instrument or per-signal-cell
-    config (Invariant C). ``k_min=3`` is the ``research/xsec/validate.py::weekly_defaults`` floor
+    config (Invariant C). ``k_min=3`` is the ``src/convexity/system/xsec_validate.py::weekly_defaults`` floor
     (the value this book actually runs with) — NOT ``SystemDefaults.k_min=8`` (the unrelated
     1-min/directional-era default) and NOT the retracted, never-grounded ``n_true_distinct >= 30``
     of an earlier spec draft (SYSTEM §6 constant-reconciliation note). The Gate 6 constants

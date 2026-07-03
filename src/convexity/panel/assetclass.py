@@ -1,6 +1,6 @@
 """Per-symbol asset-class detection + the class-level policy the scalp harness branches on.
 
-The harness now spans THREE sleeves (``selection/UNIVERSE.md``): crypto (50 USDT-M perps, native
+The harness now spans THREE sleeves (``src/convexity/panel/candidates.md``): crypto (50 USDT-M perps, native
 funding), equities (30 Dukascopy underlyings, RTH-only + overnight gaps), commodities (7 Dukascopy
 underlyings, near-continuous). Every sleeve-specific difference is funnelled through here so the
 driver/cell/netcost code stays one path:

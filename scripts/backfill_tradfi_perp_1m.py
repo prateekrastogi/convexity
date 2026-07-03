@@ -28,7 +28,7 @@ import httpx
 import pandas as pd
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
-UNIVERSE_MD = REPO / "src" / "convexity" / "selection" / "UNIVERSE.md"
+UNIVERSE_MD = REPO / "src" / "convexity" / "panel" / "candidates.md"
 LAKE = REPO / "data" / "klines"  # same lake + schema as crypto; perp symbols never collide with crypto
 LOG = REPO / "data" / "backfill_tradfi_perp.log"
 HISTORY_YEARS = 2  # TradFi perps are <1yr old; 2yr covers all with little 404 noise

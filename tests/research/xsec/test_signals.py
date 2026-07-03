@@ -193,7 +193,7 @@ def test_ensemble_red_defaults_and_no_fit(simple_panel):
     # BY DESIGN (SIGNAL.md §4.3: "a single-L signal MAY be run for research/diagnostic purposes …
     # but MUST NOT be the promoted/deployed configuration"; §9 step 3 reduces the 1-member ensemble
     # to that member's momentum_signal). BAND is a PROMOTION-GATE invariant, and its ValueError
-    # enforcement lives in PORTFOLIO's driver (research/xsec/engine.py::band_configs, per
+    # enforcement lives in PORTFOLIO's driver (src/convexity/portfolio/engine.py::band_configs, per
     # docs/ARCHITECTURE.md's pillar->module map), NOT in this SIGNAL-owned module. This test does
     # not overstate a signal-layer BAND guarantee; the cross-reference below pins where the real
     # guarantee lives and asserts it can fail.

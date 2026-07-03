@@ -1,6 +1,6 @@
 """COST pillar validation layer for the xsec-momentum book (docs/specs/COST.md Section 3).
 
-The accounting CORE (``research/xsec/accounting.py``: ``settle_week`` / ``round_trip_friction`` /
+The accounting CORE (``src/convexity/cost/accounting.py``: ``settle_week`` / ``round_trip_friction`` /
 ``WeekResult``) is the parity-critical settlement truth and lives OUTSIDE this package — nothing
 here re-derives its turnover or settlement arithmetic (COST.md Section 1, Invariant N). This
 package holds the spec's NEW validation pieces built AROUND that core:

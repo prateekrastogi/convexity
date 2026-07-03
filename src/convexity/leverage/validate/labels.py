@@ -8,7 +8,7 @@ information set: the return realized over ``(t, t+1]`` labels the ``G_t`` decide
 decision is never scored on data it could see when it was made (the causal/labeling firewall the
 whole repo enforces).
 
-This mirrors ``research/xsec/accounting.py``'s realized-return series but is the LEVERAGE-local,
+This mirrors ``src/convexity/cost/accounting.py``'s realized-return series but is the LEVERAGE-local,
 future-only view the acceptance-gate harnesses read; it never leaks a future label into a live
 estimator.
 """

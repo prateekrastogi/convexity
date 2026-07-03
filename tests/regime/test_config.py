@@ -2,7 +2,7 @@
 
 RED enters ONLY through resolve_config; no RED constant appears in AMBER metadata, and REGIME has no
 per-instrument axis at all (§3.4). Also pins the AMBER preset's reuse (not reforking) of
-research/xsec/universe.CRYPTO_REGIMES and the §3.4 in-control-window choice.
+src/convexity/panel/sleeve.CRYPTO_REGIMES and the §3.4 in-control-window choice.
 """
 
 from convexity.core.params import Bucket, assert_no_red_in_amber
@@ -32,7 +32,7 @@ def test_amber_preset_carries_no_red_field():
 
 
 def test_amber_reuses_crypto_regimes_not_reforked():
-    """§6 AMBER: the regime windows are reused from research/xsec/universe.CRYPTO_REGIMES."""
+    """§6 AMBER: the regime windows are reused from src/convexity/panel/sleeve.CRYPTO_REGIMES."""
     assert CRYPTO_REGIME_PRESET.regime_windows == dict(CRYPTO_REGIMES)
 
 

@@ -1,6 +1,6 @@
 """Signed real-8h-stamp funding accrual (COST.md Section 6).
 
-A thin typed provider around the panel's daily funding array + ``research/xsec/accounting.py``'s
+A thin typed provider around the panel's daily funding array + ``src/convexity/cost/accounting.py``'s
 listed-masked per-stamp accrual. It does NOT re-implement the settlement arithmetic (Invariant N):
 ``settle_week`` remains the ONE place ``funding_t`` is folded into ``net_t``. This module exists so
 the funding SIGN convention and the per-real-stamp (never weekly-average) accrual are a named,
@@ -20,10 +20,10 @@ gap. This is NOT a flat weekly-average rate: a +/- sign flip inside the week is 
 path.
 
 MINOR (Invariant MINOR / SEP, COST.md Section 6.3-6.4). Funding is REPORTED, never a weight driver:
-``research/xsec/portfolio.py`` takes no funding input, so the momentum book accrues incidental signed
+``src/convexity/portfolio/portfolio.py`` takes no funding input, so the momentum book accrues incidental signed
 funding on whatever weights the signal produces without importing the DSR-failing carry signal's
 structural drawdown. The funding-ablation Sharpe SYSTEM's report consumes lives in
-``research/xsec/cost/friction_stress.py::net_sharpe_ex_funding`` (COST.md Section 6.4), not here.
+``src/convexity/cost/friction/friction_stress.py::net_sharpe_ex_funding`` (COST.md Section 6.4), not here.
 """
 
 from __future__ import annotations

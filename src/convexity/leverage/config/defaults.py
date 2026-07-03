@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-# Weekly annualization cadence, shared with research/xsec/metrics.PERIODS_PER_YEAR (365.25/7).
+# Weekly annualization cadence, shared with src/convexity/system/metrics.PERIODS_PER_YEAR (365.25/7).
 # LEVERAGE works on the per-observation (weekly) series exactly like SR_LCB_t and σ̂_t (§2.6), so
 # annualization only ever appears in the vol-floor fallback (§4.2) and the §7 worked example.
 PERIODS_PER_YEAR: float = 365.25 / 7.0  # ≈ 52.18 weekly periods per year (§7)

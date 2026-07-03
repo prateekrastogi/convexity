@@ -76,7 +76,7 @@ def pit_check(
 ) -> bool:
     """Invariant PIT structural test (UNIVERSE.md §7, §9 item 9, Invariant PIT).
 
-    ``panel_full`` -- the real historical panel (``research/xsec/panel.py``'s ``Panel``).
+    ``panel_full`` -- the real historical panel (``src/convexity/panel/panel.py``'s ``Panel``).
     ``t`` -- the rebalance index under test.
     ``eligibility_fn`` -- ``Callable[[Panel, int], EligibilitySnapshot]``: the construction under test
                           (a composition of the history gate §1.4, the hysteresis FSM §2.2, and the

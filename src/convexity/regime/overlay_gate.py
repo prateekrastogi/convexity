@@ -1,4 +1,4 @@
-"""Gate ``research/xsec/overlay.py``'s mechanics behind the REGIME detector (REGIME.md §5, §5.4).
+"""Gate ``src/convexity/regime/overlay.py``'s mechanics behind the REGIME detector (REGIME.md §5, §5.4).
 
 REGIME does NOT duplicate or modify the overlay MECHANICS (§1: ``vol_target_scale``,
 ``beta_hedge_returns``, ``drawdown_stop_scale`` are pure causal transforms it consumes). It is the

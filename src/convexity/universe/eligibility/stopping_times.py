@@ -9,7 +9,7 @@ Both are stopping times w.r.t. the filtration ``F_t``: the event ``{tau_list_i <
 ``F_t``-measurable because "did this instrument have a valid quote by ``t``" is answerable from data
 available at ``t`` — no future lookahead (§1.2, Karatzas & Shreve 1991 Ch. 1).
 
-This module does NOT recompute the listing span: it READS it off ``research/xsec/panel.py``'s
+This module does NOT recompute the listing span: it READS it off ``src/convexity/panel/panel.py``'s
 already-validated per-symbol ``listed`` mask (``listed = ~np.isnan(close)``, ``first_day``/``last_day``
 derived per-symbol from its OWN observed span — "no union backfill", the panel docstring's words).
 ``panel.first_day[sym]`` IS ``tau_list_i`` and ``panel.last_day[sym]`` is the last live index (so

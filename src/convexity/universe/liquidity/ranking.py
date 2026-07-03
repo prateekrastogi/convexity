@@ -41,7 +41,7 @@ def liquidity_rank(
                       it counts as a ranked-but-least-liquid member the hysteresis gate can exit.
 
     Returns shape (n_symbols,) float in (0,1] for ranked names, 0.0 for §2.4-stale ranked names, NaN
-    for names outside ``U_t^base``. Ties are average-ranked (mirrors ``research/xsec/signals.py::_pct_rank``);
+    for names outside ``U_t^base``. Ties are average-ranked (mirrors ``src/convexity/signal/signals.py::_pct_rank``);
     the highest ``DV`` maps to rank ``m/m = 1.0`` (1 = most liquid, §2.1's convention).
     """
     base_eligible = np.asarray(base_eligible, dtype=bool)

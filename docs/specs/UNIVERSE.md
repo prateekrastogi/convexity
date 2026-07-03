@@ -62,9 +62,15 @@ Scope: crypto USDT-M perpetuals on Binance (the ONLY sleeve with a live edge —
 EDGE.md: momentum does not extend to the equities/commodities sleeves, tested),
 weekly (Friday 00:00 UTC close) rebalance cadence, ~50-name target universe,
 dollar-neutral quintile long/short book. Implemented today in
-`research/xsec/{panel,universe}.py` and `src/convexity/panel/candidates.py`; this spec is
-the formal contract those modules already approximate and the target the
-liquidity/hysteresis/shortability logic (not yet built) should hit.
+`src/convexity/panel/panel.py` and `src/convexity/panel/candidates.py`; this
+spec is the formal contract those modules already approximate. **Status
+update:** the liquidity/hysteresis/shortability logic this line originally
+flagged as "not yet built" is now implemented — see
+`src/convexity/universe/{liquidity/hysteresis.py, shortability/{venue_gate.py,
+liquidity_gate.py}, eligibility/{stopping_times.py,history_gate.py},
+liquidity/ranking.py, universe_api.py, validate/pit_check.py}` (verified by
+reading each file: all fully implemented, with essentially zero
+`NotImplementedError` stubs remaining).
 
 ### 0.1 Consolidated notation table
 
@@ -484,15 +490,23 @@ tagging discipline): every numeric input is tagged **[MEASURED]** (extracted
 from a persisted run), **[ILLUSTRATIVE]** (constructed to make the worked
 arithmetic concrete, not itself independently measured from a persisted run),
 or **[DERIVED]** (an exact arithmetic consequence of tagged inputs). This tag
-is placed at first use, not only in a trailing parenthetical.** The hysteresis
-state machine itself is, per Section 11, **not yet implemented** —
-`research/xsec/*.py` contains no `q_in`, `q_out`, or `σ_rank` symbol today —
-so every numeric input in this subsection is necessarily [ILLUSTRATIVE]: the
-FUNCTIONAL FORM of the calibration (`h_min` scales with `σ_rank·sqrt(n)`) is
-what this derivation establishes and is reusable once real data exists; the
-specific `σ_rank ≈ 0.05–0.08` figure below is a plausible order-of-magnitude
-placeholder chosen to make the arithmetic concrete, not a number pulled from
-a persisted `std_t(Δ_i(t))` computation.
+is placed at first use, not only in a trailing parenthetical.** **Status
+update:** the hysteresis state machine itself is now implemented —
+`src/convexity/universe/liquidity/hysteresis.py::hysteresis_step(rank_t,
+state_prior, q_in, q_out)` is a complete function (verified by reading the
+file), with `q_in`/`q_out` defaults (`0.80`/`0.65`) live in
+`src/convexity/universe/config/defaults.py` — superseding Section 11's
+original "not yet implemented" status for `q_in`/`q_out`. However, `σ_rank`
+as a named symbol still does NOT exist anywhere in the codebase (verified:
+no hits under `src/convexity/universe/`), because no run persisting
+`std_t(Δ_i(t))` has been computed — so every numeric input in this
+subsection remains necessarily [ILLUSTRATIVE] for that reason alone, not
+because the state machine is unbuilt. The FUNCTIONAL FORM of the calibration
+(`h_min` scales with `σ_rank·sqrt(n)`) is what this derivation establishes
+and is reusable once real data exists; the specific `σ_rank ≈ 0.05–0.08`
+figure below is a plausible order-of-magnitude placeholder chosen to make
+the arithmetic concrete, not a number pulled from a persisted
+`std_t(Δ_i(t))` computation.
 
 **Setup.** Model `Δ_i(t) := rank_i(t) − rank_i(t-1)`, the week-over-week
 change in instrument `i`'s percentile liquidity rank, as a mean-zero

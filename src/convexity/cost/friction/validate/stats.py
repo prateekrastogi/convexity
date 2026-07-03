@@ -14,7 +14,7 @@ statistics computed:
     ~3-5%-of-gross magnitude suggests, undercutting P4) becomes visible instead of silently absorbed
     into one blended number.
 
-Annualization of Sharpe matches ``research/xsec/metrics.py::PERIODS_PER_YEAR`` (weekly) everywhere.
+Annualization of Sharpe matches ``src/convexity/system/metrics.py::PERIODS_PER_YEAR`` (weekly) everywhere.
 """
 
 from __future__ import annotations

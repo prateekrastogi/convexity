@@ -9,10 +9,11 @@ in `docs/ARCHITECTURE.md` §4/§5.2 as a single-instrument directional-breakout
 gate emitting `g_t ∈ {1, .75, .5, .25}` from absorption/turbulence/corr-spike
 measures on ONE book) belonged to the directional-breakout system, which is
 **PROVEN DEAD** (gross directional R≈0 across timeframes, exits, filters,
-leverage, three asset classes, even inverted — see `research/xsec/` README and
+leverage, three asset classes, even inverted — see `docs/EDGE.md` and
 the VolArb backtest finding; background only, not re-litigated here). The live
-edge is the cross-sectional momentum book (`research/xsec/{panel,signals,
-portfolio,accounting,engine,overlay,cpcv,metrics,validate}.py`). **The risk unit
+edge is the cross-sectional momentum book (`src/convexity/{panel/panel.py,
+signal/signals.py, portfolio/{portfolio.py,engine.py}, cost/accounting.py,
+regime/overlay.py, system/{cpcv.py,metrics.py,xsec_validate.py}}`). **The risk unit
 this spec gates is no longer "one trade's R-multiple" — it is next week's
 portfolio return** of a dollar-neutral, ~50-name, weekly-rebalanced book. Every
 formula, invariant, and worked example below is rebuilt on that unit. The
@@ -220,7 +221,7 @@ the overlay mechanics. It consumes:
 > `panel/build.py` (per the existing `docs/ARCHITECTURE.md` §2 tree) is a thin
 > adapter that reads `Panel` fields; it does not recompute daily closes,
 > funding sums, or listed masks. A test asserts `panel/build.py`'s outputs are
-> a strict re-key of `research.xsec.panel.Panel`, not an independent
+> a strict re-key of `convexity.panel.panel.Panel`, not an independent
 > recomputation.
 
 ---
@@ -255,7 +256,7 @@ is explicitly NOT the default), so each feeds its own single-statistic CUSUM
 
 **Definition — reusing SIGNAL.md's own eligible-universe notation, not a new
 symbol for the same thing.** Let `U_τ ⊆ {1,...,N}` be the point-in-time
-eligible cross-section at day `τ` (SIGNAL.md §2.1's `U_t`, `research/xsec/
+eligible cross-section at day `τ` (SIGNAL.md §2.1's `U_t`, `src/convexity/panel/
 panel.py` `Panel.listed[τ]`) — exactly the same eligibility mask
 `src/convexity/signal/signals.py` uses for the momentum rank, so `D_t` and the
 momentum signal are computed over an IDENTICAL peer set at every date, by
@@ -310,7 +311,7 @@ Simple annualized realized vol of BTC's own daily returns over the week,
 computed directly from `Panel.close[:, btc_col]` (no separate data source).
 `V_t` proxies market-wide stress independent of the cross-section's breadth,
 so it remains informative even in the sparse early-history weeks where `D_t`
-is estimated over very few names (`universe_size_by_year`, `research/xsec/
+is estimated over very few names (`universe_size_by_year`, `src/convexity/panel/
 panel.py`).
 
 ### 2.4 Why NOT a fitted covariance-based turbulence/absorption measure by default
@@ -875,7 +876,7 @@ momentum book:
 ```
 
 **Edge case: the ablation's own return series is shorter than the CPCV
-split family it must reuse.** Step 4(a)'s `frac_pos` reuses `research/xsec/
+split family it must reuse.** Step 4(a)'s `frac_pos` reuses `src/convexity/system/
 cpcv.py`'s `N=8` groups / `k=2` test groups / 28 paths / 1-week-embargo
 configuration verbatim (Section 7, "REGIME does not reimplement CPCV"),
 which the EVIDENCE digest validated on the **full ~259-week crypto history**.
@@ -1125,7 +1126,7 @@ regime/
 |   +-- asset_class.py       # AMBER: per-sleeve market_symbol, regime windows (reuse universe.py tables)
 |   +-- resolve.py           # single merge point (RED unreachable from AMBER)
 +-- panel/
-|   +-- build.py             # thin adapter over research/xsec/panel.Panel (Invariant N)
+|   +-- build.py             # thin adapter over src/convexity/panel/panel.Panel (Invariant N)
 +-- measures/
 |   +-- vol_regime.py        # V_t: BTC realized vol (Section 2.3)
 |   +-- absorption.py        # cross-sectional dispersion D_t (Section 2.2) [kept filename from
@@ -1133,7 +1134,7 @@ regime/
 |   |                        #   not the old per-instrument absorption ratio]
 |   +-- turbulence.py        # optional Ledoit-Wolf + Mahalanobis fallback (Section 2.4), BLUE-only
 |   +-- liquidity.py         # optional dollar-volume-based breadth diagnostic (reuses
-|                             #   research/xsec/panel.build_dollar_volume)
+|                             #   src/convexity/panel/panel.build_dollar_volume)
 +-- state/
 |   +-- bands.py             # Section 4.1 state -> g_t band table
 |   +-- machine.py           # Section 4.2 re-arm hysteresis state machine
@@ -1201,7 +1202,7 @@ build-contract described above, out of the detector's declared scope.
   decided on.
 - **Not a sizing engine.** `g_t` is a single multiplicative scalar on gross,
   not a per-instrument weight adjustment (P2). Within-leg weighting
-  (`equal`/`volscaled`/liquidity-aware) is entirely `research/xsec/
+  (`equal`/`volscaled`/liquidity-aware) is entirely `src/convexity/portfolio/
   portfolio.py`'s concern.
 - **Not a covariance-optimized regime classifier.** Section 2.4 explicitly
   rejects a fitted absorption-ratio/HMM approach as the default, on

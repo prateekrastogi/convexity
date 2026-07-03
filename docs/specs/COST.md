@@ -263,32 +263,39 @@ Three layers, kept independent for testability:
 > **Provenance key (matches §1's table — the same two-way split, restated
 > here so a reader who jumps straight to §3 does not need to cross-reference
 > §1 to know what already exists).** Every path below is tagged
-> `[VERIFIED EXISTS]` (confirmed on the VM by reading the file; do not
-> rebuild, §1's Invariant N) or `[SPEC OUTPUT — NOT YET BUILT]` (confirmed
-> absent via `ls` on the VM at spec-writing time; this is what a builder
-> implementing this spec produces). No path below is tagged both ways, and
-> the tag is on every line, not just the directory header, so it survives
-> being read out of the code-block's visual grouping.
+> `[VERIFIED EXISTS]` (confirmed by reading the file, §1's Invariant N — do
+> not rebuild) or, historically, `[SPEC OUTPUT — NOT YET BUILT]` (confirmed
+> absent at spec-writing time). Implementation is now complete: the
+> `cost/friction/` package this spec specified has since been built (all
+> items below updated from `[SPEC OUTPUT — NOT YET BUILT]` to
+> `[VERIFIED EXISTS]`, re-verified by reading each file), so every path in
+> this tree is `[VERIFIED EXISTS]`.
 
 ```text
-research/xsec/
-  accounting.py          # [VERIFIED EXISTS] settle_week, round_trip_friction, WeekResult
-  universe.py            # [VERIFIED EXISTS] ClassFriction flat fallback (non-crypto sleeves)
-  cost/                  # [SPEC OUTPUT — NOT YET BUILT] the entire package below is new
-    __init__.py                 # [SPEC OUTPUT — NOT YET BUILT]
-    spread_impact.py            # [SPEC OUTPUT — NOT YET BUILT] SpreadImpactModel: sqrt-law half-spread anchor + Amihud impact estimator
-    funding.py                  # [SPEC OUTPUT — NOT YET BUILT] FundingModel: real-8h-stamp signed accrual (wraps panel funding array)
-    friction_stress.py          # [SPEC OUTPUT — NOT YET BUILT] the 1.5x-friction promotion-gate scenario (§8) + net_sharpe_ex_funding (§6.4)
-    validate/                   # [SPEC OUTPUT — NOT YET BUILT]
-      amihud_calibration.py     # [SPEC OUTPUT — NOT YET BUILT] Amihud-ratio-vs-realized-spread calibration check (walk-forward)
-      corwin_schultz_reject.py  # [SPEC OUTPUT — NOT YET BUILT] the DOCUMENTED NEGATIVE RESULT (§5.4.3), kept as a regression test
-      baselines.py             # [SPEC OUTPUT — NOT YET BUILT] flat-bps cost (universe.py's ClassFriction), no-impact, perfect-foresight
-      stats.py                 # [SPEC OUTPUT — NOT YET BUILT] block-bootstrap CIs on cost-drag/yr, net Sharpe, and win-rate-by-funding-sign (§6.4)
-
 src/convexity/cost/
+  accounting.py          # [VERIFIED EXISTS] settle_week, round_trip_friction, WeekResult
+  friction/
+    __init__.py                 # [VERIFIED EXISTS]
+    spread_impact.py            # [VERIFIED EXISTS] SpreadImpactModel: sqrt-law half-spread anchor + Amihud impact estimator (amihud_ratio)
+    funding.py                  # [VERIFIED EXISTS] FundingModel: real-8h-stamp signed accrual (wraps panel funding array)
+    friction_stress.py          # [VERIFIED EXISTS] the 1.5x-friction promotion-gate scenario (§8) + net_sharpe_ex_funding (§6.4)
+    validate/                   # [VERIFIED EXISTS]
+      amihud_calibration.py     # [VERIFIED EXISTS] Amihud-ratio-vs-realized-spread calibration check (walk-forward)
+      corwin_schultz_reject.py  # [VERIFIED EXISTS] the DOCUMENTED NEGATIVE RESULT (§5.4.3), kept as a regression test
+  validate/
+    baselines.py             # [VERIFIED EXISTS] flat-bps cost (`ClassFriction`, now `src/convexity/panel/sleeve.py`), no-impact, perfect-foresight
+    stats.py                 # [VERIFIED EXISTS] block-bootstrap CIs on cost-drag/yr, net Sharpe, and win-rate-by-funding-sign (§6.4)
+
   config/
     fee_schedule.py        # [VERIFIED EXISTS] BINANCE_USDM_FEE_SCHEDULE, ONE fee truth
 ```
+
+Note on `ClassFriction`: this spec's original tree cited it as living in a
+`universe.py` file alongside `accounting.py`; that module has since been
+split during the promotion refactor, and `ClassFriction` /
+`CRYPTO_FRICTION` / `EQUITY_FRICTION` / `COMMODITY_FRICTION` now live at
+`src/convexity/panel/sleeve.py` (verified by reading the file), not at a
+`universe.py` counterpart of `accounting.py`.
 
 Also relevant but owned elsewhere (referenced, not built by this spec):
 `src/convexity/system/xsec_validate.py` is `[VERIFIED EXISTS]` **and verified to contain
@@ -1294,13 +1301,13 @@ component scales — `funding_cashflow_A` is untouched by the stress scenario
 - `docs/specs/LEVERAGE.md` — the source of the `G` (gross exposure) /
   `R_{t+1}` sizing notation referenced in the §0 notation bridge, and of the
   PSR≈0.994/`n_obs≈258`/MinTRL restatement this spec's §8.4 caveat mirrors.
-- `docs/ARCHITECTURE.md` — pending update: the directional-breakout package
-  layout (§2 of that document) does not yet reflect the xsec-momentum
-  pivot's actual module map (`research/xsec/*`, `src/convexity/cost/config/`,
-  `src/convexity/system/validate/*`); a follow-up architecture pass should
-  fold this spec's `src/convexity/cost/friction/` layout (§3) into that document once
-  all pillar specs are rewritten. Not updated by this pass (out of scope —
-  no gap in the independent review required an `ARCHITECTURE.md` change).
+- `docs/ARCHITECTURE.md` — has since been updated (a subsequent promotion
+  refactor moved the xsec-momentum pivot's actual module map into
+  `src/convexity/{panel,universe,signal,portfolio,leverage,cost,execution,
+  regime,system,ops}/`, and `docs/ARCHITECTURE.md` was swept to reflect this);
+  this spec's own `src/convexity/cost/friction/` layout (§3) is part of that
+  already-current module map. Not touched by this pass (out of scope — this
+  bullet only records that the pending-update note above is resolved).
 - `Convexity xsec momentum edge` (memory digest) — the source of every
   empirical constant in this document that is not itself a cross-reference
   to `SYSTEM.md`/`PORTFOLIO.md`/`LEVERAGE.md`'s own restatement of that same

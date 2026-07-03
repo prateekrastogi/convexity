@@ -15,7 +15,7 @@ conservative upper bound on the true minimum history (P6).
 Invariant HW (§1.4): the warmup is computed from instrument ``i``'s OWN ``tau_list_i``, NEVER from the
 earliest-listed symbol in the panel or a fixed calendar date. A symbol that listed ``k < L_max +
 w_warmup`` days before ``t`` is excluded regardless of how much history OTHER symbols have — this is
-the formal version of ``research/xsec/signals.py::momentum_signal``'s per-symbol endpoint guard, which
+the formal version of ``src/convexity/signal/signals.py::momentum_signal``'s per-symbol endpoint guard, which
 already checks ``panel.listed`` at BOTH window endpoints rather than the panel's global first row.
 """
 

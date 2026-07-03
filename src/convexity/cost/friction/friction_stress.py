@@ -6,7 +6,7 @@ scenario: the identical weekly settlement re-run at 1.5x the baseline round-trip
 gate that lets the signal "adapt" to higher costs would test a different, adapted strategy, not
 the robustness of the one actually promoted; COST.md Section 10).
 
-WHY SCALING THE RATE IS THE IDENTICAL MACHINERY. ``research/xsec/accounting.py::settle_week``'s
+WHY SCALING THE RATE IS THE IDENTICAL MACHINERY. ``src/convexity/cost/accounting.py::settle_week``'s
 cost line is LINEAR in the friction rate (``cost = turnover * friction`` on the scalar path,
 ``cost = 0.5 * sum|dw_i| * friction_i`` on the per-symbol path), and
 ``round_trip_friction = 2 * (taker + half_spread + impact)`` is linear in its per-leg components.
@@ -14,13 +14,13 @@ Scaling each component by the stress multiplier therefore scales the assembled r
 the whole cost series — by exactly that multiplier, while ``w_target`` / ``gross_price`` /
 ``funding`` / ``turnover`` are untouched (Invariant STRESS, COST.md Section 8.2; the friction rate
 never feeds weight formation, COST.md P2). ``friction_stress_run`` exploits this by re-running the
-UNCHANGED engine (``research/xsec/engine.py::run`` -> ``settle_week``) with only the three per-leg
+UNCHANGED engine (``src/convexity/portfolio/engine.py::run`` -> ``settle_week``) with only the three per-leg
 friction components of the config scaled.
 
 Also home to ``net_sharpe_ex_funding`` (COST.md Section 6.4, Invariant MINOR): the funding
 ablation SYSTEM's report consumes so a config that clears promotion only via funding income —
 versus one that is friction-robust on price P&L alone — is visible, never silently absorbed.
-``research/xsec/validate.py`` deliberately does NOT carry this helper (COST.md Section 3).
+``src/convexity/system/xsec_validate.py`` deliberately does NOT carry this helper (COST.md Section 3).
 """
 
 from __future__ import annotations
@@ -49,7 +49,7 @@ def net_sharpe_ex_funding(net_weekly: np.ndarray, funding: np.ndarray) -> float:
     """Annualized Sharpe of the weekly series with funding ZEROED OUT (COST.md Section 6.4).
 
     Recomputes Sharpe on ``net_weekly - funding`` (price P&L minus cost only) using the IDENTICAL
-    annualization as ``research/xsec/metrics.py::compute`` (delegated to it, sqrt(52.18)/yr).
+    annualization as ``src/convexity/system/metrics.py::compute`` (delegated to it, sqrt(52.18)/yr).
     Invariant MINOR: SYSTEM's promotion gate consumes this ALONGSIDE the funding-inclusive net
     Sharpe so funding income is reported, never the unstated reason a config passes — matching the
     finding that carry alone is DSR-failing and must not sneak in through the momentum book.
@@ -148,7 +148,7 @@ def stressed_frac_pos(
 ) -> float:
     """CPCV ``frac_pos`` of a (stressed) weekly net series on the SAME partition as the baseline.
 
-    Delegates to ``research/xsec/cpcv.py::path_distribution`` with the recorded-baseline defaults
+    Delegates to ``src/convexity/system/cpcv.py::path_distribution`` with the recorded-baseline defaults
     (N_groups=8, k_test=2 -> 28 paths, 1-week embargo — COST.md Section 8.3). ``frac_pos`` is the
     gating statistic; the 5th-percentile path Sharpe is partition-fragile and is reported only,
     never a threshold (COST.md Section 8.3, SYSTEM Invariant CPCV-STAT).

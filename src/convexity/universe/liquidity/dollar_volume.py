@@ -1,7 +1,7 @@
 """Trailing dollar-volume liquidity statistic ``DV_i(d)`` — a thin REUSE layer (UNIVERSE.md §2.1).
 
 ``DV_i(d) = mean_{s in [d-W+1, d]} ( close_i(s) * volume_i(s) )`` over ``i``'s live span, computed
-causally (only ``s <= d``). UNIVERSE.md §2.1 pins this to ``research/xsec/panel.py::trailing_dollar_volume``
+causally (only ``s <= d``). UNIVERSE.md §2.1 pins this to ``src/convexity/panel/panel.py::trailing_dollar_volume``
 (``window: int = 30``) verbatim — this module DELEGATES to it, never recomputes it, so the proven
 panel numerics (and their point-in-time behavior) are the single source of the liquidity statistic.
 

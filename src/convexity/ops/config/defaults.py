@@ -15,8 +15,8 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
-# ---- annualization (must match research/xsec/metrics.py; OPS introduces no second week-count) ----
-# research/xsec/metrics.py::PERIODS_PER_YEAR == 365.25 / 7 ~= 52.18 (OPS.md sec 4.2).
+# ---- annualization (must match src/convexity/system/metrics.py; OPS introduces no second week-count) ----
+# src/convexity/system/metrics.py::PERIODS_PER_YEAR == 365.25 / 7 ~= 52.18 (OPS.md sec 4.2).
 PERIODS_PER_YEAR: float = 365.25 / 7.0
 
 

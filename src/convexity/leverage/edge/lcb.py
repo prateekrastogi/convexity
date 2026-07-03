@@ -10,8 +10,8 @@ the single most load-bearing pointer in the whole spec (§2.6):
 
 This module does NOT define its own bootstrap or DSR math (Invariant K-CI): the CI is a pass-through
 of the REAL ``block_bootstrap_ci`` in ``convexity.system.validate.robustness`` (never
-``research/xsec/cpcv.PathSharpeSummary``, which has no CI field, §2.6), and the gate is a
-pass-through of ``DeflatedSharpe.deflate(...).passed`` via ``research/xsec/validate.deflated_sharpe``
+``src/convexity/system/cpcv.PathSharpeSummary``, which has no CI field, §2.6), and the gate is a
+pass-through of ``DeflatedSharpe.deflate(...).passed`` via ``src/convexity/system/xsec_validate.deflated_sharpe``
 (the weekly-cadence wrapper, §2.6). Both read the SAME weekly net-of-cost series, so the CI lower
 bound and the DSR gate can never silently reference different data (§2.6).
 """
@@ -65,7 +65,7 @@ def sr_lcb_t(
     bypass the CI/DSR objects).
 
     Steps (§2.6):
-      1. Gate: ``DeflatedSharpe.deflate(...).passed`` via ``research/xsec/validate.deflated_sharpe``
+      1. Gate: ``DeflatedSharpe.deflate(...).passed`` via ``src/convexity/system/xsec_validate.deflated_sharpe``
          (the weekly-cadence wrapper). If ``passed is False`` → ``SR_LCB_t = 0`` unconditionally
          (Invariant K-LCB, §8 edge case), regardless of how large the raw Sharpe looks.
       2. CI: ``block_bootstrap_ci`` (the real robustness function) with RED ``L_boot=6``, ``n_boot``,

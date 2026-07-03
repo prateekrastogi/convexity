@@ -24,7 +24,7 @@ import httpx
 import pandas as pd
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
-UNIVERSE_MD = REPO / "src" / "convexity" / "selection" / "UNIVERSE.md"
+UNIVERSE_MD = REPO / "src" / "convexity" / "panel" / "candidates.md"
 LAKE = REPO / "data" / "klines"
 LOG = REPO / "data" / "backfill_crypto.log"
 HISTORY_YEARS = 5

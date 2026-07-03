@@ -142,7 +142,7 @@ def run(panel: Panel, cfg: XSecConfig) -> XSecResult:
     # SCALAR flat-cost path (research baseline): one round-trip rate for every name.
     # TODO(COST-integration, engine/PORTFOLIO-owned, not COST-owned): the DERIVED per-name cost model
     # of COST.md Section 5.2-5.3 is built and unit-tested in
-    # research/xsec/cost/spread_impact.py::SpreadImpactModel.friction_vector(adv, amihud, ...) but is
+    # src/convexity/cost/friction/spread_impact.py::SpreadImpactModel.friction_vector(adv, amihud, ...) but is
     # NOT yet consumed here — the production crypto book still runs on flat cfg.taker/half_spread/impact.
     # To wire it: per rebalance day d, compute causal trailing ADV_i / Amihud_i from
     # panel.build_dollar_volume + spread_impact.amihud_ratio over panel.py's window=30, build the
@@ -218,7 +218,7 @@ def run_book(
     # SCALAR flat-cost path (research baseline): one round-trip rate for every name.
     # TODO(COST-integration, engine/PORTFOLIO-owned, not COST-owned): the DERIVED per-name cost model
     # of COST.md Section 5.2-5.3 is built and unit-tested in
-    # research/xsec/cost/spread_impact.py::SpreadImpactModel.friction_vector(adv, amihud, ...) but is
+    # src/convexity/cost/friction/spread_impact.py::SpreadImpactModel.friction_vector(adv, amihud, ...) but is
     # NOT yet consumed here — the production crypto book still runs on flat cfg.taker/half_spread/impact.
     # To wire it: per rebalance day d, compute causal trailing ADV_i / Amihud_i from
     # panel.build_dollar_volume + spread_impact.amihud_ratio over panel.py's window=30, build the

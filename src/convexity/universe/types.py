@@ -4,7 +4,7 @@ One ``EligibilitySnapshot`` per rebalance ``t`` (the long/base gate, §1-3); one
 per rebalance ``t`` (the stricter short subset, §4). Both immutable: a snapshot is the frozen record
 of what was knowable in ``F_t`` at ``t``, and must never be mutated after construction (§9 edge case 9:
 ``U_t`` history is never retroactively recomputed). Field shapes/types match §11.1's build contract
-byte-for-byte; array conventions mirror ``research/xsec/panel.py`` (bool masks and float ranks over the
+byte-for-byte; array conventions mirror ``src/convexity/panel/panel.py`` (bool masks and float ranks over the
 panel's fixed ``(n_symbols,)`` column order).
 """
 
@@ -20,10 +20,10 @@ class EligibilitySnapshot:
     """One rebalance's eligibility state (UNIVERSE.md §1-3). Immutable, one per ``t``.
 
     Field contract is §11.1 verbatim. All masks/ranks are over the panel's fixed ``(n_symbols,)``
-    column order (``research/xsec/panel.py::Panel.symbols``).
+    column order (``src/convexity/panel/panel.py::Panel.symbols``).
     """
 
-    t: int  # rebalance index (Friday-close ordinal, matching research/xsec/panel.py's day index)
+    t: int  # rebalance index (Friday-close ordinal, matching src/convexity/panel/panel.py's day index)
     base_eligible: np.ndarray  # shape (n_symbols,), bool — U_t^base (§1.4)
     hysteresis_state: np.ndarray  # shape (n_symbols,), bool — U_t^base-liquid IN/OUT (§2.2)
     # rank_i(t) (§2.1). Three-valued over the panel column order:

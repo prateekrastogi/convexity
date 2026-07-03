@@ -34,7 +34,7 @@ import re
 import pandas as pd
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
-UNIVERSE_MD = REPO / "src" / "convexity" / "selection" / "UNIVERSE.md"
+UNIVERSE_MD = REPO / "src" / "convexity" / "panel" / "candidates.md"
 KLINES = REPO / "data" / "klines"
 DUKA = REPO / "data" / "dukascopy"
 OUT = REPO / "data" / "stitched"

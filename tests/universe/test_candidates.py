@@ -22,7 +22,7 @@ def _panel(listed: np.ndarray, symbols: tuple[str, ...]) -> Panel:
 
 
 def test_candidate_list_loads_and_is_nonempty():
-    """§6/§8 AMBER: the crypto candidate pool loads from research/UNIVERSE.md's curated table."""
+    """§6/§8 AMBER: the crypto candidate pool loads from src/convexity/panel/candidates.md's curated table."""
     cands = crypto_candidates()
     assert len(cands) > 0
     assert cands == candidate_symbols(("crypto",))
