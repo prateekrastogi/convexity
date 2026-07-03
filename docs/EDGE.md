@@ -18,7 +18,8 @@ repo has been stripped to the minimum needed to continue that one edge (see `REA
 - **The one surviving edge is crypto CROSS-SECTIONAL MOMENTUM.** Weekly, dollar-neutral, quintile,
   vol-scaled, on the point-in-time crypto perp panel. Honest **net Sharpe ~0.8–1.0**, CAGR
   ~20–25% at 100% gross, maxDD ~25%, ~60% of weeks positive. Passed the full validation battery
-  (purged-WF, DSR, block-bootstrap CI, holdout, per-regime, breadth, weighting, CPCV/PBO).
+  (purged-WF, block-bootstrap CI, holdout, per-regime, breadth, weighting, CPCV/PBO); DSR fails
+  on TRACK LENGTH only (PSR high — see §(d), the biggest honesty flag).
 - **Verdict: paper it, quarter-Kelly, deploy the 12–16d lookback BAND, not a single fitted L.**
 
 ---
@@ -149,6 +150,11 @@ This is the whole reason cross-sectional backtests lie, so the discipline was he
 
 ## (e) Next
 
+- **Status (2026-07): everything upstream of papering is DONE.** The 9 pillar specs are
+  implemented and test-covered (613 tests), independently math-audited (a turnover double-drift
+  fix re-measured the records: naive 0.987 / CPCV mean 0.914 / PBO 0.39, frac_pos and haircut
+  unchanged), real Binance lot/tick/min-notional filters are wired, and the enhancement menu was
+  tested and rejected (§(d)). The paper rebalancer is the ONLY remaining build item.
 - **Paper the 12–16d lookback ensemble** (the band, vol-scaled quintile, ~60–75 names, weekly),
   dollar-neutral, at quarter-Kelly gross.
 - **Open items / not yet done:**

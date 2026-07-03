@@ -9,8 +9,17 @@
 
 Weekly dollar-neutral quintile momentum on the point-in-time crypto perp panel (~60–75 names,
 12–16d lookback band, vol-scaled): honest **net Sharpe ~0.8–1.0**, CAGR ~20–25% @100% gross,
-maxDD ~25%, ~60% of weeks positive. Passed purged-WF / DSR / bootstrap / holdout / per-regime /
-breadth / CPCV-PBO. Full memo: **[`docs/EDGE.md`](docs/EDGE.md)**.
+maxDD ~25%, ~60% of weeks positive. Passed purged-WF / bootstrap / holdout / per-regime / breadth /
+CPCV-PBO (recorded: CPCV mean-path **0.91** vs naive **0.99**, frac_pos **1.00**, PBO **≈0.39**);
+**DSR fails on track length only** (PSR 0.988 — the ~5yr sample is short of MinTRL; the single
+biggest honesty flag). Full memo: **[`docs/EDGE.md`](docs/EDGE.md)**.
+
+**Status (2026-07):** all 9 pillar specs in `docs/specs/` are IMPLEMENTED and test-covered
+(613 tests), independently math-audited (2 critical + 8 major defects found and fixed — including
+a turnover double-drift that overstated cost in every earlier backtest; baselines re-measured),
+real per-symbol Binance lot/tick filters wired, and the standard equity-momentum enhancement menu
+was pre-registered, tested, and REJECTED (`docs/EDGE.md` §(d)). The one remaining step is the
+live/paper rebalancer below.
 
 ## Layout
 
@@ -70,9 +79,12 @@ PYTHONPATH=. .venv/bin/python scripts/xsec_pipeline.py
 
 ## The live strategy slot is intentionally EMPTY
 
-There is **no live/paper rebalancer yet** — this repo is research + validation only. When papering
-begins, build the weekly rebalancer against NautilusTrader (the reuse rules in `CLAUDE.md` still
-apply) as a new module; do NOT pre-build it. The next concrete step is in `docs/EDGE.md` §(e).
+There is **no live/paper rebalancer yet** — this repo is research + validation only, and as of
+2026-07 the rebalancer is **the single remaining piece** (everything upstream of it — specs,
+pillar implementations, validation, cost model, exchange filters — is complete and audited). When
+papering begins, build the weekly rebalancer against NautilusTrader (the reuse rules in
+`CLAUDE.md` still apply) as a new module; do NOT pre-build it. The next concrete step is in
+`docs/EDGE.md` §(e).
 
 ## Discipline (non-negotiable)
 
