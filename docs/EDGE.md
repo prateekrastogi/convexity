@@ -168,7 +168,15 @@ This is the whole reason cross-sectional backtests lie, so the discipline was he
   −1 to −5 at realistic 4–10bp — daily cadence pays ~250 RT/yr against sub-1bp/day gross effects).
   GHLZ market-intraday-momentum is also dead in-sample (QQQ −1.76 net). And the roster is
   survivorship-flattered, so these numbers are the OPTIMISTIC case. Re-runnable harness:
-  `research/us_intraday.py`.
+  `research/us_intraday.py`. **ORB (opening-range breakout + tight 1-min stop + ride-to-close —
+  the unconfirmed NIFTY ITM-candidate construction) also tested 2026-07, negative:** on the
+  mega-cap cross-section gross is NEGATIVE (−0.2 to −0.5bp/trade, 91% stop rate, net −1.8 to −2.6
+  Sharpe); QQQ ≈ 0 net at even futures-grade 1bp costs; the single alive-looking cell (IWM OR15,
+  +0.6 net Sharpe @1bp) fails every fragility diagnostic — parameter-fragile (OR30 on the same
+  instrument is negative), year-unstable, DSR ≈ 0.5 over the 6-cell family, and the top 10 trades
+  are ~91% of ALL gross (the same fat-tail luck-shape the NIFTY candidate is flagged with). The
+  construction is a laddered lottery: ~90% of trades pay ~−10bp for a ~10% shot at ~+100bp — fair
+  to negative net of costs on US instruments. Harness: `research/us_orb.py`.
 - **Size QUARTER-KELLY.** Conservative by construction given the above. Pair it with a
   **scale-up-on-live-confirmation** rule: only raise gross after paper/live re-confirms the edge
   out of sample.
