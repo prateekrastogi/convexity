@@ -74,6 +74,13 @@ class OpsDefaults:
     # ---- sec 5 SLA budget ----
     m_slip: float = 2.0  # [ILLUSTRATIVE-RED] OPS.md sec 5.2: realized slippage <= m_slip * expected
     sla_severe_lag_multiple: float = 2.0  # OPS.md sec 5.3: completion_lag > this * W_exec -> HALT
+
+    # ---- sec 15 external capital flows (RED) ----
+    # A flow at/above this fraction of pre-flow equity triggers the immediate flow_risk_check
+    # directive instead of waiting for Friday (OPS.md sec 15.2). [ILLUSTRATIVE-RED] 0.10 ~= 3.5x
+    # the book's ~2.8% weekly vol -- beyond week-scale noise, the same material-vs-noise separation
+    # the CUSUM design uses. Below it, the weekly rebalance absorbs the flow.
+    flow_check_threshold: float = 0.10
     sla_severe_slip_multiple: float = 3.0  # OPS.md sec 5.3: realized_slippage > this * m_slip * expected -> HALT
 
     @property
@@ -87,8 +94,15 @@ class OpsDefaults:
 
     @property
     def mu_0(self) -> float:
-        """[DERIVED] Per-week mean return under the null, ``SR_0 / sqrt(PERIODS_PER_YEAR)`` (sec 4.2)."""
-        return self.sr_0 / math.sqrt(PERIODS_PER_YEAR)
+        """[DERIVED] Per-week mean RETURN under the null: ``SR_0 * ann_vol_0 / PERIODS_PER_YEAR``
+        = weekly Sharpe x weekly vol = 0.85*0.28/52.18 ~= 0.456%/wk ~= the 23.8%/yr arithmetic mean
+        the ann_vol_0 derivation above already computes (sec 4.2). DIMENSIONAL FIX (2026-07): an
+        earlier revision returned ``SR_0/sqrt(PPY)`` = 0.1177 -- the per-week SHARPE RATIO, not a
+        return -- which made a FLAT week a -3.04 sigma innovation and would have walked the
+        kill-switch to a false HALT in ~3 normal weeks (caught by the sec 15 flow tests'
+        whiten->CUSUM composition check; the ARL MCs simulate z~N(0,1) directly and could not see
+        it)."""
+        return self.sr_0 * self.ann_vol_0 / PERIODS_PER_YEAR
 
     @property
     def sigma_0(self) -> float:

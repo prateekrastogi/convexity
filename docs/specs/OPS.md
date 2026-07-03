@@ -605,8 +605,19 @@ SR_0     = 0.85                                                          [MEASUR
                     #   false-alarm — a healthy strategy tracking the upper
                     #   end of its own honest range is even further from the
                     #   drift the CUSUM is built to catch
-mu_0     = SR_0 / sqrt(52.18)                                             [DERIVED]
-                    # per-week mean return under the null, in return units
+mu_0     = SR_0 * ann_vol_0 / 52.18  ~= 0.00456                          [DERIVED]
+                    # per-week mean RETURN under the null = weekly Sharpe x
+                    #   weekly vol = (SR_0/sqrt(52.18)) * (ann_vol_0/sqrt(52.18))
+                    #   ~= 0.456%/wk == the ~23.8%/yr arithmetic mean the
+                    #   ann_vol_0 round-trip below already computes.
+                    # DIMENSIONAL FIX (2026-07): an earlier revision wrote
+                    #   SR_0/sqrt(52.18) = 0.1177 here and called it a return --
+                    #   that is the per-week SHARPE, not a return; under that
+                    #   null a FLAT week scored z = -3.04 and the kill-switch
+                    #   would have falsely HALTed within ~3 normal weeks. Caught
+                    #   by sec 15's whiten->CUSUM composition test; the sec 11
+                    #   ARL Monte-Carlos simulate z~N(0,1) directly and were
+                    #   structurally blind to it.
 ann_vol_0 = 0.28                                                          [DERIVED]
                     # ~28% ANNUALIZED book vol at 100% gross, DERIVED (not
                     #   asserted) from TWO primary figures in EDGE.md sec b's
@@ -1561,6 +1572,47 @@ unhealthy episodes, at the calibrated false-alarm rate."
   UNIVERSE.md settles on.
 
 ---
+
+## 15. External capital flows (deposits / withdrawals)
+
+### 15.1 Invariant FLOW-TWR — every detector consumes the flow-stripped return
+
+A deposit/withdrawal changes account equity WITHOUT being a trading return. Fed raw into the one
+weekly return series, a deposit masquerades as a windfall (false ratchet promotion, spurious
+`ANOMALOUS_OUTPERFORMANCE`) and a withdrawal masquerades as a crash — a 30% withdrawal is a
+~7.7σ downward "return" under the sec 4.2 null, which walks the downward CUSUM most of the way to
+`h*` in a single observation and can force a false HALT that then needs a manual re-arm.
+
+> **Invariant FLOW-TWR.** The ONE weekly return that reaches `whiten`/the CUSUM/the promotion
+> ratchet/the drawdown governor in any week containing an external flow is the TIME-WEIGHTED
+> return `ops/streams/flows.py::twr_weekly_return` — sub-period returns geometrically linked at
+> each flow instant, so flows contribute EXACTLY zero (exact linking; the Modified-Dietz
+> approximation is deliberately not used). With no flows it reduces exactly to the raw return.
+> Test: a flat-price week containing a 30% withdrawal produces `r = 0` bit-exactly, and the
+> composed whiten→CUSUM chain stays at rest where the raw return jumps to >0.6·h*
+> (`tests/ops/test_flows.py`).
+
+The adapter contract: Nautilus account events carry each flow's timestamp, signed amount, and the
+equity immediately BEFORE the flow (`FlowEvent.equity_before`) — capturing equity at the flow
+instant is what makes the linking exact. Flows outside the settlement window are rejected loudly
+(they belong to a different week's linking), never silently absorbed.
+
+### 15.2 The flow-event risk check (`flow_risk_check`)
+
+The weekly calendar stays the ONLY always-on trade trigger (Invariant CAL-PRIMARY) — a flow never
+causes opportunistic re-entry. The one flow case that ADDS risk is a material WITHDRAWAL: the
+instant it lands, positions are unchanged while equity is smaller, so realized gross/NAV sits
+ABOVE target until Friday. Directive table (RED `flow_check_threshold = 0.10` of pre-flow equity,
+[ILLUSTRATIVE-RED] ≈ 3.5× the book's ~2.8% weekly vol — beyond week-scale noise):
+
+| Flow | `< threshold` | `≥ threshold` |
+|---|---|---|
+| Deposit | `NONE` (Friday absorbs it) | `RECONCILE_ONLY` — gross/NAV FELL (safe direction); refresh reconciliation tolerances to the new equity; sizing catches up Friday |
+| Withdrawal | `NONE` | `INTERIM_RESIZE` — reduce-only proportional scale of every position by `(E+F)/E < 1`, restoring target gross at the new equity (P6 risk-off) |
+
+HALT precedence is unchanged: a flow never re-arms a HALTed book (sec 6 step 5). The
+reconciliation layer (sec 1) reads `target_notional` off the post-flow equity so a flow does not
+manufacture phantom `RECON_BREACH`es.
 
 ## References
 

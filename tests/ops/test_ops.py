@@ -120,7 +120,8 @@ def test_c_red_constants_are_not_per_instrument():
 
     inst_fields = set(InstrumentSpec.__dataclass_fields__)
     for red in ("h_star", "m_slip", "m_warn", "k_lot", "k_notional", "delta_target",
-                "arl_0_target", "g_degrade", "n_confirm", "sla_severe_lag_multiple"):
+                "arl_0_target", "g_degrade", "n_confirm", "sla_severe_lag_multiple",
+                "flow_check_threshold"):
         assert red not in inst_fields, f"RED {red} must not be an InstrumentSpec field (Inv C)"
         assert red in OpsDefaults.__dataclass_fields__, f"{red} must be a RED default"
 
@@ -554,12 +555,18 @@ def test_state_from_statistic_thresholds():
 
 
 def test_whiten_matches_evidence_anchors():
-    """OPS.md sec 4.2: mu_0 = SR_0/sqrt(52.18), sigma_0 = 0.28/sqrt(52.18)."""
+    """OPS.md sec 4.2 (post dimensional fix): mu_0 = SR_0*ann_vol_0/52.18 -- a RETURN, not the
+    per-week Sharpe the earlier circular pin asserted; sigma_0 = 0.28/sqrt(52.18)."""
     d = DEFAULTS
-    assert d.mu_0 == pytest.approx(0.85 / math.sqrt(PERIODS_PER_YEAR))
+    assert d.mu_0 == pytest.approx(0.85 * 0.28 / PERIODS_PER_YEAR)
     assert d.sigma_0 == pytest.approx(0.28 / math.sqrt(PERIODS_PER_YEAR))
-    # z_k of a return exactly at mu_0 is 0.
+    # dimensional sanity: mu_0 is a plausible weekly RETURN (~0.46%), NOT a Sharpe (~0.12);
+    # and mu_0/sigma_0 reproduces the weekly Sharpe exactly.
+    assert 0.001 < d.mu_0 < 0.01
+    assert d.mu_0 / d.sigma_0 == pytest.approx(0.85 / math.sqrt(PERIODS_PER_YEAR))
+    # z_k of a return exactly at mu_0 is 0; a FLAT week is a small innovation, never ~3 sigma.
     assert whiten(d.mu_0, mu_0=d.mu_0, sigma_0=d.sigma_0) == pytest.approx(0.0)
+    assert abs(whiten(0.0, mu_0=d.mu_0, sigma_0=d.sigma_0)) < 0.2
 
 
 def test_ann_vol_0_is_derived_from_edge_sharpe_and_cagr():
