@@ -44,6 +44,7 @@ from convexity.cost.accounting import HALF_SPREAD_FRAC
 
 if TYPE_CHECKING:
     from convexity.cost.friction.spread_impact import SpreadImpactModel
+    from convexity.core.types import Side
 
 # One rebalance period in hours — the operative scale of §2.1's upper regularity bound
 # ``Delta << 7 days`` (the weekly cadence of src/convexity/portfolio/engine.py, EXECUTION.md §2.1/§6.1).
@@ -331,6 +332,123 @@ def weight_drift_vol(
         mean = float(np.sum(u * d))
         out[i] = math.sqrt(float(np.sum(u * (d - mean) ** 2)))
     return out
+
+
+# ---------------------------------------------------------------------------------------------
+# §16 lot/tick quantization: the last step from a continuous NAV-fraction trade to an actual,
+# venue-legal order (EXECUTION.md §16, Invariant LOT-Q). Every function above this point works in
+# CONTINUOUS fraction-of-NAV units by design (the Almgren-Chriss relaxation, §2); nothing upstream
+# of a RebalancePlan/TrajectoryResult knows about lot steps, tick grids, or minimum notionals, and
+# that separation is intentional (§0). But the venue does not accept a fraction of NAV -- it accepts
+# an integer multiple of ``lot_size`` units at a price on the ``tick_size`` grid, subject to
+# ``min_qty``/``min_notional`` floors. These functions are that conversion, pure and independently
+# testable so the math is right BEFORE the not-yet-built venue adapter (§1, §15) exists to call it.
+# ---------------------------------------------------------------------------------------------
+
+
+def quantize_qty(raw_qty: float, *, lot_size: float, min_qty: float = 0.0) -> float:
+    """Quantize a signed raw quantity to the venue's lot grid (§16, Invariant LOT-Q).
+
+    Rounds the MAGNITUDE DOWN to the nearest multiple of ``lot_size`` -- the conservative direction
+    (never trades MORE than the caller intended), matching the existing "lot-quantized DOWN"
+    convention already used for the OFF-policy comparison baseline
+    (``src/convexity/system/validate/baselines.py``). A relative epsilon (``1e-9`` of one lot) guards
+    the float round-trip case where an EXACT multiple (e.g. ``0.003 / 0.001``) evaluates to
+    ``2.999999999999...`` and would otherwise silently under-trade by one lot.
+
+    Returns ``0.0`` (never ``min_qty``) when the rounded magnitude is below ``min_qty``: an order
+    this small cannot legally be placed, so it is DROPPED, never inflated up to the venue minimum
+    (inflating would trade MORE than intended -- the opposite of §16's conservative direction).
+
+    ``raw_qty`` — signed quantity in instrument units (e.g. coins), any finite value.
+    ``lot_size`` — venue ``LOT_SIZE`` step, real per-symbol value (``convexity.panel.candidates.
+        crypto_filters``), must be finite and > 0.
+    ``min_qty`` — venue ``LOT_SIZE`` minimum quantity (distinct from ``min_notional``, §16), must be
+        finite and >= 0. Defaults to 0 (no floor) for callers that check ``min_notional`` separately.
+    """
+    if not math.isfinite(raw_qty):
+        raise ValueError(f"raw_qty must be finite, got {raw_qty!r}")
+    if not math.isfinite(lot_size) or lot_size <= 0.0:
+        raise ValueError(f"lot_size must be finite and > 0, got {lot_size!r}")
+    if not math.isfinite(min_qty) or min_qty < 0.0:
+        raise ValueError(f"min_qty must be finite and >= 0, got {min_qty!r}")
+    n_lots = math.floor(abs(raw_qty) / lot_size + 1e-9)
+    qty = n_lots * lot_size
+    if qty < min_qty:
+        return 0.0
+    return math.copysign(qty, raw_qty) if qty > 0.0 else 0.0
+
+
+def quantize_price(price: float, tick_size: float, *, side: "Side") -> float:
+    """Quantize a limit price to the venue's tick grid, side-aware (§16, Invariant LOT-Q).
+
+    Rounds toward being LESS aggressive than ``price``, never more: a BUY (``side=1``) rounds DOWN
+    (caps what you are willing to pay), a SELL (``side=-1``) rounds UP (floors what you are willing
+    to accept). A relative epsilon (``1e-9`` of one tick) guards the same float round-trip case as
+    :func:`quantize_qty`.
+
+    No live caller exists yet -- the EXECUTION pillar as built (``solve_trajectory``, ``RebalancePlan``)
+    never chooses a limit price or tactic (§2, §11.1's ``Tactic`` ladder is a downstream venue-adapter
+    concern, not yet built, §1/§15). This function is ready for when that tactic layer exists; it does
+    not change any current behavior.
+
+    ``price`` — the reference/decision price, must be finite and > 0.
+    ``tick_size`` — venue ``PRICE_FILTER`` step, must be finite and > 0.
+    ``side`` — ``1`` (buy) or ``-1`` (sell), the ``convexity.core.types.Side`` convention.
+    """
+    if not math.isfinite(price) or price <= 0.0:
+        raise ValueError(f"price must be finite and > 0, got {price!r}")
+    if not math.isfinite(tick_size) or tick_size <= 0.0:
+        raise ValueError(f"tick_size must be finite and > 0, got {tick_size!r}")
+    if side not in (1, -1):
+        raise ValueError(f"side must be 1 (buy) or -1 (sell), got {side!r}")
+    n_ticks_raw = price / tick_size
+    n_ticks = math.floor(n_ticks_raw + 1e-9) if side == 1 else math.ceil(n_ticks_raw - 1e-9)
+    return n_ticks * tick_size
+
+
+def child_order_qty(
+    trade_fraction: float,
+    *,
+    nav: float,
+    price: float,
+    lot_size: float,
+    min_qty: float = 0.0,
+    min_notional: float = 0.0,
+) -> float:
+    """Convert one child-slice's signed NAV-fraction trade into the actual order quantity (§16).
+
+    The literal missing link between ``TrajectoryResult.schedule[k]`` (a fraction of NAV, §2.4) and
+    "how many units to actually order": ``raw_qty = trade_fraction * nav / price``, then
+    :func:`quantize_qty`. Additionally enforces the venue's ``min_notional`` dollar floor (distinct
+    from ``min_qty``, §16) -- a quantity that clears the lot/min_qty grid but whose dollar value
+    (``|qty| * price``) is still below ``min_notional`` is likewise DROPPED (returns ``0.0``), never
+    inflated, for the same P6-conservative reason ``quantize_qty`` drops sub-``min_qty`` orders.
+
+    ``trade_fraction`` — signed fraction of NAV for this child slice (one element of
+        ``TrajectoryResult.schedule``), any finite value.
+    ``nav`` — book NAV, must be finite and > 0.
+    ``price`` — reference price for the notional conversion, must be finite and > 0.
+    ``lot_size``, ``min_qty``, ``min_notional`` — real per-symbol venue filters (``convexity.panel.
+        candidates.crypto_filters``); ``min_notional`` defaults to 0 (no floor) for callers that do
+        not have it.
+
+    Returns the signed, quantized order quantity, or ``0.0`` if the slice is too small to clear
+    EITHER the ``min_qty`` or ``min_notional`` floor.
+    """
+    if not math.isfinite(trade_fraction):
+        raise ValueError(f"trade_fraction must be finite, got {trade_fraction!r}")
+    if not math.isfinite(nav) or nav <= 0.0:
+        raise ValueError(f"nav must be finite and > 0, got {nav!r}")
+    if not math.isfinite(price) or price <= 0.0:
+        raise ValueError(f"price must be finite and > 0, got {price!r}")
+    if not math.isfinite(min_notional) or min_notional < 0.0:
+        raise ValueError(f"min_notional must be finite and >= 0, got {min_notional!r}")
+    raw_qty = trade_fraction * nav / price
+    qty = quantize_qty(raw_qty, lot_size=lot_size, min_qty=min_qty)
+    if qty != 0.0 and abs(qty) * price < min_notional:
+        return 0.0
+    return qty
 
 
 @dataclass(frozen=True)

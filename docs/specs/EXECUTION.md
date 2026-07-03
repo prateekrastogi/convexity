@@ -1606,3 +1606,71 @@ section states the Protocol-level shape only, matching `core/protocols.py`'s own
 - **The engine.** Order plumbing, position/account/portfolio state, restart reconciliation, data
   transport, backtest↔live parity are NautilusTrader's; EXECUTION emits child `OrderCommand`s
   through the Nautilus adapter and reads fills back through it, never rebuilding either.
+
+
+## 16. Lot/tick quantization — the continuous-to-discrete boundary (Invariant LOT-Q)
+
+**The gap this section closes.** Every function in §2–§13 works in CONTINUOUS fraction-of-NAV
+units by design: `x_i = w_target_i - w_carried_i` (§2.1), the no-trade band `b_i` (§4.2), and
+`TrajectoryResult.schedule` (§2.4) are all real-valued NAV fractions, never instrument quantities.
+This is the correct Almgren-Chriss relaxation (§0) — but a venue does not accept a fraction of
+NAV. It accepts an integer multiple of a `LOT_SIZE` step at a price on a `PRICE_FILTER` tick grid,
+subject to `LOT_SIZE.minQty` and `MIN_NOTIONAL` floors, and until now nothing in this repo
+performed that conversion: `src/convexity/core/types.py::InstrumentSpec.tick_size`/`lot_size` were
+either unused (`src/convexity/panel/data.py`'s constructors, `src/convexity/system/config/
+universe.py::SystemUniverse`) or carried a UNIFORM placeholder (`tick_size=0.01, lot_size=0.001`
+for every symbol, self-documented as nominal) that is wrong by two to three orders of magnitude for
+most non-BTC/ETH names — e.g. real Binance USDT-M futures filters: XRPUSDT `lot_size=0.1` (100x
+the placeholder), DOGEUSDT/1000PEPEUSDT `lot_size=1` (1000x the placeholder, i.e. these trade in
+WHOLE-COIN lots only). A quantity computed from the placeholder for these names would be rejected
+by the exchange outright.
+
+**The fix.** `src/convexity/panel/candidates.md`'s crypto entries now carry REAL per-symbol
+`tick_size`/`lot_size`/`min_qty`/`min_notional` (Binance `fapi.binance.com/fapi/v1/exchangeInfo`
+`LOT_SIZE`/`PRICE_FILTER`/`MIN_NOTIONAL` filters, a live snapshot — see the `meta.crypto_filters_*`
+keys), read via `convexity.panel.candidates.crypto_filters(symbol) -> ExchangeFilters`.
+`src/convexity/panel/data.py::crypto_spec`/`instrument_spec` now build `InstrumentSpec` from these
+real filters for every crypto symbol (raising `KeyError` rather than silently defaulting, if a
+symbol is somehow not a crypto candidate). Equities/commodities keep the nominal placeholder
+UNCHANGED and DOCUMENTED as such — they are Dukascopy-proxied underlyings with no genuine Binance
+order book, and the live cross-sectional edge is crypto-only (`docs/EDGE.md` scope), so fixing
+their tick/lot has no live consequence.
+
+**Known limitation (stated, not silently assumed away).** The Binance filter snapshot is CURRENT,
+not proven point-in-time-accurate across the full ~5yr backtest window — Binance does occasionally
+revise `LOT_SIZE`/`PRICE_FILTER` for a symbol. This does not affect any BACKTEST number (the
+frictionless engine, §0/§9, never quantizes), only the live/paper path once built.
+
+**The new functions** (`src/convexity/execution/execution.py`), pure and independently tested,
+each rounding in the P6-CONSERVATIVE direction (never trades/prices more aggressively than the
+continuous input implies) with a relative float-round-trip epsilon (`1e-9` of one lot/tick, guarding
+the case where an exact multiple like `0.003 / 0.001` evaluates to `2.999999999999...`):
+
+- **`quantize_qty(raw_qty, *, lot_size, min_qty=0.0) -> float`** — rounds `|raw_qty|` DOWN to the
+  nearest multiple of `lot_size`, preserving sign; returns `0.0` (never `min_qty`) if the rounded
+  magnitude is below `min_qty` — an order too small to legally place is DROPPED, never inflated up
+  to the venue minimum (inflating would trade MORE than intended, violating P6).
+- **`quantize_price(price, tick_size, *, side) -> float`** — rounds to the tick grid, side-aware: a
+  BUY (`side=1`) rounds DOWN (caps what you pay), a SELL (`side=-1`) rounds UP (floors what you
+  accept) — never more aggressive than `price`.
+- **`child_order_qty(trade_fraction, *, nav, price, lot_size, min_qty=0.0, min_notional=0.0) ->
+  float`** — the literal missing link from one `TrajectoryResult.schedule[k]` (a NAV fraction) to
+  an actual order quantity: `raw_qty = trade_fraction * nav / price`, then `quantize_qty`, then an
+  independent `min_notional` check (`|qty| * price >= min_notional`, else drop to `0.0` — a
+  quantity can clear the lot/`min_qty` grid yet still be below the exchange's dollar floor).
+
+**Status (honest, per this spec's existing disclosure convention).** These functions have NO live
+caller yet: `ExecutionEngine.on_target` (§12) still returns a `RebalancePlan` in continuous
+fraction-of-NAV units, exactly as designed (§0) — quantization is the LAST step, applied once per
+child order at the venue-adapter boundary (§1, §15's "the engine" non-goal), and that adapter is
+not yet built (`docs/EDGE.md` §(e)). This section specifies and implements the conversion NOW so it
+is correct and tested BEFORE the adapter exists to call it, rather than being invented ad hoc
+later. `quantize_price` in particular has no live consumer at all today because no tactic/limit-
+price layer (§11.1's `Tactic` ladder) has been built — it is ready for when that layer exists.
+
+**Why this belongs in EXECUTION, not COST or PORTFOLIO (Invariant LOT-Q boundary).** Lot/tick
+quantization is neither a cost ESTIMATE (COST's domain, §15) nor a target-weight DECISION
+(PORTFOLIO's domain, §15) — it is a deterministic, venue-supplied constraint on how a decided
+trade may be discretized into an order, which is exactly EXECUTION's "how to trade what was
+decided" mandate (§0). Placing it here also keeps it adjacent to `solve_trajectory`'s per-slice
+`schedule`, the natural input to `child_order_qty`.

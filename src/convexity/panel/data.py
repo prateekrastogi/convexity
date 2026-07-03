@@ -47,21 +47,36 @@ class FundingSchedule:
         return int(self.ts.shape[0])
 
 
+# Nominal fallback ONLY for the dead equities/commodities sleeves (no live cross-sectional edge,
+# EDGE.md scope note) which candidates.md does not carry real Binance filters for (they are
+# Dukascopy-underlying proxies, not genuine perp order books). NEVER used for crypto (below).
+_NOMINAL_TICK: float = 0.01
+_NOMINAL_LOT: float = 0.001
+
+
 def crypto_spec(symbol: str, funding_interval_hours: int = 8) -> InstrumentSpec:
     """Build an AMBER-only Binance USDT-M perp ``InstrumentSpec`` (no RED/BLUE modelling knob).
 
     ``calendar_id=""`` marks 24/7 (no session boundary) so the breakout barrier family resolves to
-    rolling Donchian (BREAKOUT §2/§3). Tick/lot are nominal; the research harness does not lot-round.
+    rolling Donchian (BREAKOUT §2/§3). ``tick_size``/``lot_size``/``min_notional`` are REAL per-symbol
+    Binance USDT-M filters read from ``candidates.md`` (``convexity.panel.candidates.crypto_filters``,
+    EXECUTION.md's quantization section) -- e.g. XRPUSDT's real lot_size is 0.1, DOGEUSDT's is 1, NOT
+    a uniform placeholder. Raises ``KeyError`` if ``symbol`` is not a crypto candidate (never silently
+    falls back to a wrong number for a real crypto perp).
     """
+    from convexity.panel.candidates import crypto_filters
+
+    f = crypto_filters(symbol)
     return InstrumentSpec(
         symbol=symbol,
         asset_class="crypto_perp",
         venue="BINANCE",
         timezone="UTC",
-        tick_size=0.01,
-        lot_size=0.001,
+        tick_size=f.tick_size,
+        lot_size=f.lot_size,
         price_multiplier=1.0,
         calendar_id="",
+        min_notional=f.min_notional,
         funding_interval_ms=funding_interval_hours * 3600_000,
     )
 
@@ -69,20 +84,28 @@ def crypto_spec(symbol: str, funding_interval_hours: int = 8) -> InstrumentSpec:
 def instrument_spec(symbol: str, funding_interval_hours: int = 8) -> InstrumentSpec:
     """Build the AMBER ``InstrumentSpec`` for ``symbol`` with its resolved asset class.
 
-    Crypto keeps the 24/7 (``calendar_id=""``) spec. Equities/commodities are gappy underlyings; we
-    keep ``calendar_id=""`` (the lake is a stitched 1-min grid whose discontinuities are carried by
-    ``gap_before``/``is_session_open``, which the pillars read directly) but tag the correct
-    ``asset_class`` so any class-aware pillar behaviour (gap-survival sigmas etc.) resolves right.
+    Crypto keeps the 24/7 (``calendar_id=""``) spec and delegates to :func:`crypto_spec` for REAL
+    per-symbol ``tick_size``/``lot_size``/``min_notional`` (never the nominal fallback). Equities/
+    commodities are gappy underlyings with no genuine Binance order book (Dukascopy-proxied, dead
+    sleeve per EDGE.md scope) -- we keep ``calendar_id=""`` (the lake is a stitched 1-min grid whose
+    discontinuities are carried by ``gap_before``/``is_session_open``, which the pillars read
+    directly), tag the correct ``asset_class`` so any class-aware pillar behaviour (gap-survival
+    sigmas etc.) resolves right, and use the NOMINAL tick/lot (documented, never consumed by the live
+    crypto-only cross-sectional book).
     """
     from convexity.panel.assetclass import asset_class_of
 
+    asset_class = asset_class_of(symbol)
+    if asset_class == "crypto_perp":
+        return crypto_spec(symbol, funding_interval_hours=funding_interval_hours)
+
     return InstrumentSpec(
         symbol=symbol,
-        asset_class=asset_class_of(symbol),
+        asset_class=asset_class,
         venue="BINANCE",
         timezone="UTC",
-        tick_size=0.01,
-        lot_size=0.001,
+        tick_size=_NOMINAL_TICK,
+        lot_size=_NOMINAL_LOT,
         price_multiplier=1.0,
         calendar_id="",
         funding_interval_ms=funding_interval_hours * 3600_000,
