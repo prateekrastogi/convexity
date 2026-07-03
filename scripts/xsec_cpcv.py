@@ -53,7 +53,7 @@ def main() -> None:
     ap.add_argument("--ckpt-dir", default="_ckpt")
     ap.add_argument("--n-groups", type=int, default=8)
     ap.add_argument("--k-test", type=int, default=2)
-    # default 3 = ceil(L_max/7), the official config since research/ROBUST.md R3 (LdP:
+    # default 3 = ceil(L_max/7), the official config since study R3, 2026-07 (LdP:
     # embargo >= feature horizon); pass --embargo 1 to reproduce the historical record.
     ap.add_argument("--embargo", type=int, default=3)
     ap.add_argument("--seed", type=int, default=0)

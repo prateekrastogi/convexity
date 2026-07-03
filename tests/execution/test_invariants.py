@@ -354,7 +354,8 @@ def test_gamma_positive_uses_eta_tilde():
 
 
 def test_tactic_for_is_maker_first_with_final_slice_fallback():
-    """E2a (research/EXTEND.md): weekly-cadence child orders default POST_ONLY_MAKER; the final
+    """E2a maker-first study (EXECUTION.md §16.1): weekly-cadence child orders default
+    POST_ONLY_MAKER; the final
     slice crosses (LIMIT_IOC) so the window always completes; urgent intents escalate per the
     core Tactic ladder. Pure function, no backtest number changes."""
     from convexity.execution.execution import tactic_for

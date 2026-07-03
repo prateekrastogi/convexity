@@ -142,15 +142,16 @@ This is the whole reason cross-sectional backtests lie, so the discipline was he
   Sun 0.51] — so "other phases dead" was substantially small-sample, while the Friday premium
   itself persists and still looks structural (full-week information at the Friday close). Friday
   was the a-priori convention, never fitted. Deploy at Friday as designed; paper confirms.
-  Studies: `research/ROBUST.md` R1 (7-phase ensemble NOT adopted), `research/EXTEND.md` E1.
-- **Real per-name cost holds the record** (`research/ROBUST.md` R2): dollar-volume spread +
+  Studies R1 + E1 (harness `research/xsec_robust.py`; raw results in the VM's `_ckpt/`;
+  preregs + full write-ups in git history — the 7-phase ensemble was NOT adopted).
+- **Real per-name cost holds the record** (study R2): dollar-volume spread +
   Amihud impact at $3M NAV shaves only ~0.02 Sharpe vs the flat 13bp (cost 3.8→4.1%/yr). A
   confirmation, recorded for completeness.
-- **Validation now runs at embargo = 3 weeks** (`research/ROBUST.md` R3, LdP's embargo ≥ feature
+- **Validation now runs at embargo = 3 weeks** (study R3, LdP's embargo ≥ feature
   horizon): CPCV mean 0.95, frac_pos 0.93, PBO ≈ 0.40–0.43 — not an embargo-leak artifact; PBO
   stays moderate (band rule unchanged).
 - **Track record: DSR now PASSES — but MARGINALLY (2026-07 panel extension).** Backfilling to
-  the venue archive's origin (2020-01, `research/EXTEND.md` E1) gives n_obs = 334 weeks vs
+  the venue archive's origin (2020-01, study E1) gives n_obs = 334 weeks vs
   MinTRL ≈ 331: DSR 0.9505 ≥ 0.95, PSR 0.9995 — the long-standing #1 flag clears by ~2 weeks.
   Honest framing: a hair above the gate, not comfortably above it; every paper/live week widens
   the margin. The choices were all frozen before the 2020 data was downloaded, so the extension

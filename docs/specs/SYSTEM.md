@@ -295,7 +295,7 @@ PARITY-SENSITIVE — it would move every recorded number and sever comparability
 fraction of the sample the DSR gate needs. The old spec's Invariant HC ("embargo = max label
 horizon") maps here to "at least one rebalance period" as the FLOOR, which `1` satisfies; the full
 3-week signal-window bound is the documented robustness re-run (Section 8.2) — LdP's own
-prescription (embargo ≥ feature horizon) sides with 3. **UPDATE (2026-07, research/ROBUST.md
+prescription (embargo ≥ feature horizon) sides with 3. **UPDATE (2026-07, study
 R3): the 3-week re-run is DONE — CPCV mean 0.914 → 0.950 (rose: no embargo-leak artifact),
 frac_pos 1.00 → 0.93, PBO range → ~[0.40, 0.43]; embargo = 3 is now the OFFICIAL validation
 configuration (scripts/xsec_cpcv.py default updated), embargo-1 retained as the historical
@@ -357,7 +357,8 @@ result, where the OOS path distribution straddled zero and the report was flagge
 CPCV mean sits within a small haircut of the naive number, which is the CPCV verdict a genuine
 (rather than overfit) edge is supposed to produce.
 
-> **Extension update (2026-07-03, research/EXTEND.md E1).** The panel now reaches the venue
+> **Extension update (2026-07-03, study E1; raw results in the VM's _ckpt/extend/).** The panel
+> now reaches the venue
 > archive's origin (2020-01; n_obs = 334 weeks, universe 2020: 34 names). On the extended panel
 > at the official embargo-3: CPCV mean **1.134**, frac_pos **1.00**, naive 1.070, PBO
 > (8,2)/(6,2)/(10,3) = **0.107/0.400/0.075**, and **DSR = 0.9505 PASSES** (PSR 0.9995, MinTRL

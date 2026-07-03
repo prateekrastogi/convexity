@@ -101,7 +101,8 @@ def test_carried_weights_drift_exactly_once_across_consecutive_settles():
 
 
 def test_phase_weekday_default_is_byte_identical_and_phases_shift_the_grid():
-    """ROBUST.md R1 engine support: phase_weekday defaults to 4 (Friday) and MUST leave the
+    """R1 phase-study engine support (research/xsec_robust.py): phase_weekday defaults to 4
+    (Friday) and MUST leave the
     recorded behavior byte-identical; a different phase runs the same weekly cadence on a
     shifted grid. (The 7-phase ensemble itself was NOT adopted -- failed its pre-registered
     sanity gate -- but the capability is the study's reusable component and the recorded

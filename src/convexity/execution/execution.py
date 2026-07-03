@@ -487,7 +487,7 @@ def child_order_qty(
 
 
 def tactic_for(urgency: str, *, is_final_slice: bool) -> str:
-    """Child-order tactic for one trajectory slice (EXECUTION.md §16.1, research/EXTEND.md E2a).
+    """Child-order tactic for one trajectory slice (EXECUTION.md §16.1, study E2a).
 
     MAKER-FIRST at the weekly cadence: with no urgency, every slice except the last posts
     POST_ONLY_MAKER (earning/avoiding the spread instead of paying taker); the FINAL slice of the
@@ -497,7 +497,8 @@ def tactic_for(urgency: str, *, is_final_slice: bool) -> str:
     ``Tactic`` ladder. Fee economics (E2 scenario, conservative half-spread-still-paid): taker
     5bp/leg -> maker 2bp/leg cuts the book's round-trip 13bp -> 7bp, cost ~3.8 -> ~2.05 %/yr; the
     OFFICIAL record stays at taker until paper trading measures real maker fill rates — this
-    function changes no backtest number, it is the deployment policy the adapter will consume.
+    function changes no backtest number, it is the deployment policy the adapter will consume
+    (raw scenario results: the VM's _ckpt/extend/results.json; summary EXECUTION.md §16.1).
 
     ``urgency`` — the core ``ExecUrgency`` ladder value (``PATIENT``/``NORMAL``/``URGENT``/
     ``IMMEDIATE``). ``is_final_slice`` — True on the last slice of the execution window.

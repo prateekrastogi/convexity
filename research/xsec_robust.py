@@ -1,4 +1,8 @@
-"""Robustness study R1-R3 (docs/ROBUST.md, pre-registered): rebalance-phase ensemble, per-name
+"""Reusable robustness harness (R1 rebalance-phase ensemble / R2 per-name real cost / R3
+embargo re-baseline). The studies were pre-registered and written up in git history (preregs
+44b815e, a22efc4; results 12020b2, 3b35304) with raw outputs in _ckpt/; the summaries now live
+in docs/EDGE.md + docs/specs/SYSTEM.md. This script is the retained REUSABLE component: re-run
+any stage on the current lake (per-stage checkpoint resume). Original scope: per-name
 real cost, embargo-3 re-baseline. Checkpointed per stage to _ckpt/robust/results.json.
 
 Run:  PYTHONPATH=. .venv/bin/python scripts/xsec_robust.py

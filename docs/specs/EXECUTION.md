@@ -1689,3 +1689,16 @@ quantization is neither a cost ESTIMATE (COST's domain, §15) nor a target-weigh
 trade may be discretized into an order, which is exactly EXECUTION's "how to trade what was
 decided" mandate (§0). Placing it here also keeps it adjacent to `solve_trajectory`'s per-slice
 `schedule`, the natural input to `child_order_qty`.
+
+### 16.1 Maker-first child-order tactic (deployment policy; official record stays at taker)
+
+`execution.tactic_for(urgency, is_final_slice)` (test-pinned) maps each trajectory slice to the
+core `Tactic` ladder: with no urgency every slice posts **POST_ONLY_MAKER** except the FINAL
+slice, which crosses via **LIMIT_IOC** so any unfilled remainder completes inside the window (the
+fallback is "all but the last slice" — no new fitted constant); `URGENT`/`IMMEDIATE` escalate to
+`MARKETABLE_LIMIT`/`MARKET`. Economics (study E2, 2026-07, conservative: maker fee 2bp/leg with
+the half-spread STILL charged in full): round-trip 13bp → 7bp, book cost ~3.80 → ~2.05 %/yr,
+naive Sharpe +0.08, CPCV mean +0.09 — **~+1.75%/yr of recoverable cost, CONTINGENT on maker fill
+rates that only paper trading can measure. The OFFICIAL record therefore stays at taker**; this
+section records the policy and the ceiling, not a new baseline (raw results: the VM's
+`_ckpt/extend/results.json`).

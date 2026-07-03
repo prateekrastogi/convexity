@@ -55,8 +55,9 @@ class XSecConfig:
     vol_window: int = 28  # trailing realized-vol window for vol-scaled weighting
 
     # Rebalance phase: weekday of the weekly close the book rebalances on (0=Mon .. 6=Sun).
-    # Default 4 (Friday) = the recorded convention; other phases exist for the ROBUST.md R1
-    # rebalance-timing-luck ensemble (crypto is 24/7 -- Friday is one arbitrary phase of 7).
+    # Default 4 (Friday) = the recorded convention; other phases exist for the R1
+    # rebalance-timing-luck study (research/xsec_robust.py; crypto is 24/7 -- Friday is one
+    # arbitrary phase of 7; all phases positive on the extended panel, Friday premium persists).
     phase_weekday: int = 4
 
     # friction (fractions of notional per leg); defaults match research.config / cost pillar.
@@ -129,7 +130,7 @@ def _first_friday_index(panel: Panel, warmup: int, weekday: int = 4) -> int:
     """First panel row index at/after ``warmup`` on ``weekday`` (default 4 = Friday).
 
     The default is the recorded Friday convention; ``weekday`` generalizes the anchor for the
-    ROBUST.md R1 phase ensemble (same weekly cadence, different phase).
+    R1 phase study (research/xsec_robust.py; same weekly cadence, different phase).
     """
     wd = panel.dates.weekday.to_numpy()
     for i in range(warmup, panel.n_days):
