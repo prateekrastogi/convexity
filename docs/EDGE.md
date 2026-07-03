@@ -161,6 +161,14 @@ This is the whole reason cross-sectional backtests lie, so the discipline was he
   band-not-a-point rule STAYS mandatory. (5yr historical record: ≈0.39–0.43.)
 - **Crypto-specific.** The edge does NOT extend to equities or commodities (tested; those sleeves
   were directional-grade only). This is a crypto cross-sectional dispersion premium, full stop.
+  **Including INTRADAY (tested 2026-07, negative):** US-equity cross-sectional winners/losers held
+  open→NY-close is DEAD net-of-cost in BOTH directions (25 mega-caps, 1,311 days, 3 signal windows
+  × 3 cost levels): gross momentum ≈ 0 and sign-unstable; the one real gross pattern is midday
+  REVERSAL (+4.6%/yr, Sharpe +0.84 gross) which even a 2bp round-trip fully consumes (−0.08 net;
+  −1 to −5 at realistic 4–10bp — daily cadence pays ~250 RT/yr against sub-1bp/day gross effects).
+  GHLZ market-intraday-momentum is also dead in-sample (QQQ −1.76 net). And the roster is
+  survivorship-flattered, so these numbers are the OPTIMISTIC case. Re-runnable harness:
+  `research/us_intraday.py`.
 - **Size QUARTER-KELLY.** Conservative by construction given the above. Pair it with a
   **scale-up-on-live-confirmation** rule: only raise gross after paper/live re-confirms the edge
   out of sample.
