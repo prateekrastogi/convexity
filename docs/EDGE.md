@@ -124,6 +124,17 @@ This is the whole reason cross-sectional backtests lie, so the discipline was he
 
 ## (d) Honest caveats
 
+- **The equity-momentum enhancement menu was tested and REJECTED (2026-07, pre-registered
+  9-variant family: vol-target/crash-brake, absolute-momentum gate, residual momentum, FIP blend,
+  skip, tranches, rank hysteresis).** Nothing cleared the pre-registered adoption bar
+  (ΔCPCV ≥ +0.05): best was vol-targeting at +0.005 — the inverse-vol dollar-neutral book already
+  self-stabilizes and the 25% DD brake never fired in 5yr; the TSMOM gate re-imports the dead §(a)
+  directional signal (−0.25, maxDD 31.5%); skip=2 was the worst single change (−0.55 — no
+  short-term reversal to dodge at weekly cadence). Family PBO 0.57–0.70: picking the "best"
+  enhancement would itself be overfitting. Deployed config unchanged; the study artifacts were
+  removed from the repo — this note is the record (raw per-variant results retained off-git in
+  the VM's `_ckpt/enhance/results.json`).
+
 - **Young track record (~5yr).** DSR *fails on length* — there simply are not enough weekly obs to
   clear MinTRL — even though PSR is high. This is the single biggest honesty flag.
 - **Moderate PBO (0.39).** Real edge, but not a slam-dunk; overfit risk is non-trivial → the
