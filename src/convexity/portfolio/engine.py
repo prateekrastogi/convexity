@@ -54,6 +54,11 @@ class XSecConfig:
     gross: float = 1.0  # reference gross exposure (100% = 50% long + 50% short)
     vol_window: int = 28  # trailing realized-vol window for vol-scaled weighting
 
+    # Rebalance phase: weekday of the weekly close the book rebalances on (0=Mon .. 6=Sun).
+    # Default 4 (Friday) = the recorded convention; other phases exist for the ROBUST.md R1
+    # rebalance-timing-luck ensemble (crypto is 24/7 -- Friday is one arbitrary phase of 7).
+    phase_weekday: int = 4
+
     # friction (fractions of notional per leg); defaults match research.config / cost pillar.
     taker: float = 0.0005
     half_spread: float = 1.0e-4
@@ -120,11 +125,15 @@ def _rank_at(panel: Panel, d: int, cfg: XSecConfig) -> np.ndarray:
     )
 
 
-def _first_friday_index(panel: Panel, warmup: int) -> int:
-    """First panel row index at/after ``warmup`` whose date is a Friday (weekday == 4)."""
+def _first_friday_index(panel: Panel, warmup: int, weekday: int = 4) -> int:
+    """First panel row index at/after ``warmup`` on ``weekday`` (default 4 = Friday).
+
+    The default is the recorded Friday convention; ``weekday`` generalizes the anchor for the
+    ROBUST.md R1 phase ensemble (same weekly cadence, different phase).
+    """
     wd = panel.dates.weekday.to_numpy()
     for i in range(warmup, panel.n_days):
-        if wd[i] == 4:
+        if wd[i] == weekday:
             return i
     return panel.n_days  # no valid start
 
@@ -153,7 +162,7 @@ def run(panel: Panel, cfg: XSecConfig) -> XSecResult:
     # the ~15-unshortable-tail cost is priced (inf) rather than silently finite for universes > N~50.
     # Until then the flat scalar below is the live cost truth and the CPCV parity anchor.
     friction = round_trip_friction(taker=cfg.taker, half_spread=cfg.half_spread, impact=cfg.impact)
-    start = _first_friday_index(panel, warmup)
+    start = _first_friday_index(panel, warmup, cfg.phase_weekday)
 
     dates: list[pd.Timestamp] = []
     net: list[float] = []
@@ -233,7 +242,7 @@ def run_book(
     # the ~15-unshortable-tail cost is priced (inf) rather than silently finite for universes > N~50.
     # Until then the flat scalar below is the live cost truth and the CPCV parity anchor.
     friction = round_trip_friction(taker=cfg.taker, half_spread=cfg.half_spread, impact=cfg.impact)
-    start = _first_friday_index(panel, warmup)
+    start = _first_friday_index(panel, warmup, cfg.phase_weekday)
     mkt_col = panel.symbols.index(market_symbol) if market_symbol in panel.symbols else -1
 
     dates: list[pd.Timestamp] = []

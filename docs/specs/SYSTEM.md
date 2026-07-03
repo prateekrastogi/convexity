@@ -295,8 +295,11 @@ PARITY-SENSITIVE — it would move every recorded number and sever comparability
 fraction of the sample the DSR gate needs. The old spec's Invariant HC ("embargo = max label
 horizon") maps here to "at least one rebalance period" as the FLOOR, which `1` satisfies; the full
 3-week signal-window bound is the documented robustness re-run (Section 8.2) — LdP's own
-prescription (embargo ≥ feature horizon) sides with 3, and a future re-baselining should adopt it,
-because at `n_obs ≈ 258` weekly observations
+prescription (embargo ≥ feature horizon) sides with 3. **UPDATE (2026-07, research/ROBUST.md
+R3): the 3-week re-run is DONE — CPCV mean 0.914 → 0.950 (rose: no embargo-leak artifact),
+frac_pos 1.00 → 0.93, PBO range → ~[0.40, 0.43]; embargo = 3 is now the OFFICIAL validation
+configuration (scripts/xsec_cpcv.py default updated), embargo-1 retained as the historical
+record** — noting that at `n_obs ≈ 258` weekly observations
 (Section 5.3) every additional embargoed week is a non-trivial fraction of the sample the DSR gate
 needs (Section 5.5's MinTRL discipline is exactly why this trade-off is made explicit rather than
 silently defaulted to the conservative extreme).

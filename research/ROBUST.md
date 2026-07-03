@@ -44,3 +44,43 @@ recommend the official record move to embargo-3 going forward if the deltas are 
 ## Protocol
 Same machinery as always (run_cpcv/compute_pbo byte-identical reuse); all runs checkpointed to
 _ckpt/robust/results.json per stage; every series produced by the frozen settle_week.
+Reusable harness: `research/xsec_robust.py` (run with `PYTHONPATH=. .venv/bin/python
+research/xsec_robust.py` from the repo root; per-stage checkpoint resume).
+
+## RESULTS (run 2026-07-03, full 100-crypto panel; raw detail in _ckpt/robust/results.json)
+
+### R1 — MAJOR HONESTY FINDING: the edge is PHASE-CONCENTRATED at the Friday close
+
+Per-phase band-ensemble Sharpe (identical strategy, only the weekly rebalance weekday changed):
+
+| Mon | Tue | Wed | Thu | **Fri (recorded)** | Sat | Sun |
+|---|---|---|---|---|---|---|
+| −0.01 | +0.24 | +0.43 | +0.68 | **+1.12** | +0.26 | −0.03 |
+
+RTL dispersion: Sharpe std 0.41 across phases; the 7-phase ensemble scores Sharpe 0.50 / CPCV
+mean 0.38 / frac_pos 0.75 vs the Friday book's 1.06 / 0.96. **Per the pre-registered decision
+rule the ensemble FAILS its sanity gate (frac_pos drop 0.21 > 0.10) and is NOT adopted — the
+Friday-close construction stays deployed.** The honest reading, stated both ways: (a) the profile
+is MONOTONE-rising into Friday then collapsing over the weekend — consistent with STRUCTURE, not
+exchangeable luck (a Friday-close signal carries the full trading week's information into the
+weekend regime; signals formed at weekend/Monday closes are polluted by thin weekend prints), and
+Friday was the a-priori convention, never fitted; (b) with ~5yr a luck component cannot be
+excluded — under exchangeability the pre-chosen phase landing on the max is a 1-in-7 event, and
+the honest expectation would sit nearer the phase-mean (~0.5). Recorded as the book's
+second-biggest caveat after track length (EDGE.md §(d)); paper trading at the Friday phase is the
+out-of-sample discriminator.
+
+### R2 — per-name real cost: the flat-cost record HOLDS (restatement immaterial)
+
+Per-name dollar-volume spread + Amihud impact at NAV = $3M, one-way notional |dw_i|·NAV: cost
+3.80 → 4.13 %/yr, naive Sharpe 1.124 → 1.109, CPCV mean 1.061 → 1.045 (same aligned grid). The
+flat-13bp record is robust to the fuller cost model at this book size (~0.02 Sharpe haircut).
+Shortability premium remains out (documented, blocked on UNIVERSE per-symbol flags).
+
+### R3 — embargo-3 re-baseline: the edge is NOT an embargo-leak artifact — ADOPTED as official
+
+Committed 7-lookback family, L=14 selected, embargo 1wk → 3wk: CPCV mean 0.914 → 0.950 (rose),
+frac_pos 1.00 → 0.93, PBO (8,2)/(6,2)/(10,3): 0.393/0.467/0.308 → 0.429/0.400/0.425 (range
+~[0.40, 0.43], same moderate zone). Embargo = 3 weeks (= ceil(L_max/7), LdP's embargo ≥ feature
+horizon) is now the OFFICIAL validation configuration; embargo-1 numbers remain the historical
+record.

@@ -98,3 +98,35 @@ def test_carried_weights_drift_exactly_once_across_consecutive_settles():
     # the OLD wiring's number -- shown here as the counterfactual this test exists to forbid:
     assert res2_doubled.turnover == pytest.approx(0.10, abs=1e-3)
     assert res2_doubled.turnover > res2_correct.turnover * 1.9
+
+
+def test_phase_weekday_default_is_byte_identical_and_phases_shift_the_grid():
+    """ROBUST.md R1 engine support: phase_weekday defaults to 4 (Friday) and MUST leave the
+    recorded behavior byte-identical; a different phase runs the same weekly cadence on a
+    shifted grid. (The 7-phase ensemble itself was NOT adopted -- failed its pre-registered
+    sanity gate -- but the capability is the study's reusable component and the recorded
+    Friday convention is now an explicit, tested parameter rather than a hardcoded constant.)"""
+    from convexity.portfolio.engine import XSecConfig, run
+    from tests.conftest import make_panel
+
+    rng = np.random.default_rng(5)
+    n_days, n_sym = 120, 6
+    drifts = np.linspace(-0.003, 0.004, n_sym)
+    tt = np.arange(n_days)[:, None]
+    close = 100.0 * np.exp(drifts[None, :] * tt + rng.normal(0, 0.003, (n_days, n_sym)).cumsum(0))
+    panel = make_panel(close, np.zeros((n_days, n_sym)),
+                       np.ones((n_days, n_sym), dtype=bool),
+                       tuple(f"S{i}" for i in range(n_sym)))
+
+    base = XSecConfig(signal="momentum", lookback=14, quantile="quintile", weighting="volscaled")
+    explicit = XSecConfig(signal="momentum", lookback=14, quantile="quintile",
+                          weighting="volscaled", phase_weekday=4)
+    a, b = run(panel, base), run(panel, explicit)
+    assert np.array_equal(a.net, b.net)  # default == explicit Friday, bit-for-bit
+    assert a.dates[0].weekday() == 4
+
+    monday = XSecConfig(signal="momentum", lookback=14, quantile="quintile",
+                        weighting="volscaled", phase_weekday=0)
+    m = run(panel, monday)
+    assert m.dates[0].weekday() == 0  # genuinely shifted grid
+    assert not np.array_equal(a.net[: len(m.net)], m.net[: len(a.net)])

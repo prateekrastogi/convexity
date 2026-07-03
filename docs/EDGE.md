@@ -136,6 +136,20 @@ This is the whole reason cross-sectional backtests lie, so the discipline was he
   removed from the repo — this note is the record (raw per-variant results retained off-git in
   the VM's `_ckpt/enhance/results.json`).
 
+- **PHASE CONCENTRATION (2026-07, measured).** The edge lives at the FRIDAY-close rebalance
+  phase: the identical book on all 7 weekly phases gives Sharpe [Mon −0.01, Tue +0.24, Wed +0.43,
+  Thu +0.68, Fri +1.12, Sat +0.26, Sun −0.03] — monotone into Friday, dead over the weekend.
+  Friday was the a-priori convention (never fitted) and the shape looks structural (full-week
+  information at the Friday close; weekend prints pollute other phases), but with ~5yr a luck
+  component cannot be excluded — the phase-mean is ~0.5. Second-biggest honesty flag after track
+  length; papering at the Friday phase is the out-of-sample discriminator. Study:
+  `research/ROBUST.md` R1 (7-phase ensemble NOT adopted — failed its pre-registered sanity gate).
+- **Real per-name cost holds the record** (`research/ROBUST.md` R2): dollar-volume spread +
+  Amihud impact at $3M NAV shaves only ~0.02 Sharpe vs the flat 13bp (cost 3.8→4.1%/yr). A
+  confirmation, recorded for completeness.
+- **Validation now runs at embargo = 3 weeks** (`research/ROBUST.md` R3, LdP's embargo ≥ feature
+  horizon): CPCV mean 0.95, frac_pos 0.93, PBO ≈ 0.40–0.43 — not an embargo-leak artifact; PBO
+  stays moderate (band rule unchanged).
 - **Young track record (~5yr).** DSR *fails on length* — there simply are not enough weekly obs to
   clear MinTRL — even though PSR is high. This is the single biggest honesty flag.
 - **Moderate PBO (0.39).** Real edge, but not a slam-dunk; overfit risk is non-trivial → the

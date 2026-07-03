@@ -53,7 +53,9 @@ def main() -> None:
     ap.add_argument("--ckpt-dir", default="_ckpt")
     ap.add_argument("--n-groups", type=int, default=8)
     ap.add_argument("--k-test", type=int, default=2)
-    ap.add_argument("--embargo", type=int, default=1)
+    # default 3 = ceil(L_max/7), the official config since research/ROBUST.md R3 (LdP:
+    # embargo >= feature horizon); pass --embargo 1 to reproduce the historical record.
+    ap.add_argument("--embargo", type=int, default=3)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--only-l14", action="store_true",
                     help="sanity: run CPCV path distribution for L=14 alone (still needs the family for PBO)")
