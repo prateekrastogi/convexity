@@ -1,0 +1,7 @@
+[Unit]
+Description=convexity paper finalize (rebalance window end)
+[Timer]
+OnCalendar=Sat *-*-* 02:20:00 UTC
+Persistent=true
+[Install]
+WantedBy=timers.target

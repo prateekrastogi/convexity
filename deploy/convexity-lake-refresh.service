@@ -1,0 +1,13 @@
+# Weekly lake refresh: pull the newest kline/funding dumps and re-stitch, so the durable lake
+# catches up to what the rebalance session topped up via REST (PAPER.md §2). Runs well after the
+# rebalance window; the session itself never depends on this.
+[Unit]
+Description=convexity lake refresh (backfill dumps + stitch)
+Wants=network-online.target
+After=network-online.target
+[Service]
+Type=oneshot
+User=ubuntu
+WorkingDirectory=/home/speculation/convexity
+ExecStart=/bin/bash -lc '/home/speculation/convexity/.venv/bin/python scripts/backfill_crypto_1m.py && /home/speculation/convexity/.venv/bin/python scripts/backfill_funding_1m.py && /home/speculation/convexity/.venv/bin/python scripts/stitch_tradfi_1m.py'
+TimeoutStartSec=7200

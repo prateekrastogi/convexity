@@ -80,14 +80,15 @@ PYTHONPATH=. .venv/bin/python scripts/xsec_pipeline.py
 .venv/bin/python -m pytest tests/ -q
 ```
 
-## The live strategy slot is intentionally EMPTY
+## The live strategy slot: paper rebalancer
 
-There is **no live/paper rebalancer yet** — this repo is research + validation only, and as of
-2026-07 the rebalancer is **the single remaining piece** (everything upstream of it — specs,
-pillar implementations, validation, cost model, exchange filters — is complete and audited). When
-papering begins, build the weekly rebalancer against NautilusTrader (the reuse rules in
-`CLAUDE.md` still apply) as a new module; do NOT pre-build it. The next concrete step is in
-`docs/EDGE.md` §(e).
+**BUILT (2026-07)** — `src/convexity/paper/` (spec: `docs/specs/PAPER.md`; units + runbook:
+`deploy/`): scheduled weekly sessions (settle→target→size→plan→orders→journal), targets
+parity-pinned bit-for-bit to the validated engine, quarter-Kelly gross, USDT→USDC collateral
+waterfall (BTC never — user mandate), maker-first venue-exact orders, TWR flow stripping, daily
+reconciliation. Dry-run works with no keys (`python -m convexity.paper rebalance`); the demo
+gateway is EXPERIMENTAL until the first SUPERVISED `--live` session — run that before enabling
+the timers (`deploy/README.md`).
 
 ## Discipline (non-negotiable)
 

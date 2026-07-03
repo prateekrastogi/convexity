@@ -178,9 +178,12 @@ This is the whole reason cross-sectional backtests lie, so the discipline was he
   dollar-neutral, at quarter-Kelly gross.
 - **Open items / not yet done:**
   - Exact real-cost CAGR reconciliation (nail down the Amihud size-cost → the ~20–25% figure).
-  - The **live rebalancer is NOT built** — this repo is research + validation only. The live/paper
-    strategy slot is intentionally empty (see `src/convexity/` and the strategy note in
-    `README.md`). Build it against NautilusTrader when papering starts; do not pre-build it now.
+  - The **live/paper rebalancer is BUILT** (2026-07: `src/convexity/paper/`, spec
+    `docs/specs/PAPER.md`, systemd units `deploy/`): weekly oneshot sessions, targets parity-pinned
+    bit-for-bit to the engine, quarter-Kelly sizing over the USDT→USDC collateral waterfall (BTC
+    never), maker-first venue-legal orders, TWR flow handling, journal + reconciliation. Dry-run
+    verified end-to-end on the real lake; the Binance-demo gateway is EXPERIMENTAL until the first
+    SUPERVISED `--live` session (the remaining step before the timers go on).
 
 ---
 
