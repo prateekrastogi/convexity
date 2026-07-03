@@ -49,3 +49,47 @@ momentum-only book.
 ## Protocol
 Main-thread, no agents; every stage checkpointed to _ckpt/extend/ (results.json + PROGRESS.md);
 prod docs/src updated ONLY after all three complete; research artifacts stay in research/.
+
+## RESULTS (2026-07-03; raw detail _ckpt/extend/results.json)
+
+### E1 — the extension pays off on every axis (334 weeks, 2020-01 → 2026-07; +29% track)
+
+Klines backfilled to the Binance UM dump archive's origin (2020-01; 770 new month-files, 24.4M
+rows, 0 errors); funding archive begins 2020-06 (earlier weeks use the documented 0-accrual
+convention — momentum needs only closes). Every strategy choice was frozen BEFORE this data was
+downloaded, so the extension is backward-out-of-sample evidence, not fitting. On the extended
+panel (universe 2020: 34 names — above every breadth floor):
+
+- **DSR PASSES: 0.9505 ≥ 0.95, PSR 0.9995, MinTRL 331.1 < n_obs 333** — the repo's #1 honesty
+  flag (track length) clears, MARGINALLY (by 2 weeks; every live week widens it). Honest framing:
+  a hair above the gate, not comfortably above it.
+- **PBO collapses**: (8,2) 0.393 → **0.107**, (10,3) 0.425 → **0.075** — both under the 0.2
+  clean-pass line; (6,2) 0.400 (partition sensitivity remains → the BAND rule stays mandatory).
+- CPCV (official embargo-3, L=14 selected over the 7-family): mean **+1.134**, frac_pos **1.00**,
+  naive 1.070. Per-L naive Sharpe (334wk): 10: 1.02, 12: 1.48, 14: 1.07, 16: 1.08, 18: 0.92,
+  21: 1.06, 28: 0.84 — every member improved; 2020 (COVID crash + recovery) was GOOD for the book.
+- **Phase table softens exactly as more data should adjudicate** (deployable Friday band ensemble
+  per phase): [Mon 0.52, Tue 0.53, Wed 0.45, Thu 0.82, **Fri 1.29**, Sat 0.75, Sun 0.51] — every
+  phase now POSITIVE (5yr worst was −0.03); the Friday premium persists and still looks
+  structural, but "other phases are dead" was substantially a small-sample artifact. Neither R1
+  flag condition fired (Friday still max; CPCV well above 0.5).
+- The official record MOVES to the extended panel (prod docs restated); the 5yr numbers remain
+  the historical record in git.
+
+### E2 — maker-first execution: tactic implemented, upside quantified, record unchanged
+
+(a) `execution.tactic_for` (test-pinned): POST_ONLY_MAKER on every slice except the last;
+final slice crosses LIMIT_IOC; URGENT/IMMEDIATE escalate per the core ladder. (b) Conservative
+scenario (fees 5→2bp/leg, half-spread STILL paid): cost 3.80 → 2.05 %/yr, naive Sharpe 1.124 →
+1.206, CPCV(e=3) 1.336 → 1.423 (5yr grid, same-grid comparison). ~+1.75%/yr of recoverable cost,
+CONTINGENT on maker fill rates — the official record stays at taker until paper measures them.
+
+### E3 — 85/15 carry sleeve: NEAR-MISS, NOT ADOPTED (pre-registered bar holds)
+
+Book-level 0.85·momentum + 0.15·carry (5yr grid): ΔCPCV(8,2,e=3) = **+0.033 vs the +0.05 bar** —
+fails rule (i); sign-consistent at all three partitions (+0.026/+0.040/+0.033), maxDD 21.2% ≤ 25%,
+frac_pos equal. The SIGNAL.md §6.1 additivity identity predicted the combined Sharpe EXACTLY
+(1.174 predicted = 1.174 measured); realized momentum–carry corr 0.32 is too high for a 15%
+sleeve to clear a +0.05 materiality bar. Momentum-only book retained; negative finding recorded.
+(E2/E3 ran on the pre-extension 5yr grid — both are same-grid relative comparisons; their
+conclusions are grid-internal and unaffected by the extension.)

@@ -10,9 +10,10 @@
 Weekly dollar-neutral quintile momentum on the point-in-time crypto perp panel (~60–75 names,
 12–16d lookback band, vol-scaled): honest **net Sharpe ~0.8–1.0**, CAGR ~20–25% @100% gross,
 maxDD ~25%, ~60% of weeks positive. Passed purged-WF / bootstrap / holdout / per-regime / breadth /
-CPCV-PBO (official record at the 3wk embargo: CPCV mean-path **0.95**, frac_pos **0.93**,
-PBO **≈0.40–0.43**; embargo-1 historical: 0.91/1.00/0.39); NOTE the measured **Friday
-phase-concentration** caveat (`docs/EDGE.md` §(d));
+CPCV-PBO (official record, extended 6.5yr panel @ 3wk embargo: CPCV mean-path **1.13**,
+frac_pos **1.00**, PBO **0.11**; 5yr historical: 0.95/0.93/0.40); **DSR now PASSES**
+(0.9505, n_obs 334 vs MinTRL 331 — marginal, see `docs/EDGE.md` §(d)); Friday phase premium
+persists with all phases positive on the extended panel;
 **DSR fails on track length only** (PSR 0.988 — the ~5yr sample is short of MinTRL; the single
 biggest honesty flag). Full memo: **[`docs/EDGE.md`](docs/EDGE.md)**.
 

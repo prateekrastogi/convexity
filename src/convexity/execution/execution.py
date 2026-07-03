@@ -486,6 +486,32 @@ def child_order_qty(
     return qty
 
 
+def tactic_for(urgency: str, *, is_final_slice: bool) -> str:
+    """Child-order tactic for one trajectory slice (EXECUTION.md §16.1, research/EXTEND.md E2a).
+
+    MAKER-FIRST at the weekly cadence: with no urgency, every slice except the last posts
+    POST_ONLY_MAKER (earning/avoiding the spread instead of paying taker); the FINAL slice of the
+    window crosses via LIMIT_IOC so any unfilled remainder completes inside the window — the
+    conservative fallback that bounds completion risk without a new fitted constant (the maker
+    window is simply "all but the last slice"). Urgent intents escalate per the existing core
+    ``Tactic`` ladder. Fee economics (E2 scenario, conservative half-spread-still-paid): taker
+    5bp/leg -> maker 2bp/leg cuts the book's round-trip 13bp -> 7bp, cost ~3.8 -> ~2.05 %/yr; the
+    OFFICIAL record stays at taker until paper trading measures real maker fill rates — this
+    function changes no backtest number, it is the deployment policy the adapter will consume.
+
+    ``urgency`` — the core ``ExecUrgency`` ladder value (``PATIENT``/``NORMAL``/``URGENT``/
+    ``IMMEDIATE``). ``is_final_slice`` — True on the last slice of the execution window.
+    Returns a ``convexity.core.types.Tactic`` literal.
+    """
+    if urgency == "IMMEDIATE":
+        return "MARKET"
+    if urgency == "URGENT":
+        return "MARKETABLE_LIMIT"
+    if urgency in ("PATIENT", "NORMAL"):
+        return "LIMIT_IOC" if is_final_slice else "POST_ONLY_MAKER"
+    raise ValueError(f"unknown urgency {urgency!r} (core ExecUrgency ladder)")
+
+
 @dataclass(frozen=True)
 class ShortfallReport:
     """One rebalance's decomposed implementation shortfall (Perold 1988, §7.1)."""

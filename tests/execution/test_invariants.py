@@ -351,3 +351,18 @@ def test_gamma_positive_uses_eta_tilde():
     with pytest.raises(ValueError, match="eta_tilde"):
         solve_trajectory(0.05, delta=2.0, n=10, sigma_i=sigma, eta_i=1e-6, gamma_i=1e-5,
                          lambda_i=lam)
+
+
+def test_tactic_for_is_maker_first_with_final_slice_fallback():
+    """E2a (research/EXTEND.md): weekly-cadence child orders default POST_ONLY_MAKER; the final
+    slice crosses (LIMIT_IOC) so the window always completes; urgent intents escalate per the
+    core Tactic ladder. Pure function, no backtest number changes."""
+    from convexity.execution.execution import tactic_for
+
+    assert tactic_for("NORMAL", is_final_slice=False) == "POST_ONLY_MAKER"
+    assert tactic_for("PATIENT", is_final_slice=False) == "POST_ONLY_MAKER"
+    assert tactic_for("NORMAL", is_final_slice=True) == "LIMIT_IOC"
+    assert tactic_for("URGENT", is_final_slice=False) == "MARKETABLE_LIMIT"
+    assert tactic_for("IMMEDIATE", is_final_slice=True) == "MARKET"
+    with pytest.raises(ValueError):
+        tactic_for("bogus", is_final_slice=False)

@@ -357,6 +357,14 @@ result, where the OOS path distribution straddled zero and the report was flagge
 CPCV mean sits within a small haircut of the naive number, which is the CPCV verdict a genuine
 (rather than overfit) edge is supposed to produce.
 
+> **Extension update (2026-07-03, research/EXTEND.md E1).** The panel now reaches the venue
+> archive's origin (2020-01; n_obs = 334 weeks, universe 2020: 34 names). On the extended panel
+> at the official embargo-3: CPCV mean **1.134**, frac_pos **1.00**, naive 1.070, PBO
+> (8,2)/(6,2)/(10,3) = **0.107/0.400/0.075**, and **DSR = 0.9505 PASSES** (PSR 0.9995, MinTRL
+> 331.1 < 333 — marginal, by ~2 weeks; Gate 2 is now a clean branch-2a pass on this panel). All
+> choices were frozen before the 2020 data was downloaded (backward-out-of-sample). The numbers
+> below this note are the 5yr-panel historical record.
+>
 > **Provenance of the numbers above (re-measured 2026-07-03).** The recorded values were re-run
 > after the engine turnover-drift fix (audit PF-1: carried weights were double-drifted, overstating
 > cost every week): naive L=14 `0.9794 -> 0.9872`, CPCV mean-path `0.9061 -> 0.9141`, PBO at the

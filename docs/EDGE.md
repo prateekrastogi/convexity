@@ -136,24 +136,28 @@ This is the whole reason cross-sectional backtests lie, so the discipline was he
   removed from the repo — this note is the record (raw per-variant results retained off-git in
   the VM's `_ckpt/enhance/results.json`).
 
-- **PHASE CONCENTRATION (2026-07, measured).** The edge lives at the FRIDAY-close rebalance
-  phase: the identical book on all 7 weekly phases gives Sharpe [Mon −0.01, Tue +0.24, Wed +0.43,
-  Thu +0.68, Fri +1.12, Sat +0.26, Sun −0.03] — monotone into Friday, dead over the weekend.
-  Friday was the a-priori convention (never fitted) and the shape looks structural (full-week
-  information at the Friday close; weekend prints pollute other phases), but with ~5yr a luck
-  component cannot be excluded — the phase-mean is ~0.5. Second-biggest honesty flag after track
-  length; papering at the Friday phase is the out-of-sample discriminator. Study:
-  `research/ROBUST.md` R1 (7-phase ensemble NOT adopted — failed its pre-registered sanity gate).
+- **PHASE PREMIUM at Friday (2026-07, measured; SOFTENED by the panel extension).** On the
+  5yr panel the non-Friday phases looked dead ([−0.01 … +1.12]); on the extended 6.5yr panel
+  every phase is POSITIVE — [Mon 0.52, Tue 0.53, Wed 0.45, Thu 0.82, **Fri 1.29**, Sat 0.75,
+  Sun 0.51] — so "other phases dead" was substantially small-sample, while the Friday premium
+  itself persists and still looks structural (full-week information at the Friday close). Friday
+  was the a-priori convention, never fitted. Deploy at Friday as designed; paper confirms.
+  Studies: `research/ROBUST.md` R1 (7-phase ensemble NOT adopted), `research/EXTEND.md` E1.
 - **Real per-name cost holds the record** (`research/ROBUST.md` R2): dollar-volume spread +
   Amihud impact at $3M NAV shaves only ~0.02 Sharpe vs the flat 13bp (cost 3.8→4.1%/yr). A
   confirmation, recorded for completeness.
 - **Validation now runs at embargo = 3 weeks** (`research/ROBUST.md` R3, LdP's embargo ≥ feature
   horizon): CPCV mean 0.95, frac_pos 0.93, PBO ≈ 0.40–0.43 — not an embargo-leak artifact; PBO
   stays moderate (band rule unchanged).
-- **Young track record (~5yr).** DSR *fails on length* — there simply are not enough weekly obs to
-  clear MinTRL — even though PSR is high. This is the single biggest honesty flag.
-- **Moderate PBO (0.39).** Real edge, but not a slam-dunk; overfit risk is non-trivial → the
-  band-not-a-point rule is mandatory, not optional.
+- **Track record: DSR now PASSES — but MARGINALLY (2026-07 panel extension).** Backfilling to
+  the venue archive's origin (2020-01, `research/EXTEND.md` E1) gives n_obs = 334 weeks vs
+  MinTRL ≈ 331: DSR 0.9505 ≥ 0.95, PSR 0.9995 — the long-standing #1 flag clears by ~2 weeks.
+  Honest framing: a hair above the gate, not comfortably above it; every paper/live week widens
+  the margin. The choices were all frozen before the 2020 data was downloaded, so the extension
+  is backward-out-of-sample evidence, not fitting.
+- **PBO drops to clean-pass territory on the extended panel: 0.107 at (8,2), 0.075 at (10,3)**
+  (both < 0.2), with (6,2) at 0.40 still moderate — partition sensitivity remains, so the
+  band-not-a-point rule STAYS mandatory. (5yr historical record: ≈0.39–0.43.)
 - **Crypto-specific.** The edge does NOT extend to equities or commodities (tested; those sleeves
   were directional-grade only). This is a crypto cross-sectional dispersion premium, full stop.
 - **Size QUARTER-KELLY.** Conservative by construction given the above. Pair it with a
@@ -183,6 +187,11 @@ This is the whole reason cross-sectional backtests lie, so the discipline was he
 
 - Directional gross R ≈ **0** (dead everywhere).
 - Funding carry **+12.9%/yr** gross / **~70%** structural DD (income-only).
-- Xsec honest net Sharpe **~0.8–1.0**, CAGR **~20–25%** @100% gross, maxDD **~25%**, **~60%** weeks +.
-- Universe sweet spot **~60–75** names; lookback band **12–16d**; **PBO 0.39**; ~5yr sample.
+- Xsec honest net Sharpe **~0.9–1.1** on the extended 6.5yr panel (band ensemble 1.29 naive at
+  Friday; plan conservatively), CAGR **~20–25%** @100% gross, maxDD **~25%**, **~60%** weeks +.
+- Universe sweet spot **~60–75** names; lookback band **12–16d**; **PBO 0.11** [(8,2), extended;
+  5yr historical 0.39]; **DSR passes 0.95 at 334wk vs MinTRL 331** (marginal); Friday phase
+  premium persists (all phases positive on 6.5yr).
+- Maker-first execution upside ~+1.75%/yr cost recovery (E2 scenario, contingent on paper fill
+  rates); 85/15 carry sleeve tested and NOT adopted (+0.033 < +0.05 bar).
 - Sizing: **quarter-Kelly**, scale up only on live confirmation.
