@@ -3,8 +3,10 @@
 This is the SHARED WIRING the pillar implementers each left as an integration TODO. It
 composes, in the exact ARCHITECTURE.md §2 order, one full weekly pass:
 
-  UNIVERSE (eligibility + shortability, point-in-time hysteresis FSM)
-    -> SIGNAL  (m=3 lookback ensemble L in {12,14,16}, quintile, vol-scaled, dollar-neutral)
+  UNIVERSE (eligibility + shortability, point-in-time hysteresis FSM; feeds LEVERAGE's
+              capacity inputs + the last-week shortable flag — run_ensemble ranks the panel
+              under its own listed+warmup eligibility, audit X-3)
+  SIGNAL  (m=3 lookback ensemble L in {12,14,16}, quintile, vol-scaled, dollar-neutral)
     -> PORTFOLIO (run_ensemble: equal-weight average of the 3 members' weight paths)
     -> LEVERAGE (LeverageEngine.size_book -> G_t, quarter-Kelly on SR_LCB / sigma_hat)
     -> REGIME (RegimeEngine causal state path -> g_t in [0,1] de-risk multiplier)
@@ -135,8 +137,41 @@ def build_cost_facts(cfg, sigma_price: np.ndarray, n: int) -> CostFacts:
         eta=np.full(n, cfg.impact),          # temporary impact coeff (flat, research scale)
         gamma=np.full(n, cfg.impact * 0.5),  # permanent-impact split (illustrative)
         theta=np.full(n, 2.0 * linear),      # linear round-trip cost per name (§4.2)
-        sigma=np.asarray(sig, float),
+        # solve_trajectory needs sigma per sqrt-HOUR (delta is in hours); realized_vol is a
+        # per-sqrt-DAY statistic -> /sqrt(24) (audit X-4/E-4 units trap, harmless while lambda_=0
+        # = TWAP but dimensionally wrong to leave).
+        sigma=np.asarray(sig, float) / np.sqrt(24.0),
     )
+
+
+# Gate-5 regime windows (RED, dated): the five crypto macro windows docs/EDGE.md §(c)
+# names for the per-regime validation row — "positive across all 5 crypto macro windows
+# (2021 bull, 2022 bear incl. LUNA/FTX, 2023 recovery, 2024 bull, 2025-26)". Calendar-year
+# boundaries; the last window runs to the end of data (audit X-1: Gate 5 previously received
+# the SAME full-sample Sharpe for all five keys, making the regime-breadth gate vacuous).
+REGIME_WINDOWS: dict[str, tuple[str, str]] = {
+    "2021_bull": ("2021-01-01", "2022-01-01"),
+    "2022_bear": ("2022-01-01", "2023-01-01"),
+    "2023_recovery": ("2023-01-01", "2024-01-01"),
+    "2024_bull": ("2024-01-01", "2025-01-01"),
+    "2025_2026": ("2025-01-01", "2099-01-01"),
+}
+
+
+def regime_window_sharpes(net: np.ndarray, week_dates: np.ndarray) -> dict[str, float]:
+    """Per-regime-window annualized Sharpe of the weekly net series (Gate 5, SYSTEM.md §6.1).
+
+    ``week_dates`` — the rebalance-grid dates aligned 1:1 with ``net`` (the ensemble's trailing
+    Friday closes). Slices ONE already-computed series per window; never re-runs the backtest.
+    """
+    import pandas as pd
+
+    dates = pd.DatetimeIndex(week_dates)
+    out: dict[str, float] = {}
+    for key, (lo, hi) in REGIME_WINDOWS.items():
+        mask = (dates >= lo) & (dates < hi)
+        out[key] = metrics.compute(net[np.asarray(mask)]).sharpe_ann
+    return out
 
 
 def _weekly_day_indices(panel: Panel, reb: list[int], step: int) -> list[np.ndarray]:
@@ -194,6 +229,12 @@ def run_pipeline(n_symbols: int = 20, *, verbose: bool = True) -> dict:
     log(f"[PORTFOLIO] run_ensemble -> {len(ens)} weekly books; universe_size band "
         f"[{int(ens.universe_size.min())}..{int(ens.universe_size.max())}]")
     net = ens.net
+    # Gate-5 evidence: slice the ONE ensemble net series by the five dated regime windows
+    # (audit X-1) — the trailing len(net) rebalance dates align 1:1 with the ensemble path.
+    week_dates = panel.dates.to_numpy()[np.array(reb[-len(net):], dtype=int)]
+    regime_sharpes_by_window = regime_window_sharpes(net, week_dates)
+    log("[SYSTEM] Gate-5 per-regime Sharpes: "
+        + ", ".join(f"{k}={v:.2f}" for k, v in regime_sharpes_by_window.items()))
     m = metrics.compute(net)
     log(f"[PORTFOLIO] ensemble net: n={len(net)} wk, Sharpe={m.sharpe_ann:.3f}, "
         f"CAGR={m.cagr_pct:.2f}%, maxDD={m.maxdd_pct:.2f}%, turnover/yr={m.turnover_per_year:.2f}")
@@ -237,6 +278,9 @@ def run_pipeline(n_symbols: int = 20, *, verbose: bool = True) -> dict:
         vol_series = np.array(
             [weekly_btc_vol(reg_inputs.daily_returns, reg_inputs.btc_col, d) for d in wk_days]
         )
+    # NOTE (audit X-5): calibrating on the FIRST HALF then applying the state path over ALL
+    # weeks means the training-half weeks' g_t is in-sample — fine for this integration demo's
+    # diagnostic log line, but NOT a causal overlay result; no gate input reads it.
     half = len(reb) // 2
     disp_train = disp_series[:half][np.isfinite(disp_series[:half])]
     vol_train = vol_series[:half][np.isfinite(vol_series[:half])]
@@ -272,7 +316,8 @@ def run_pipeline(n_symbols: int = 20, *, verbose: bool = True) -> dict:
     # ================================================================= PILLAR 6: EXECUTION
     d_last = reb[-1]
     ranks = [_rank_at(panel, d_last, c) for c in cfgs]
-    vols = realized_vol(panel, d_last, window=8)
+    vols = realized_vol(panel, d_last, window=28)  # match the ensemble book's vol_window=28
+    # (audit X-4: window=8 described a DIFFERENT book than the one settle_week priced)
     ws = [quantile_weights(r, quantile="quintile", weighting="volscaled", gross=1.0, vol=vols)
           for r in ranks]
     w_target_last = np.mean(ws, axis=0)  # equal-weight ensemble target (run_ensemble semantics)
@@ -294,6 +339,9 @@ def run_pipeline(n_symbols: int = 20, *, verbose: bool = True) -> dict:
                              impact=cfgs[1].impact)
     log(f"[COST] flat round-trip friction = {rt * 1e4:.1f} bp")
 
+    # NOTE (audit X-6): this deflates over the m=3 deployed band only; the honest multiplicity
+    # of the ORIGINAL research search (7-lookback grid x quantile x weighting) lives in the other
+    # scripts' trial ledger — this pipeline's DSR is a wiring check, not the recorded evidence.
     dsr = deflated_sharpe(net, trial_sharpes, n_trials_effective=float(len(trial_sharpes)),
                           k_distinct=len(trial_sharpes))
     wf = purged_walkforward(net, n_folds=3, embargo_weeks=1)
@@ -316,8 +364,7 @@ def run_pipeline(n_symbols: int = 20, *, verbose: bool = True) -> dict:
         ledger_as_of=0,
         frac_pos=float(cpcv_res.path_summary.frac_pos),
         pbo=pbo_ev,
-        regime_sharpes={k: metrics.compute(run(panel, cfgs[1]).net).sharpe_ann for k in
-                        ("2021_bull", "2022_bear", "2023_recovery", "2024_bull", "2025_2026")},
+        regime_sharpes=regime_sharpes_by_window,
         cost_stress=CostStressEvidence(
             stressed_sharpe_ann=stress.stressed_sharpe,
             baseline_sharpe_ann_lower=0.8,

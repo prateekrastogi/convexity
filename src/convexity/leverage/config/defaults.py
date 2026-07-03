@@ -62,7 +62,7 @@ class LeverageDefaults:
 
     # ---- CUSUM promotion ratchet (§6.3, Page 1954 / Hawkins & Olwell 1998) ----
     k_ref: float = 0.25            # CUSUM reference offset in standardized-surprise units (§3, §6.3)
-    h_promote: float = 5.0         # decision threshold: ARL_0≈52wk conservative margin (§3, §6.3)
+    h_promote: float = 5.0         # delivers ARL_0≈142wk (MC-verified) above the ≥52wk floor (§3, §6.3)
     n_min_weeks: int = 52          # minimum elapsed live-time floor before promotion eligible (§3)
     arl_0_target: float = 52.0     # target in-control ARL: ~1 false promotion / yr (§3, §6.3)
     # demote_z_threshold = -k_ref: the CUSUM ratchet's DOWN-STEP (de-lever) threshold, now anchored

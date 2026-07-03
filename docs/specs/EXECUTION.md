@@ -267,7 +267,7 @@ divergence has since been corrected in both files, and `{12, 14, 16}` is now the
 deployed anywhere in the repo.
 
 This ensemble is deployed specifically because SYSTEM.md §4.4's PBO finding
-(`PBO=0.357`, range `[0.31, 0.47]` across `(N,k_test)` choices, `L=12` in-sample-best on 21/28 CPCV
+(`PBO=0.393`, range `[0.31, 0.47]` across `(N,k_test)` choices, `L=12` in-sample-best on 21/28 CPCV
 splits — cited fully in §14) sits in the "deploy the ensemble, not a point" zone, not the "clean
 pass, deploy the single best config" zone. Concretely, per SIGNAL §4.2–4.4, the ensemble is resolved
 **upstream of PORTFOLIO and upstream of this pillar**: `ensemble_momentum_signal` computes a
@@ -423,23 +423,38 @@ general-λ closed form as a black box, this spec derives the small-`κΔ` expans
 §2.4's own trajectory (§2.1 established `Δ ≪ 7 days` is the operative small parameter, so this
 order is exactly the regime EXECUTION operates in): `Var[C]* = σ² ∫₀^Δ X(t)² dt`. Substituting
 `X(t)` and expanding `sinh(κ(Δ−t))²/sinh(κΔ)²` in powers of `κΔ` (a direct Taylor expansion of the
-integrand, integrated term-by-term — verified symbolically, not asserted):
+integrand, integrated term-by-term; the closed ratio is `Var(κ)/Var(0) = 3·(sinh(2κΔ) − 2κΔ) /
+(4κΔ·sinh²(κΔ))`, whose expansion — verified BOTH by hand from `sinh(2z) − 2z = (4z³/3)(1 + z²/5 +
+2z⁴/105 + …)` and `4z·sinh²z = 4z³(1 + z²/3 + 2z⁴/45 + …)`, AND by numerical quadrature
+((1−ratio)/z² → 0.13333 = 2/15 as z→0) — is:
 
 ```
-Var[C]*(κ)  =  x² σ² Δ/3 · [ 1 − (17/45)·(κΔ)² + O((κΔ)⁴) ]      (leading-order κ-dependent
+Var[C]*(κ)  =  x² σ² Δ/3 · [ 1 − (2/15)·(κΔ)² + (2/105)·(κΔ)⁴ − … ]   (leading-order κ-dependent
                                                                     correction to the κ=0 TWAP
-                                                                    variance x²σ²Δ/3 of §2.4;
-                                                                    the 17/45 coefficient is the
-                                                                    exact result of integrating
-                                                                    sinh(κ(Δ−t))²/sinh(κΔ)² over
-                                                                    [0,Δ] and Taylor-expanding in
-                                                                    κΔ — shown here, not quoted)
+                                                                    variance x²σ²Δ/3 of §2.4.
+                                                                    NOTE: an earlier revision of
+                                                                    this spec displayed 17/45 here
+                                                                    and called it "verified
+                                                                    symbolically" — that value was
+                                                                    WRONG by a factor 17/6; the
+                                                                    audit's quadrature probe and
+                                                                    the hand expansion above both
+                                                                    give 2/15)
 ```
 
 i.e. increasing `κ` (more front-loading) REDUCES `Var[C]*` below the TWAP baseline, exactly as
 §2.4's qualitative front-loading discussion states, and the reduction is second-order in `κΔ` with
-an explicit, verified coefficient (`17/45`) — a closed-form, checkable statement of "how much" that
+an explicit, verified coefficient (`2/15`) — a closed-form, checkable statement of "how much" that
 the earlier draft's prose-only front-loading claim did not provide.
+
+**Domain of validity (stated, not implied).** The expansion is exact as `κΔ → 0` and within ~1% for
+`bracket ≤ 0.05` (where `κΔ = sqrt(7.5·bracket) ≤ 0.61`); near `bracket → 1` it is materially
+OPTIMISTIC (`κΔ` is then O(1)–O(2), outside the small-`z` regime — an end-to-end probe at
+`bracket = 0.72` showed the linearized `κ` violating the stated budget ~2.9x even with the correct
+coefficient). A book that needs a tight budget at large bracket must solve `Var(κ) = budget`
+EXACTLY by bisection on the monotone-decreasing closed ratio above (a ~20-line exact solve,
+documented option — `lambda_from_budget` implements the expansion with the small-bracket caveat in
+its docstring).
 
 **Setting `λ` from a stated risk budget, worked.** Let `V_week = Σ_i w_target,i² σ_i²` be one week's
 target-book return variance (a diagonal approximation, ignoring cross-name correlation for this
@@ -453,9 +468,9 @@ draft implicitly did by using only the `κ=0` TWAP variance, would make the cons
 
 ```
 Var[C_i]*(κ_i)  ≤  β · w_target,i² · σ_i²                                       [per-name risk-budget constraint]
-(x_i² σ_i² Δ/3)·[1 − (17/45)(κ_i Δ)²]  ≤  β · w_target,i² · σ_i²                [substituting the verified
+(x_i² σ_i² Δ/3)·[1 − (2/15)(κ_i Δ)²]  ≤  β · w_target,i² · σ_i²                 [substituting the verified
                                                                                    correction; σ_i² cancels]
-⇒  κ_i²  ≥  (45 / (17 Δ²)) · [ 1 − (3β/Δ)·(w_target,i/x_i)² ]                   [solved for κ_i² at equality
+⇒  κ_i²  ≥  (15 / (2 Δ²)) · [ 1 − (3β/Δ)·(w_target,i/x_i)² ]                    [solved for κ_i² at equality
                                                                                    — verified algebraically —
                                                                                    gives the MINIMUM κ_i that
                                                                                    satisfies the budget; larger
@@ -535,15 +550,15 @@ eta_i                ~ COST's fitted crypto-major k_amihud * sqrt(Amihud_i)  [TE
 
 Applying the kappa_i^2 solve above at w_target,i/x_i = 1/0.30 ~ 3.33:
 
-  kappa_i^2  >=  (45 / (17 * Delta^2)) * [ 1 - (3*0.01/Delta) * 3.33^2 ]
+  kappa_i^2  >=  (15 / (2 * Delta^2)) * [ 1 - (3*0.01/Delta) * 3.33^2 ]
 
   with Delta in the SAME units as sigma_i is quoted in (weekly-equivalent fraction-of-week units, i.e.
   Delta/7days = 2h/168h ~ 0.0119 weeks) so the constraint is dimensionally consistent with Section 2.4's
   sigma^2 being a PER-WEEK-EQUIVALENT price variance rate:
 
-  kappa_i^2  >=  (45 / (17 * 0.0119^2)) * [ 1 - (0.03/0.0119) * 11.09 ]
-             =   18,650 * [ 1 - 27.98 ]                             [DERIVED, from the tagged inputs above]
-             =   18,650 * (-26.98)  <  0
+  kappa_i^2  >=  (15 / (2 * 0.0119^2)) * [ 1 - (0.03/0.0119) * 11.09 ]
+             =   52,960 * [ 1 - 27.98 ]                             [DERIVED, from the tagged inputs above]
+             =   52,960 * (-26.98)  <  0
 
 Since the bracket is negative, the constraint is satisfied by kappa_i = 0 (pure TWAP) — this
 representative liquid-core name, at this illustrative x_i/w_target,i ~0.30 and beta=0.01, lands in
@@ -878,7 +893,7 @@ The post-execution honest Sharpe (the weekly net-return series AFTER live shortf
 §7 below) is validated with the SAME machinery `src/convexity/system/xsec_validate.py` and `cpcv.py` already
 apply to the frictionless backtest series: `convexity.system.validate.deflated.DeflatedSharpe` — PSR
 per SYSTEM §5.2's series/units contract (the `path_returns`/`ppy`/`SR_pp`/`n_obs` pinned inputs) and
-§5.3's worked DSR example (Vintage-2 real-Amihud-cost numbers: `DSR=0.807`, `PSR=0.994` against
+§5.3's worked DSR example (Vintage-2 real-Amihud-cost numbers: `DSR=0.796`, `PSR=0.988` against
 `SR*=0`), DSR gate per SYSTEM §6.1's promotion conjunction (`DSR ≥ 0.95` RED threshold) — and
 `convexity.system.validate.cpcv.SystemCPCV` per SYSTEM §4.1–§4.2 (combinatorial purged CV, `N=8`
 groups / `k=2` test groups / 28 paths / 1-week embargo — the exact configuration `docs/EDGE.md`
@@ -1059,7 +1074,7 @@ re-run, on the execution-adjusted series:
   retuning (via the RED governance path, §10 — never a per-instrument tune on realized P&L).
 - **DSR** (`convexity.system.validate.deflated.DeflatedSharpe`) — the execution-adjusted series is
   expected to fail DSR for the SAME reason the frictionless series does (`docs/EDGE.md` §d:
-  "DSR fails ONLY on insufficient track record... PSR~0.994 is high... a track-length problem, not a
+  "DSR fails ONLY on insufficient track record... PSR~0.988 is high... a track-length problem, not a
   deflation rejection") — i.e. this pillar's job is to confirm execution does not turn a
   track-length-limited PASS-pending series into a genuinely-deflated FAIL. A DSR outcome that
   degrades from "track-length-limited" to "fails on `SR_pp` itself" is a signal execution cost is
@@ -1555,7 +1570,7 @@ section states the Protocol-level shape only, matching `core/protocols.py`'s own
   weekly win rate (~60%), CPCV (N=8/k=2/28 paths/1-week embargo, mean path Sharpe 0.91,
   `frac_pos` 0.85–1.00), and the universe-size / liquidity-weighting findings this spec repeatedly
   grounds its design choices in. **PBO is reported as a RANGE, per SYSTEM.md §4.4's Invariant
-  PBO-RANGE, never as a bare point:** PBO = 0.357 at the committed `(N=8, k_test=2)` CPCV
+  PBO-RANGE, never as a bare point:** PBO = 0.393 at the committed `(N=8, k_test=2)` CPCV
   configuration, but **PBO ∈ [0.31, 0.47]** across alternative `(N, k_test)` partitions (SYSTEM
   §4.4), with `L=12` the in-sample-best lookback on **21 of 28 splits** yet never falling below the
   ~0.2 clean-pass relative-rank floor out-of-sample. This is the exact finding SYSTEM §4.4's

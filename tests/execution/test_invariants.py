@@ -235,17 +235,19 @@ def test_twap_limit_recovery():
 
 
 def test_lambda_from_budget_realizes_the_beta_to_lambda_derivation():
-    # §2.5 (gap-close): lambda is DERIVED from a stated variance budget beta via the verified
-    # closed-form kappa_i^2 = (45/(17*Delta^2))*[1 - (3*beta/Delta)*(w_target/x)^2] and
+    # §2.5 (gap-close): lambda is DERIVED from a stated variance budget beta via the closed form
+    # kappa_i^2 = (15/(2*Delta^2))*[1 - (3*beta/Delta)*(w_target/x)^2] and
     # lambda = kappa^2 * eta / sigma^2 — never a raw injected scalar, never fitted on P&L. This test
-    # pins the 17/45 coefficient (it fails if the derivation were rescaled) and the edge case.
+    # pins the 2/15 expansion coefficient (audit-corrected: an earlier revision shipped 17/45,
+    # wrong by 17/6 — see test_solved_trajectory_respects_the_variance_budget for the NON-circular
+    # check that the solved trajectory actually honors the budget) and the edge case.
     eta, sigma, delta, beta = 2e-4, 0.004, 0.0119, 0.01
     # a name with a LARGE required trade relative to its target weight (illiquid-tail regime): the
     # bracket is positive, kappa > 0 binds, and lambda recovers the exact closed form.
     x_i, w_i = 0.05, 0.02  # w_target/x = 0.4 -> (w/x)^2 = 0.16, small enough to keep bracket > 0
     bracket = 1.0 - (3.0 * beta / delta) * (w_i / x_i) ** 2
     assert bracket > 0.0  # this regime genuinely needs front-loading
-    exp_kappa_sq = (45.0 / (17.0 * delta * delta)) * bracket
+    exp_kappa_sq = (15.0 / (2.0 * delta * delta)) * bracket
     exp_lambda = exp_kappa_sq * eta / (sigma * sigma)
     got = lambda_from_budget(x_i, w_i, delta=delta, beta=beta, eta_i=eta, sigma_i=sigma)
     assert got == pytest.approx(exp_lambda, rel=1e-12)
@@ -288,3 +290,64 @@ def test_shipped_lambda_default_is_the_anchored_twap_limit():
     injected = lambda_from_budget(0.05, 0.02, delta=0.0119, beta=0.01, eta_i=2e-4, sigma_i=0.004)
     assert injected > 0.0
     assert ExecutionDefaults(rho=1.0, band_c=0.1, lambda_=injected).lambda_ == injected
+
+
+def test_solved_trajectory_respects_the_variance_budget():
+    """NON-circular §2.5 check (audit E-1 test-gap): the trajectory solved from lambda_from_budget's
+    lambda must ACTUALLY deliver Var[C] <= beta * w_target^2 * sigma^2 (the stated budget), within
+    the small-bracket expansion tolerance — and the OLD 17/45 coefficient's lambda must violate the
+    same bound, so this test cannot pass by construction."""
+    delta_wk = 2.0 / 168.0  # 2h window as a fraction of a week (the §2.5 units convention)
+    sigma_wk = 0.04  # per-sqrt-week price vol
+    eta = 2e-4
+    w, x = 0.02, 0.06
+    # choose beta so the bracket is small (0.05) — inside the expansion's stated domain of validity.
+    beta = 0.95 * delta_wk / (3.0 * (w / x) ** 2)
+    lam = lambda_from_budget(x, w, delta=delta_wk, beta=beta, eta_i=eta, sigma_i=sigma_wk)
+    res = solve_trajectory(x, delta=delta_wk, n=50, sigma_i=sigma_wk, eta_i=eta, gamma_i=0.0,
+                           lambda_i=lam)
+    budget = beta * w * w * sigma_wk * sigma_wk
+    assert res.var_cost <= budget * 1.05  # measured 1.0345 at bracket=0.05
+    # the OLD wrong coefficient (45/17 in kappa^2, i.e. lambda scaled by (45/17)/(15/2)) violates:
+    lam_old = lam * (45.0 / 17.0) / (15.0 / 2.0)
+    res_old = solve_trajectory(x, delta=delta_wk, n=50, sigma_i=sigma_wk, eta_i=eta, gamma_i=0.0,
+                               lambda_i=lam_old)
+    assert res_old.var_cost > budget * 1.05  # measured 1.0662 — fails the same bound
+
+
+def test_tiny_lambda_falls_back_to_exact_twap_not_nan():
+    """Audit E-2: 0 < kappa*tau <~ 1.5e-8 used to produce an all-NaN schedule (acosh underflow ->
+    0/0). The TWAP fallback must catch the whole underflow region; schedules stay finite and sum
+    to x exactly."""
+    for lam in (1e-18, 1e-16, 1e-14, 1e-10):
+        res = solve_trajectory(0.05, delta=2.0, n=10, sigma_i=0.004, eta_i=2e-4, gamma_i=0.0,
+                               lambda_i=lam)
+        assert np.all(np.isfinite(res.schedule)), f"non-finite schedule at lambda={lam}"
+        assert res.schedule.sum() == pytest.approx(0.05, abs=1e-15)
+
+
+def test_hours_valued_delta_rejected_by_lambda_from_budget():
+    """Audit E-4: lambda is not unit-invariant; passing delta_hours (e.g. 2.0) instead of the
+    week-fraction 2/168 silently mis-sizes lambda ~121x. The guard turns the trap into an error."""
+    with pytest.raises(ValueError, match="FRACTION of a week"):
+        lambda_from_budget(0.05, 0.02, delta=2.0, beta=0.01, eta_i=2e-4, sigma_i=0.004)
+
+
+def test_gamma_positive_uses_eta_tilde():
+    """Audit E-8: AC 2001 eq. 12-14 use eta_tilde = eta - gamma*tau/2, not raw eta, in kappa and
+    the temporary cost. gamma=0 (shipped default) is numerically identical to the old behavior."""
+    import math as _math
+    eta, sigma, lam = 2e-4, 0.004, 5.0
+    r0 = solve_trajectory(0.05, delta=2.0, n=10, sigma_i=sigma, eta_i=eta, gamma_i=0.0,
+                          lambda_i=lam)
+    assert r0.kappa == pytest.approx(_math.sqrt(lam * sigma**2 / eta), rel=1e-15)
+    tau = 2.0 / 10
+    gamma = 1e-5
+    rg = solve_trajectory(0.05, delta=2.0, n=10, sigma_i=sigma, eta_i=eta, gamma_i=gamma,
+                          lambda_i=lam)
+    assert rg.kappa == pytest.approx(_math.sqrt(lam * sigma**2 / (eta - 0.5 * gamma * tau)),
+                                     rel=1e-15)
+    # eta_tilde <= 0 (permanent impact too large for the slice) is rejected, never silently solved.
+    with pytest.raises(ValueError, match="eta_tilde"):
+        solve_trajectory(0.05, delta=2.0, n=10, sigma_i=sigma, eta_i=1e-6, gamma_i=1e-5,
+                         lambda_i=lam)

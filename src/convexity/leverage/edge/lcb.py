@@ -99,12 +99,16 @@ def sr_lcb_t(
         return EdgeLCB(sr_lcb=0.0, ci_low=float("nan"), ci_high=float("nan"),
                        dsr_passed=False, gated_to_zero=True)
 
-    # --- Step 2: the block-bootstrap CI (Invariant K-CI) — the REAL robustness function, RED params
+    # --- Step 2: the block-bootstrap CI (Invariant K-CI) — the REAL robustness function, RED params.
+    # block_bootstrap_ci is TWO-SIDED (alpha/2 per tail); the spec's bootstrap_ci_level=0.90 is a
+    # ONE-SIDED 90% lower bound = the 10th percentile = a two-sided 80% CI's lower bound
+    # (LEVERAGE.md §3: "one-sided 90% ... same tail mass as a two-sided 80%"). Passing 0.90
+    # directly would take the 5th percentile — systematically BELOW the spec'd bound.
     ci_low, ci_high = block_bootstrap_ci(
         r,
         block_length=defaults.bootstrap_block_length,
         n_boot=defaults.bootstrap_n,
-        ci_level=defaults.bootstrap_ci_level,
+        ci_level=2.0 * defaults.bootstrap_ci_level - 1.0,
         seed=defaults.bootstrap_seed,
     )
 

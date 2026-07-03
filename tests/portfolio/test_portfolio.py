@@ -5,6 +5,7 @@ from __future__ import annotations
 import inspect
 
 import numpy as np
+import pytest
 
 from convexity.portfolio.portfolio import (
     _leg_count,
@@ -161,3 +162,18 @@ def test_liqcap_lowers_concentration_vs_volscaled():
         return 1.0 / np.sum((a / a.sum()) ** 2)
 
     assert _breadth(w_cap) > _breadth(w_plain)  # long-leg breadth rises under the cap
+
+
+def test_subnormal_vol_cannot_leak_nan_weights():
+    """Audit PF-2: a subnormal vol (>0, finite, < ~1e-308) overflows 1/vol to inf -> inf/inf = NaN
+    weight leaking into the book and breaking dollar neutrality. The output-finiteness guard routes
+    it into the existing leg-mean fallback. Unreachable from real closes (constant closes give
+    exactly 0, which was already guarded) — this pins the guard against pathological inputs."""
+    rank = np.array([0.9, 0.8, 0.7, 0.3, 0.2, 0.1])
+    vol = np.array([1e-320, 0.02, 0.025, 0.03, 0.04, 0.05])
+    with np.errstate(over="ignore"):
+        w = quantile_weights(rank, quantile="quintile", weighting="volscaled", gross=1.0, vol=vol)
+    assert np.all(np.isfinite(w))
+    assert w.sum() == pytest.approx(0.0, abs=1e-12)  # dollar-neutral
+    assert w[w > 0].sum() == pytest.approx(0.5, abs=1e-12)
+    assert w[w < 0].sum() == pytest.approx(-0.5, abs=1e-12)

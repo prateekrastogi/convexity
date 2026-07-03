@@ -1091,7 +1091,7 @@ is `src/convexity/system/xsec_validate.py::deflated_sharpe`'s direct input into
 `src/convexity/system/validate/deflated.py::DeflatedSharpe`. `SYSTEM.md
 §5.3–5.5` derives, against these same numbers, that DSR currently fails
 **only on insufficient track record, not on a low point-estimate**:
-`PSR≈0.994` (against `SR*=0`) is high — the *sign* of the edge is not in
+`PSR≈0.988` (against `SR*=0`) is high — the *sign* of the edge is not in
 serious doubt — while `n_obs≈258` weekly observations (~5 years) falls
 short of the multi-testing-inflated `MinTRL` implied by the size of the
 lookback/quantile/weighting search (`SYSTEM.md §5.5`). This is a
@@ -1175,9 +1175,13 @@ component scales — `funding_cashflow_A` is untouched by the stress scenario
   universe upstream, per `src/convexity/panel/sleeve.py`) — COST does not invent
   a liquidity floor independent of the universe filter; it inherits it.
 - **`Amihud_i` is undefined (fewer than a minimum window of trading days).**
-  Falls back to the class-level flat research constant
-  (`src/convexity/panel/sleeve.py::CRYPTO_FRICTION.impact`), never to zero and
-  never to an extrapolated/fitted value from a thin sample (P5).
+  Falls back to a CONSERVATIVE class-worst constant, `2x
+  src/convexity/panel/sleeve.py::CRYPTO_FRICTION.impact` — never to zero, never
+  to an extrapolated/fitted value from a thin sample, and never to the MEDIAN
+  anchor itself (P5; audit C-2: a name whose Amihud cannot be measured is
+  disproportionately a thin/new listing, likelier MORE expensive than the
+  median liquid name the anchor was calibrated on — the earlier median-anchor
+  fallback was neutral where the spec demands conservative).
 - **A name is selected into a short leg but cannot actually be borrowed
   (unshortable).** Resolved concretely in §7 (not deferred): COST's model
   returns `math.inf` for `round_trip_friction_i`, never `NaN` and never a
@@ -1300,7 +1304,7 @@ component scales — `funding_cashflow_A` is untouched by the stress scenario
   this spec's unshortable-name resolution (§7) follows.
 - `docs/specs/LEVERAGE.md` — the source of the `G` (gross exposure) /
   `R_{t+1}` sizing notation referenced in the §0 notation bridge, and of the
-  PSR≈0.994/`n_obs≈258`/MinTRL restatement this spec's §8.4 caveat mirrors.
+  PSR≈0.988/`n_obs≈258`/MinTRL restatement this spec's §8.4 caveat mirrors.
 - `docs/ARCHITECTURE.md` — has since been updated (a subsequent promotion
   refactor moved the xsec-momentum pivot's actual module map into
   `src/convexity/{panel,universe,signal,portfolio,leverage,cost,execution,

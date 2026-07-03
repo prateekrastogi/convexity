@@ -172,7 +172,11 @@ def run(panel: Panel, cfg: XSecConfig) -> XSecResult:
             rank, quantile=cfg.quantile, weighting=cfg.weighting, gross=cfg.gross, vol=vol
         )
         res: WeekResult
-        res, w_end = settle_week(
+        # settle_week's contract: w_prev = the PRIOR REBALANCE'S TARGET weights, which it drifts
+        # internally over the elapsed week. Feeding back the returned w_end (ALREADY drifted)
+        # double-drifted the carried weights -- w_prev*(1+r)^2 -- doubling turnover's drift
+        # component and overstating cost every week (audit PF-1, PARITY: fix improves baselines).
+        res, _ = settle_week(
             panel.close, panel.funding, panel.listed,
             d0=d, d1=d + step, w_target=w_target, w_prev=w_prev, friction=friction,
         )
@@ -183,7 +187,7 @@ def run(panel: Panel, cfg: XSecConfig) -> XSecResult:
         trn.append(res.turnover)
         cst.append(res.cost)
         usz.append(int(np.isfinite(rank).sum()))
-        w_prev = w_end
+        w_prev = w_target  # prior TARGET, per settle_week's contract (audit PF-1)
         d += step
 
     return XSecResult(
@@ -255,7 +259,11 @@ def run_book(
             rank, quantile=cfg.quantile, weighting=cfg.weighting, gross=cfg.gross, vol=vol
         )
         res: WeekResult
-        res, w_end = settle_week(
+        # settle_week's contract: w_prev = the PRIOR REBALANCE'S TARGET weights, which it drifts
+        # internally over the elapsed week. Feeding back the returned w_end (ALREADY drifted)
+        # double-drifted the carried weights -- w_prev*(1+r)^2 -- doubling turnover's drift
+        # component and overstating cost every week (audit PF-1, PARITY: fix improves baselines).
+        res, _ = settle_week(
             panel.close, panel.funding, panel.listed,
             d0=d, d1=d + step, w_target=w_target, w_prev=w_prev, friction=friction,
         )
@@ -280,7 +288,7 @@ def run_book(
         af_rows.append(f_wk)
         contrib_rows.append(contrib)
         mkt_rows.append(mkt_r)
-        w_prev = w_end
+        w_prev = w_target  # prior TARGET, per settle_week's contract (audit PF-1)
         d += step
 
     dt = pd.DatetimeIndex(dates)
@@ -494,7 +502,9 @@ def run_ensemble(panel: Panel, cfgs: list[XSecConfig]) -> XSecResult:
     for j in range(w_avg.shape[0]):
         d = int(ref_rows[j])
         res_j: WeekResult
-        res_j, w_prev = settle_week(
+        # w_prev = the prior AVERAGED TARGET (settle_week drifts it internally; feeding the
+        # returned w_end back double-drifted it -- audit PF-1).
+        res_j, _ = settle_week(
             panel.close, panel.funding, panel.listed,
             d0=d, d1=d + step, w_target=w_avg[j], w_prev=w_prev, friction=friction,
         )
@@ -503,6 +513,7 @@ def run_ensemble(panel: Panel, cfgs: list[XSecConfig]) -> XSecResult:
         fnd.append(res_j.funding)
         trn.append(res_j.turnover)
         cst.append(res_j.cost)
+        w_prev = w_avg[j]  # prior averaged TARGET, per settle_week's contract (audit PF-1)
 
     # §11 E5: the ensemble is only live where EVERY member is warm/eligible, so over the common
     # suffix the reported eligible count is the conservative element-wise MIN across members

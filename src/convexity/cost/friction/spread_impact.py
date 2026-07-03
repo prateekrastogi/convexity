@@ -150,12 +150,15 @@ class SpreadImpactModel:
         surfaces below make ``notional_leg`` REQUIRED so this convenience default can never silently
         misprice a live trade at the fixed calibration size — the footgun the review flagged).
         If ``Amihud_i`` is undefined (NaN / non-positive: fewer than a minimum window of trading days),
-        falls back to the class flat research constant ``CRYPTO_FRICTION.impact`` — never zero, never
-        an extrapolated thin-sample fit (COST.md Section 10, P5).
+        falls back to a CONSERVATIVE class-worst constant ``2x CRYPTO_FRICTION.impact`` — never zero,
+        never an extrapolated thin-sample fit, and never the MEDIAN anchor (audit C-2: a name whose
+        Amihud cannot be measured is disproportionately a thin/new listing, i.e. likelier MORE
+        expensive than the median liquid name; pricing it at the median anchor was neutral, not
+        conservative — COST.md Section 10, P5).
         """
         notional = self.anchor_notional if notional_leg is None else notional_leg
         if not (amihud_i > 0.0 and math.isfinite(amihud_i)):
-            return CRYPTO_FRICTION.impact
+            return 2.0 * CRYPTO_FRICTION.impact
         return self.k_amihud * math.sqrt(amihud_i * notional)
 
     def round_trip_friction_i(

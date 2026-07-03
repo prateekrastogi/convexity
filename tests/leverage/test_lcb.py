@@ -35,7 +35,9 @@ def test_k_ci_bit_for_bit_matches_block_bootstrap_ci_at_fixed_seed():
         r,
         block_length=d.bootstrap_block_length,
         n_boot=d.bootstrap_n,
-        ci_level=d.bootstrap_ci_level,
+        # mirror lcb.py's one-sided->two-sided conversion (LEVERAGE.md §3: one-sided 90% lower
+        # bound = 10th percentile = two-sided 80% lower bound), so bit-for-bit still holds.
+        ci_level=2.0 * d.bootstrap_ci_level - 1.0,
         seed=d.bootstrap_seed,
     )
     assert edge.ci_low == ci_low  # bit-for-bit (same seed, same params)
@@ -112,3 +114,30 @@ def test_sr_lcb_bypass_with_raw_scalar_is_impossible():
     d = LeverageDefaults()
     with pytest.raises((ValueError, TypeError, IndexError)):
         sr_lcb_t(0.98, np.array([1.0, 0.9, 0.8]), d)  # a raw Sharpe, not a series
+
+
+def test_ci_lower_bound_is_the_tenth_percentile():
+    """LEVERAGE.md §3: the SR_LCB CI is a ONE-SIDED 90% lower bound = the 10th percentile of the
+    bootstrap Sharpe distribution (same tail mass as a two-sided 80% CI) — NOT the 5th percentile
+    a raw two-sided 90% call would produce (the audit-found L-1 defect this test pins)."""
+    d = LeverageDefaults()
+    r = _passing_series()
+    trials = np.array([1.0, 0.9, 0.8, 1.1, 0.95])
+    edge = sr_lcb_t(r, trials, d)
+    assert edge.dsr_passed
+
+    # reconstruct the bootstrap Sharpe distribution exactly as robustness.block_bootstrap_ci does
+    rng = np.random.default_rng(d.bootstrap_seed)
+    n = r.size
+    bl = d.bootstrap_block_length
+    n_blocks = -(-n // bl)
+    starts_pool = n - bl + 1
+    stats = np.empty(d.bootstrap_n)
+    for b in range(d.bootstrap_n):
+        starts = rng.integers(0, starts_pool, size=n_blocks)
+        sample = np.concatenate([r[s : s + bl] for s in starts])[:n]
+        stats[b] = sample.mean() / sample.std(ddof=1)
+    tenth = float(np.quantile(stats, 0.10))
+    fifth = float(np.quantile(stats, 0.05))
+    assert edge.ci_low == tenth  # the spec'd one-sided 90% bound
+    assert edge.ci_low != fifth  # the L-1 defect (raw two-sided 90%) would land here

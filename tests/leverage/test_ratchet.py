@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
 from convexity.leverage.config.defaults import LeverageDefaults
 from convexity.leverage.ratchet.cusum import (
@@ -25,10 +26,14 @@ def test_cusum_step_is_one_sided_and_floored_at_zero():
     assert cusum_step(1.0, 1.0, 0.25) == 1.75
 
 
-def test_arl0_closed_form_matches_hawkins_olwell():
-    # §6.3: ARL_0 ≈ exp(2·k_ref·h)/(2·k_ref²). At the v1 (0.25, 5.0) this sits ABOVE the ~52 target
-    # (h_promote is set conservatively above the closed-form solution, §3).
+def test_arl0_closed_form_matches_corrected_siegmund_and_mc():
+    # §6.3: corrected-Siegmund ARL_0 with b = h + 1.166. At the v1 (0.25, 5.0) this sits ABOVE
+    # the >=52wk floor (h_promote is set conservatively above the closed-form solve, §3).
     arl = arl0_closed_form(0.25, 5.0)
+    # Corrected-Siegmund form vs 100k-run MC (audit: 141.7; independent 30k-run: 141.8) — the
+    # closed form must sit within 5% of the pinned MC truth. The old uncorrected exp(2kh)/(2k^2)
+    # form gave 97.5 (45% understatement); this pin catches any regression to it.
+    assert arl == pytest.approx(141.7, rel=0.05)
     assert arl > 52.0  # conservative margin above target (§3)
     # sanity: the closed form is monotone increasing in h_promote.
     assert arl0_closed_form(0.25, 6.0) > arl

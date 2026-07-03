@@ -113,7 +113,9 @@ This is the whole reason cross-sectional backtests lie, so the discipline was he
 - **Breadth / universe size** — net edge peaks around **60–75 names**; 100 does not honestly beat
   50, and 500 is *worse* (dilution + illiquid-tail cost). Bigger is not better here.
 - **Weighting** — plain vol-scaled beats liquidity-capped net of cost.
-- **CPCV / PBO** — survives combinatorial purged cross-validation; **PBO ≈ 0.36** (moderate). The
+- **CPCV / PBO** — survives combinatorial purged cross-validation; **PBO ≈ 0.39** (moderate;
+  re-measured after the engine turnover-drift fix — pre-fix records read 0.36/0.979/0.906,
+  post-fix 0.39/0.987/0.914; frac_pos 1.00 and haircut 0.07 unchanged). The
   takeaway drives the deployment rule: **deploy the lookback BAND, not one L**, because the single
   best L is partition-fragile. **`frac_pos` (fraction of positive OOS paths) is the robust signal;
   the p05 tail is partition-fragile** — trust breadth of positivity, not the worst-partition tail.
@@ -124,7 +126,7 @@ This is the whole reason cross-sectional backtests lie, so the discipline was he
 
 - **Young track record (~5yr).** DSR *fails on length* — there simply are not enough weekly obs to
   clear MinTRL — even though PSR is high. This is the single biggest honesty flag.
-- **Moderate PBO (0.36).** Real edge, but not a slam-dunk; overfit risk is non-trivial → the
+- **Moderate PBO (0.39).** Real edge, but not a slam-dunk; overfit risk is non-trivial → the
   band-not-a-point rule is mandatory, not optional.
 - **Crypto-specific.** The edge does NOT extend to equities or commodities (tested; those sleeves
   were directional-grade only). This is a crypto cross-sectional dispersion premium, full stop.
@@ -151,5 +153,5 @@ This is the whole reason cross-sectional backtests lie, so the discipline was he
 - Directional gross R ≈ **0** (dead everywhere).
 - Funding carry **+12.9%/yr** gross / **~70%** structural DD (income-only).
 - Xsec honest net Sharpe **~0.8–1.0**, CAGR **~20–25%** @100% gross, maxDD **~25%**, **~60%** weeks +.
-- Universe sweet spot **~60–75** names; lookback band **12–16d**; **PBO 0.36**; ~5yr sample.
+- Universe sweet spot **~60–75** names; lookback band **12–16d**; **PBO 0.39**; ~5yr sample.
 - Sizing: **quarter-Kelly**, scale up only on live confirmation.

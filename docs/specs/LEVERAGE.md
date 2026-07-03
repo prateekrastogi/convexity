@@ -77,7 +77,7 @@ already built.
 CONFIDENCE-ADJUSTED edge, never the raw point-estimate Sharpe.** Plug-in Kelly
 computed from a backtest's raw sample mean overstates the safe fraction under
 parameter uncertainty (Section 2.3). This system's own DSR fails on track-record
-length (PSR≈0.994 is high, but `n_obs=258` weekly observations over ~5yr is
+length (PSR≈0.988 is high, but `n_obs=258` weekly observations over ~5yr is
 short relative to the multi-testing-inflated MinTRL — a track-length problem,
 not a deflation rejection; **SYSTEM §5.3–§5.5**, gate branch 2b of **SYSTEM
 §6.1**). LEVERAGE therefore sizes off a **lower-confidence-bound Sharpe pulled
@@ -381,7 +381,7 @@ system's own Sharpe estimate carries a wide block-bootstrap CI (**SYSTEM
 §7.4/Invariant BLOCK-LEN** for the block-length derivation, **§8.1** for the
 robustness suite that runs it) and the DSR gate is known to fail on
 track-record length even with a high point-estimate PSR (**SYSTEM
-§5.3–§5.5**; **PSR≈0.994** cited in the EMPIRICAL BASELINE, yet `n_obs≈258`
+§5.3–§5.5**; **PSR≈0.988** cited in the EMPIRICAL BASELINE, yet `n_obs≈258`
 weekly observations sits below the multi-testing-inflated `MinTRL` — SYSTEM's
 own worked example at §5.5 computes `MinTRL ≈ 824` weeks against `n_obs=258`,
 i.e. `n_obs < MinTRL` by roughly 3×). Plug-in Kelly computed from `μ̂` alone
@@ -475,7 +475,7 @@ paths with positive Sharpe) is **0.85–1.00**, the ROBUST statistic, while the
 −0.59** depending on `(n_groups, k_test)` — SYSTEM §4.3's Bernoulli-vs-order-
 statistic argument for why). This is also why the lookback band itself is
 deployed as an ensemble rather than the single fitted peak: SYSTEM §4.4's
-**PBO = 0.357** (range **[0.31, 0.47]** under alternative partitionings),
+**PBO = 0.393** (range **[0.31, 0.47]** under alternative partitionings),
 with `L=12` winning in-sample on **21 of 28** CPCV splits, is direct evidence
 that the single-`L` peak is partly a partition-dependent artifact of the
 search, not a cleanly-validated point estimate — exactly the reason `μ̂` for
@@ -642,17 +642,20 @@ COST/SYSTEM).
     half-Kelly-worthy outperformance, i.e. `z_k` running consistently
     `~0.5` above `SR_ref` in standardized units, so `k_ref=0.25` is the
     "half the target shift" convention applied to that target), decision
-    threshold `h_promote = 5.0` (chosen, per the standard CUSUM ARL relation
-    `ARL_0 ≈ exp(2·k_ref·h_promote)/(2·k_ref²)` for a one-sided CUSUM on
-    standardized Gaussian increments — Page 1954; Hawkins & Olwell 1998 give
-    this closed-form ARL approximation for the one-sided Gaussian CUSUM —
-    to target `ARL_0 ≈ 52` weeks, i.e. an expected ONE FALSE PROMOTION PER
-    YEAR of in-control operation: solving `52 ≈ exp(2·0.25·h)/(2·0.25²) =
-    8·exp(0.5h)` gives `exp(0.5h) ≈ 6.5`, `h ≈ 2·ln(6.5) ≈ 3.75`; `h_promote`
-    is set slightly above this closed-form solution, at `5.0`, as a
-    deliberate conservative margin given the Gaussian-increment assumption
-    is only approximate for weekly crypto returns — RED, BLUE-searchable
-    offline only against this formula, never against realized promotions);
+    threshold `h_promote = 5.0` (calibrated per Siegmund 1985's CORRECTED-
+    diffusion one-sided-Gaussian-CUSUM ARL form `ARL_0 ≈ (exp(2·k_ref·b) −
+    2·k_ref·b − 1)/(2·k_ref²)` with `b = h_promote + 1.166`, the Gaussian
+    excess-over-boundary constant — Page 1954 for the CUSUM itself. An
+    earlier revision displayed the uncorrected `exp(2kh)/(2k²)` form,
+    misattributed to Hawkins & Olwell 1998; it understates `ARL_0` ~45% at
+    these constants. Against the design FLOOR `ARL_0 ≥ 52` weeks — at most
+    ~one false promotion per in-control year — the corrected solve gives
+    `h ≈ 3.40`; `h_promote` ships ABOVE that, at `5.0`, as a deliberate
+    conservative margin given the Gaussian-increment assumption is only
+    approximate for weekly crypto returns, DELIVERING `ARL_0 ≈ 141.9`
+    (100k-run MC: 141.7-141.8, ~0.1% agreement) — one false promotion per
+    ~2.7 in-control years — RED, BLUE-searchable offline only against this
+    formula, never against realized promotions);
   - `N_min_weeks = 52` (minimum elapsed live-time floor before promotion is
     even eligible, regardless of CUSUM state — anchored to requiring at
     least one full annual cycle of live weekly observations, which is also
@@ -673,11 +676,16 @@ COST/SYSTEM).
     a single step whenever `z_k + k_ref < 0`, i.e. `z_k < −k_ref = −0.25`. So
     the same `k_ref = 0.25` that sets "half the target shift" on the promotion
     side pins the demotion trip at `−0.25` on the de-lever side; the value is
-    the reference offset, not an independent quantity. The closed-form ARL of
-    this `h_demote = 0` lower CUSUM is `ARL_0 ≈ exp(2·k_ref·0)/(2·k_ref²) =
-    1/(2·0.25²) = 8` weeks — an order of magnitude FASTER than the promotion
-    side's `ARL_0 ≈ 52`, which is precisely the "fast to demote, slow to
-    promote" asymmetry §6.2 requires, now quantified rather than asserted
+    the reference offset, not an independent quantity. At `h_demote = 0` the
+    diffusion-scale ARL approximation does not apply (it is a large-boundary
+    asymptotic); the EXACT calculation is elementary: from `S = 0` the lower
+    CUSUM alarms on any single week with `z_k < −k_ref`, so run lengths are
+    geometric with `p = Φ(−0.25) ≈ 0.401` and `ARL_0 = 1/p ≈ 2.5` weeks —
+    nearly two orders of magnitude FASTER than the promotion side's delivered
+    `ARL_0 ≈ 142`, which is precisely the "fast to demote, slow to
+    promote" asymmetry §6.2 requires, now quantified exactly rather than
+    asserted (an earlier revision quoted `8` weeks here via the uncorrected
+    closed form — wrong twice over: the formula and its domain)
     (RED, BLUE-searchable offline only against this same formula, never against
     realized demotions). The injection path is retained: an OPS governance
     layer MAY override this default (e.g. `0.0` to demote on ANY negative
@@ -929,11 +937,11 @@ never per-symbol; Section 3 states the illustrative v1 values and their
 derivation) are chosen to target a stated in-control average run length
 `ARL_0 ≈ 52` weeks (the expected number of weeks before a FALSE promotion
 under a book truly performing at exactly `SR_LCB_t`, no better) via the
-standard closed-form one-sided-Gaussian-CUSUM ARL approximation (Page, 1954;
-Hawkins & Olwell, 1998, *Cumulative Sum Charts and Charting for Quality
-Improvement*, ch. 4, for the explicit closed-form `ARL_0 ≈
-exp(2·k_ref·h_promote)/(2·k_ref²)` under the i.i.d.-Gaussian in-control model
-stated above) — the same average-run-length calibration discipline OPS's own
+corrected-diffusion one-sided-Gaussian-CUSUM ARL approximation (Page, 1954,
+for the CUSUM; Siegmund, 1985, *Sequential Analysis*, for the closed form
+`ARL_0 ≈ (exp(2·k_ref·b) − 2·k_ref·b − 1)/(2·k_ref²)`, `b = h_promote +
+1.166`, under the i.i.d.-Gaussian in-control model stated above; Hawkins &
+Olwell, 1998, ch. 4, for the same ARL-calibration discipline) — the same average-run-length calibration discipline OPS's own
 CUSUM detectors use elsewhere in this repo, and (per Section 3) a genuine
 closed-form calculation from the stated model, not a Monte Carlo fit to
 historical P&L. A Monte-Carlo verification against synthetic `N(0,1)`
@@ -1132,7 +1140,7 @@ where the empirically-anchored ladder bites.
 - **DSR gate failing at deploy time.** `SR_LCB_t = 0` unconditionally
   (Section 2.6) regardless of how large the raw sample Sharpe looks — this is
   the direct, load-bearing consequence of Invariant K-LCB and is exactly the
-  regime the EMPIRICAL BASELINE describes today (PSR≈0.994 but `n_obs≈258 <
+  regime the EMPIRICAL BASELINE describes today (PSR≈0.988 but `n_obs≈258 <
   MinTRL≈824`, SYSTEM §5.5's own worked number — currently a Gate-2-branch-2b
   CONDITIONAL pass per SYSTEM §6.2, not a clean pass): LEVERAGE does not wait
   for a future spec revision to apply this guard; it is live from week one.
@@ -1361,7 +1369,7 @@ sequences only; no live layer (`vol/`, `edge/`, `ceilings/`, `ratchet/`,
   universe size `N≈50` — those are cited inputs from the EMPIRICAL BASELINE,
   not decisions this file makes. In particular, the decision to deploy the
   BAND rather than the single in-sample-fitted peak `L=12` is a SYSTEM/
-  SELECTION decision driven by **PBO = 0.357 (range [0.31, 0.47] under
+  SELECTION decision driven by **PBO = 0.393 (range [0.31, 0.47] under
   alternative CPCV partitionings; `L=12` won in-sample on 21/28 splits)** —
   SYSTEM §4.4's three-zone PBO convention, not a LEVERAGE computation.
   LEVERAGE's ONLY interaction with this fact is indirect: `SR_LCB_t`
@@ -1427,15 +1435,20 @@ sequences only; no live layer (`vol/`, `edge/`, `ceilings/`, `ratchet/`,
   Prado, M. & Zhu, Q. J. (2014), "The Probability of Backtest Overfitting,"
   *Journal of Computational Finance* — the CPCV path-Sharpe distribution
   (`src/convexity/system/cpcv.py`, SYSTEM §4) and the PBO logit-of-relative-rank
-  estimator cited for the lookback-band overfitting evidence (**PBO = 0.357,
+  estimator cited for the lookback-band overfitting evidence (**PBO = 0.393,
   range [0.31, 0.47] under alternative partitionings, `L=12` winning 21/28
   splits — SYSTEM §4.4**) this file's Section 2.5 numeric grounding draws on
   explicitly, at its point of use, not only here in the bibliography.
-- **Sequential-test average-run-length closed form:** Hawkins, D. M. &
+- **Sequential-test average-run-length closed form:** Siegmund, D. (1985),
+  *Sequential Analysis: Tests and Confidence Intervals*, Springer — the
+  corrected-diffusion one-sided-Gaussian-CUSUM ARL approximation
+  `ARL_0 ≈ (exp(2·k_ref·b) − 2·k_ref·b − 1)/(2·k_ref²)`, `b = h_promote +
+  1.166`, used in Section 6.3 to check `h_promote` against the `ARL_0`
+  floor (MC-verified to ~0.1% at the shipped constants). Hawkins, D. M. &
   Olwell, D. H. (1998), *Cumulative Sum Charts and Charting for Quality
-  Improvement*, Springer, ch. 4 — the closed-form one-sided-Gaussian-CUSUM
-  ARL approximation `ARL_0 ≈ exp(2·k_ref·h_promote)/(2·k_ref²)` used in
-  Section 6.3 to derive `h_promote` from a target `ARL_0`.
+  Improvement*, Springer, ch. 4 — background on the same ARL-calibration
+  discipline (an earlier revision mis-credited the uncorrected `b = h`
+  form to this reference).
 - **Random matrix theory / Marchenko–Pastur:** Marchenko, V. A. & Pastur, L.
   A. (1967), "Distribution of eigenvalues for some sets of random matrices,"
   *Sbornik: Mathematics*; Laloux, L., Cizeau, P., Bouchaud, J.-P. & Potters,
@@ -1469,7 +1482,7 @@ sequences only; no live layer (`vol/`, `edge/`, `ceilings/`, `ratchet/`,
   EMPIRICAL BASELINE digest supplied with this spec (crypto cross-sectional
   momentum backtest/validation results): honest net Sharpe ~0.8–1.0,
   CPCV mean OOS path Sharpe ≈0.91 vs naive 0.98 (haircut ≈0.07), `frac_pos`
-  0.85–1.00, 5th-percentile path Sharpe fragility (+0.42 to −0.59), PSR≈0.994
+  0.85–1.00, 5th-percentile path Sharpe fragility (+0.42 to −0.59), PSR≈0.988
   with `n_obs≈258` weeks short of MinTRL, max drawdown ~25% at 100% gross
   (~28% annualized vol), weekly win rate ~60%, capacity ~$3M uncapped /
   ~$12–23M at liquidity-cap tightness `C=2–3` with a ~0.4–0.6 Sharpe cost and

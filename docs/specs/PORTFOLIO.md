@@ -101,7 +101,7 @@ default within-leg scheme (Invariant L).
 **P6 — Deploy the lookback BAND, not a fitted point.** The momentum lookback `L`
 is a family `L ∈ {12, 14, 16}` trading days, not a single number. CPCV
 over the family shows the single best-in-sample `L` is partition-fragile
-(PBO = 0.36 blended — `docs/EDGE.md` §(c) — with per-partition logit-relative-rank
+(PBO = 0.39 blended — `docs/EDGE.md` §(c) — with per-partition logit-relative-rank
 spanning 0.31–0.47 and the best-IS pick landing on `L=12` in 21/28 splits yet
 never failing clean `<0.2` — EVIDENCE, task digest, cross-referenced in
 `docs/specs/SIGNAL.md` §4.1). PORTFOLIO's public contract
@@ -793,7 +793,7 @@ config).
 
 **The measured result**: PBO = **0.31–0.47** across partitions (EVIDENCE, task
 digest, cross-referenced in `docs/specs/SIGNAL.md` §4.1; the blended figure
-"PBO = 0.36" is the single number `docs/EDGE.md` §(c) reports — the wider
+"PBO = 0.39" is the single number `docs/EDGE.md` §(c) reports — the wider
 0.31–0.47 per-partition spread is not in `docs/EDGE.md` itself), with the
 best-in-sample pick landing on `L=12` in **21 of 28** CPCV
 splits, and PBO never falling cleanly below 0.2 in any partition scheme
@@ -1125,8 +1125,8 @@ restate different numbers in either category without a new measurement:
 | Weekly win rate | **~60%** | — | `[EDGE]` §(b) |
 | CPCV mean OOS path Sharpe (`N=8`, `k=2`, 28 paths, 1-wk embargo) | **~0.91** | naive single-path Sharpe ~0.98 (haircut ~0.07 — **no OOS collapse**) | `[TASK]`, cross-ref `UNIVERSE.md` §7, `LEVERAGE.md` §7, `EXECUTION.md` §11 |
 | `frac_pos` (fraction of CPCV paths with Sharpe > 0) | **0.85–1.00** — the ROBUST statistic | p05 path Sharpe swings **+0.42 to −0.59** across `N`/`k` choices — PARTITION-FRAGILE, do not lead with it | `[TASK]`, cross-ref `UNIVERSE.md` §7, `LEVERAGE.md` §2.6/§7 |
-| PBO (lookback-family overfitting) | **0.36** blended (0.31–0.47 per-partition); best-IS pick = `L=12` on 21/28 splits | — | `0.36` is `[EDGE]` §(c); `0.31–0.47`/`21/28` is `[TASK]`, cross-ref `SIGNAL.md` §4.1 |
-| DSR | **fails on track-length only** — PSR ≈ 0.994 (high), `n_obs ≈ 258` weekly obs falls short of the multiplicity-inflated MinTRL | — | track-length framing is `[EDGE]` §(d); PSR ≈ 0.994 point figure is `[TASK]`, cross-ref `SIGNAL.md` §7 |
+| PBO (lookback-family overfitting) | **0.39** blended (0.31–0.47 per-partition); best-IS pick = `L=12` on 21/28 splits | — | `0.39` is `[EDGE]` §(c); `0.31–0.47`/`21/28` is `[TASK]`, cross-ref `SIGNAL.md` §4.1 |
+| DSR | **fails on track-length only** — PSR ≈ 0.988 (high), `n_obs ≈ 258` weekly obs falls short of the multiplicity-inflated MinTRL | — | track-length framing is `[EDGE]` §(d); PSR ≈ 0.988 point figure is `[TASK]`, cross-ref `SIGNAL.md` §7 |
 
 **Reading this table.** The CPCV haircut (0.98 → 0.91, only ~0.07) is
 qualitatively different from the old directional-breakout system's CPCV

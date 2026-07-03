@@ -54,10 +54,13 @@ class TCA:
         """
         gross_minus_net = trade.gross_pnl - trade.net_pnl  # the measured IS gap
 
-        # --- delay cost: decision_price -> arrival_price, signed by side, on filled qty.
-        # A long whose arrival is above the decision price paid the lag (P&L-reducing).
+        # --- delay cost: decision_price -> arrival_price, signed by side, on the FULL
+        # INTENDED qty (Perold 1988: the lag was suffered on the whole decision, not just the
+        # filled part — audit C-4: charging filled qty only left the decision->arrival move on
+        # the missed qty in the unattributed plug). A long whose arrival is above the decision
+        # price paid the lag (P&L-reducing). The identity stays exact (the plug closes).
         delay_cost = trade.side * (marks.arrival_price - marks.decision_price) * abs(
-            trade.filled_qty
+            trade.intended_qty
         )
 
         # --- fee cost: realized maker/taker fees (FACT, = Σ Nautilus Commission, Inv N).
@@ -83,7 +86,9 @@ class TCA:
         # --- carry cost: realized roll/MTF/storage carry over the hold (FACT).
         carry_cost = trade.realized_carry_cost
 
-        # --- opportunity cost: unfilled/missed-portion shortfall valued at final mid.
+        # --- opportunity cost: unfilled/missed-portion shortfall, arrival -> final mid
+        # (the decision -> arrival move on the missed qty is in delay_cost above, so together
+        # the two lines attribute the missed qty's full decision -> final shortfall).
         missed_qty = trade.intended_qty - trade.filled_qty
         opportunity_cost = trade.side * (marks.final_mid - marks.arrival_price) * missed_qty
 

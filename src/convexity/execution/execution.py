@@ -97,8 +97,10 @@ def solve_trajectory(
 
     Returns a ``TrajectoryResult`` whose ``schedule`` sums to ``x_i`` (``X_0 = x_i``, ``X_n = 0``
     boundary conditions, §2.1) and whose ``kappa`` is the value implied by
-    ``kappa^2 = lambda_i * sigma_i^2 / eta_i`` (§2.4) — ``kappa = 0`` recovers pure TWAP exactly
-    (§2.4's ``lambda -> 0`` limit), the expected output for the liquid core (§3).
+    ``kappa^2 = lambda_i * sigma_i^2 / eta_tilde`` with ``eta_tilde = eta_i - gamma_i*tau/2``
+    (AC 2001 eq. 12-14's discrete temporary coefficient; == ``eta_i`` at the shipped ``gamma=0``) —
+    ``kappa = 0`` recovers pure TWAP exactly (§2.4's ``lambda -> 0`` limit), the expected output
+    for the liquid core (§3).
 
     The schedule is the exact discrete Almgren-Chriss solution (2001, eq. 12-14): the discrete rate
     ``kappa_d`` solves ``cosh(kappa_d * tau) = 1 + (kappa * tau)^2 / 2`` on the ``n``-slice lattice
@@ -134,12 +136,22 @@ def solve_trajectory(
         raise ValueError(f"lambda_i must be finite and >= 0, got {lambda_i!r}")
 
     tau = delta / n
-    # kappa^2 = lambda*sigma^2/eta (§2.4/§2.5, notation table line 126); written sigma_i**2 to
-    # match the spec's sigma-SQUARED expression byte-for-byte (Inv N-exec byte-for-byte kappa check).
-    kappa = math.sqrt(lambda_i * sigma_i**2 / eta_i)
+    # Discrete-time AC (2001) eq. 12-14: the temporary coefficient enters as
+    # eta_tilde = eta - gamma*tau/2 (half-slice permanent rebate), and kappa^2 = lambda*sigma^2/
+    # eta_tilde. gamma = 0 (the shipped default) => eta_tilde == eta, numerically identical.
+    eta_tilde = eta_i - 0.5 * gamma_i * tau
+    if eta_tilde <= 0.0:
+        raise ValueError(
+            f"eta_tilde = eta - gamma*tau/2 = {eta_tilde!r} must be > 0 (AC 2001 eq. 12-14): "
+            "permanent impact too large for this slice length"
+        )
+    kappa = math.sqrt(lambda_i * sigma_i**2 / eta_tilde)
 
-    if kappa * tau == 0.0:
-        # lambda -> 0 risk-neutral limit: exact TWAP, uniform schedule (§2.4).
+    if kappa * tau < 1e-8:
+        # lambda -> 0 risk-neutral limit: exact TWAP, uniform schedule (§2.4). Strict threshold,
+        # not ==0: for 0 < kappa*tau <~ 1.5e-8, 1 + 0.5*(kappa*tau)**2 rounds to 1.0 in float64,
+        # acosh -> 0, and the sinh ratio becomes 0/0 (all-NaN schedule). Below 1e-8 the true
+        # trajectory is TWAP to machine precision, so the TWAP branch is exact, not approximate.
         schedule = np.full(n, x_i / n)
         remaining = x_i * (1.0 - np.arange(n + 1) / n)  # linear decay, X_0 = x_i, X_n = 0
     else:
@@ -149,8 +161,9 @@ def solve_trajectory(
         remaining = x_i * np.sinh(kappa_d * (delta - j * tau)) / math.sinh(kappa_d * delta)
         schedule = remaining[:-1] - remaining[1:]
 
-    # E[C] = gamma*x^2/2 (path-independent) + (eta/tau) * sum x_k^2 (temporary, quadratic) — §2.4.
-    e_cost = 0.5 * gamma_i * x_i * x_i + (eta_i / tau) * float(np.sum(schedule * schedule))
+    # E[C] = gamma*x^2/2 (path-independent) + (eta_tilde/tau) * sum x_k^2 (temporary, quadratic) —
+    # AC 2001 eq. 12-14 (eta_tilde, not raw eta; identical when gamma=0).
+    e_cost = 0.5 * gamma_i * x_i * x_i + (eta_tilde / tau) * float(np.sum(schedule * schedule))
     # Var[C] = sigma^2 * sum tau * X_{k-1}^2 — exposure held during each sub-interval (§2.4's
     # sigma^2 * integral X(t)^2 dt, discretized at the interval-start position).
     var_cost = sigma_i * sigma_i * tau * float(np.sum(remaining[:-1] ** 2))
@@ -204,11 +217,19 @@ def lambda_from_budget(
     §2.5 forbids fitting ``lambda`` on realized rebalance P&L (COST's Invariant C-cfg). Instead
     ``lambda`` is recovered from a governance-level risk budget ``beta in (0, 1)`` — "execution-cost
     variance must not exceed a fraction ``beta`` of one week's target-book variance" — via §2.5's
-    verified closed form (the ``17/45`` small-``kappa*Delta`` expansion coefficient of
-    ``Var[C]*(kappa)``):
+    closed form (the ``2/15`` small-``kappa*Delta`` expansion coefficient of ``Var[C]*(kappa)``;
+    the expansion of ``3*(sinh(2z)-2z)/(4z*sinh^2(z))`` is ``1 - (2/15)z^2 + (2/105)z^4``, verified
+    by quadrature — an earlier draft's ``17/45`` was wrong by a factor 17/6):
 
-        kappa_i^2  >=  (45 / (17 * Delta^2)) * [ 1 - (3*beta/Delta) * (w_target_i / x_i)^2 ]
+        kappa_i^2  >=  (15 / (2 * Delta^2)) * [ 1 - (3*beta/Delta) * (w_target_i / x_i)^2 ]
         lambda_i   =   kappa_i^2 * eta_i / sigma_i^2                         (§2.4's kappa inverted)
+
+    DOMAIN OF VALIDITY: this is a small-``kappa*Delta`` (equivalently small-bracket) linearization —
+    exact as bracket -> 0+, within ~1% for bracket <= 0.05, and materially optimistic for bracket
+    near 1 (kappa*Delta = sqrt(7.5*bracket) is then O(1), outside the expansion). A book needing a
+    tight budget at large bracket should solve ``Var(kappa) = budget`` exactly by bisection on the
+    monotone ``Var(kappa)/Var(0) = 3*(sinh(2*kappa*Delta) - 2*kappa*Delta) /
+    (4*kappa*Delta*sinh(kappa*Delta)^2)`` instead (documented option, not implemented).
 
     ``kappa_i`` is taken at the MINIMUM-satisfying value (least front-loading, hence least ``E[C]``,
     consistent with ``beta`` — front-loading is not free, §2.3). This function realizes the
@@ -222,7 +243,10 @@ def lambda_from_budget(
         required trade has no trajectory to size).
     ``w_target_i`` — this name's target weight (the book-variance term of §2.5's budget).
     ``delta`` — execution window in the SAME per-week-equivalent units ``sigma_i`` is quoted in
-        (§2.5's dimensional-consistency note: ``Delta`` as a fraction of a week, e.g. 2h/168h).
+        (§2.5's dimensional-consistency note: ``Delta`` as a FRACTION of a week, e.g. 2h/168h).
+        Values >= 1.0 are REJECTED: ``lambda`` is not unit-invariant (``lambda = kappa^2*eta/sigma^2
+        ~ 1/time``), so passing ``ExecutionDefaults.delta_hours`` (e.g. ``2.0``) here instead of
+        ``2/168`` silently mis-sizes ``lambda`` ~121x — the guard turns that trap into an error.
     ``beta`` — stated risk budget in (0, 1), RED governance choice (§2.5, §10).
     ``eta_i`` — COST's fitted temporary-impact coefficient (Invariant N-exec), > 0.
     ``sigma_i`` — per-unit-time price-return vol (``portfolio.realized_vol``), > 0.
@@ -238,6 +262,12 @@ def lambda_from_budget(
         raise ValueError(f"w_target_i must be finite, got {w_target_i!r}")
     if not math.isfinite(delta) or delta <= 0.0:
         raise ValueError(f"delta must be finite and > 0, got {delta!r}")
+    if delta >= 1.0:
+        raise ValueError(
+            f"delta={delta!r} must be a FRACTION of a week (e.g. 2/168 for a 2h window). "
+            "Passing delta_hours here is the §2.5 units trap: lambda ~ 1/time is not "
+            "unit-invariant, so an hours-valued delta silently mis-sizes lambda ~121x."
+        )
     if not (0.0 < beta < 1.0):
         raise ValueError(f"beta must be in (0, 1), got {beta!r}")
     if not math.isfinite(eta_i) or eta_i <= 0.0:
@@ -245,12 +275,14 @@ def lambda_from_budget(
     if not math.isfinite(sigma_i) or sigma_i <= 0.0:
         raise ValueError(f"sigma_i must be finite and > 0, got {sigma_i!r}")
 
-    # §2.5's verified kappa_i^2 solve at the constraint's minimum-satisfying value.
+    # §2.5's kappa_i^2 solve at the constraint's minimum-satisfying value. Coefficient 15/2 from
+    # the exact expansion Var(k)/Var(0) = 1 - (2/15)(k*Delta)^2 + O((k*Delta)^4) (verified by
+    # quadrature; the earlier 17/45 draft was wrong by 17/6 and violated the stated budget ~2.9x).
     bracket = 1.0 - (3.0 * beta / delta) * (w_target_i / x_i) ** 2
     if bracket <= 0.0:
         # EDGE CASE (§2.5): TWAP already satisfies the budget -> no front-loading, lambda_i = 0.
         return 0.0
-    kappa_sq = (45.0 / (17.0 * delta * delta)) * bracket
+    kappa_sq = (15.0 / (2.0 * delta * delta)) * bracket
     # lambda_i = kappa^2 * eta / sigma^2 (§2.4's kappa definition, inverted).
     return kappa_sq * eta_i / (sigma_i * sigma_i)
 
@@ -372,7 +404,10 @@ def quantize_qty(raw_qty: float, *, lot_size: float, min_qty: float = 0.0) -> fl
         raise ValueError(f"lot_size must be finite and > 0, got {lot_size!r}")
     if not math.isfinite(min_qty) or min_qty < 0.0:
         raise ValueError(f"min_qty must be finite and >= 0, got {min_qty!r}")
-    n_lots = math.floor(abs(raw_qty) / lot_size + 1e-9)
+    # Relative (1e-12) + absolute (1e-9) tolerance: the absolute epsilon alone stops protecting
+    # exact multiples once |q|/lot > ~1e7 (float64 spacing exceeds it); the relative term keeps the
+    # guard scale-free. Behavior at small N is unchanged.
+    n_lots = math.floor(abs(raw_qty) / lot_size * (1.0 + 1e-12) + 1e-9)
     qty = n_lots * lot_size
     if qty < min_qty:
         return 0.0
@@ -975,10 +1010,10 @@ class ExecutionValidation:
 
     wf_oos_sharpe_ann: float  # purged walk-forward OOS Sharpe on the ADJUSTED selected series
     naive_full_sharpe_ann: float  # full-sample Sharpe of the ADJUSTED selected series
-    cpcv_mean_path_sharpe: float  # CPCV mean-path Sharpe (adjusted); baseline ~0.906 (docs/EDGE.md)
+    cpcv_mean_path_sharpe: float  # CPCV mean-path Sharpe (adjusted); baseline ~0.914 (docs/EDGE.md)
     cpcv_frac_pos: float  # CPCV fraction of paths with OOS Sharpe > 0; baseline 0.85-1.00
     cpcv_haircut: float  # naive_full - cpcv_mean (adjusted)
-    cpcv_pbo: float  # PBO over the lookback family (adjusted); baseline 0.357
+    cpcv_pbo: float  # PBO over the lookback family (adjusted); baseline 0.393
     dsr_passed: bool  # DeflatedSharpe.deflate(...).passed on the adjusted series
 
 

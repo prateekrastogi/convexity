@@ -1,7 +1,8 @@
 """CUSUM average-run-length Monte-Carlo verification (LEVERAGE.md §6.3, §9, §10).
 
-Verifies the one-sided-Gaussian-CUSUM in-control ARL against the Hawkins & Olwell (1998) closed
-form ``ARL_0 ≈ exp(2·k_ref·h_promote)/(2·k_ref²)`` (§6.3). Runs ONLY on synthetic ``N(0,1)``
+Verifies the one-sided-Gaussian-CUSUM in-control ARL against Siegmund (1985)'s corrected-
+diffusion closed form ``ARL_0 ≈ (exp(2·k_ref·b) − 2·k_ref·b − 1)/(2·k_ref²)``, ``b = h + 1.166``
+(§6.3). Runs ONLY on synthetic ``N(0,1)``
 surprise sequences (the stated in-control model) — NEVER on realized live P&L, which would violate
 P5/P7 (§9, §10). This is a ``validate/`` module: no live layer imports it (Invariant V firewall).
 """
@@ -20,7 +21,8 @@ class ArlEstimate:
     """OUTPUT of :func:`monte_carlo_arl` (LEVERAGE.md §6.3).
 
     ``arl_mc`` is the empirical mean run length to a false crossing under the in-control ``N(0,1)``
-    model; ``arl_closed_form`` the Hawkins & Olwell (1998) target; ``n_runs`` the MC sample count.
+    model; ``arl_closed_form`` the corrected-Siegmund target (they agree to ~0.1% at the shipped
+    constants); ``n_runs`` the MC sample count.
     """
 
     arl_mc: float

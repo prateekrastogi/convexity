@@ -27,9 +27,10 @@ from convexity.ops.detectors.cusum import CUSUM, arl_0_siegmund, solve_boundary
 class ArlReport:
     """The reproducible-calibration report for one ``(d, h*, delta_target)`` triple (OPS.md sec 11.1).
 
-    ``h_star_solved`` is the boundary the Siegmund solve produces for ``(d, arl_0_target)`` — the
-    number the shipped RED constant must match (sec 12 kill-switch gate). ``arl_0_closed_form`` is the
-    Siegmund ARL_0 at the shipped ``(d, h_star)``. ``arl_0_mc``/``arl_1_mc`` are the Monte-Carlo
+    ``h_star_solved`` is the FLOOR boundary the corrected-Siegmund solve produces for
+    ``(d, arl_0_target)`` — the shipped RED constant must sit AT OR ABOVE it (sec 12 kill-switch
+    gate; the shipped ``h*=6.23`` > floor ``~5.06`` is deliberate margin). ``arl_0_closed_form`` is
+    the corrected-Siegmund ARL_0 at the shipped ``(d, h_star)``. ``arl_0_mc``/``arl_1_mc`` are the Monte-Carlo
     empirical average run lengths under the null and the injected shift. ``per_year_false_halt`` is
     the annualized false-HALT probability implied by ``arl_0_mc`` (the <=5%/yr budget, sec 4.3).
     """
@@ -50,8 +51,9 @@ def solve_h_star(*, delta_target: float, arl_0_target: float) -> float:
     """Reproduce the shipped boundary ``h*`` from the Siegmund ARL_0 solve (OPS.md sec 4.3 [DERIVED]).
 
     ``d = delta_target / 2`` (classical reference/allowance value); solve ``ARL_0(d, h) = arl_0_target``
-    for ``h`` by bisection. With ``delta_target = 1.0`` and ``arl_0_target = 1000`` this reproduces
-    ``h* ~= 6.23``, the RED constant this pillar ships. No ML, no grid search — a one-time scalar
+    for ``h`` by bisection. With ``delta_target = 1.0`` and ``arl_0_target = 1000`` the corrected
+    form gives the FLOOR ``h_min ~= 5.06``; the shipped RED constant ``h* = 6.23`` sits above it
+    (deliberate margin, delivered ARL_0 ~= 3242). No ML, no grid search — a one-time scalar
     root-find on the monotone Siegmund exponential (P8).
     """
     d = delta_target / 2.0
@@ -113,12 +115,13 @@ def calibrate_and_verify(
 ) -> ArlReport:
     """Full Inv CAL acceptance run: reproduce ``h*`` and Monte-Carlo-verify ARL_0/ARL_1 (sec 11.1).
 
-    Reproduces the shipped ``h_star`` from the Siegmund solve, reports the closed-form ARL_0 at the
-    shipped boundary, and Monte-Carlo estimates ARL_0 (null) and ARL_1 (injected ``delta_target``
-    shift). The caller (the CAL test / an offline acceptance report) asserts: (i) ``h_star_solved``
-    rounds to the shipped ``h_star``; (ii) ``per_year_false_halt < 0.05`` (the <=5%/yr budget); and
-    (iii) ``arl_1_mc << arl_0_mc`` (fast detection). This is the acceptance gate for changing any of
-    ``d``/``h*``/``delta_target`` (sec 11.1).
+    Solves the corrected-Siegmund FLOOR boundary for ``(d, arl_0_target)``, reports the
+    closed-form ARL_0 at the shipped boundary, and Monte-Carlo estimates ARL_0 (null) and ARL_1
+    (injected ``delta_target`` shift). The caller (the CAL test / an offline acceptance report)
+    asserts: (i) the shipped ``h_star`` >= ``h_star_solved`` (floor + margin); (ii)
+    ``per_year_false_halt < 0.05`` (the <=5%/yr budget); and (iii) ``arl_1_mc << arl_0_mc`` (fast
+    detection). This is the acceptance gate for changing any of ``d``/``h*``/``delta_target``
+    (sec 11.1).
     """
     d = delta_target / 2.0
     h_star_solved = solve_boundary(d, arl_0_target)

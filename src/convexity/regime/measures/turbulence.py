@@ -59,10 +59,14 @@ def ledoit_wolf_shrunk_covariance(returns_nt: np.ndarray) -> tuple[np.ndarray, f
     theta_jj = (xc2 @ (xc * xc).T) / t - var[None, :] * s  # symmetric partner
     rho_diag = float(np.diag(pi_mat).sum())
     with np.errstate(invalid="ignore", divide="ignore"):
-        ratio = np.sqrt(np.outer(var, var))
         cross = (std[None, :] / std[:, None]) * theta_ii + (std[:, None] / std[None, :]) * theta_jj
     cross[np.diag_indices(n)] = 0.0
-    rho_hat = rho_diag + rbar * 0.5 * float((cross / np.where(ratio == 0.0, 1.0, ratio))[off].sum())
+    # LW 2003 Appendix B: rho_hat = sum_i pi_ii + sum_{i!=j} (rbar/2)[sqrt(s_jj/s_ii) theta_ii,ij
+    # + sqrt(s_ii/s_jj) theta_jj,ij] — NO further division. An earlier revision divided `cross` by
+    # sqrt(var_i*var_j), making delta* SCALE-VARIANT (delta*(x) != delta*(c*x); at realistic
+    # decimal-return scales the extra ~1/4e-4 factor drove kappa negative and delta* clamped to 0,
+    # silently disabling shrinkage). Audit R-1; the scale-invariance test pins the fix.
+    rho_hat = rho_diag + rbar * 0.5 * float(cross[off].sum())
     # gamma_hat: squared Frobenius distance between sample covariance and target
     gamma_hat = float(((f - s) ** 2).sum())
     if gamma_hat <= 0.0:

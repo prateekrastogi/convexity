@@ -5,9 +5,11 @@
 summed over the funding timestamps that ACTUALLY occurred (read from Nautilus's
 ingested funding events — NOT modelled, Invariant N). A perp LONG paying positive
 funding accrues a COST (``F_accrued > 0`` is money out); a SHORT in the same regime
-accrues a CREDIT (Invariant P). ``Notional(τ_k)`` is the SIGNED position notional AT
-``τ_k`` (it changes with price and partial reduces) read from Nautilus state, never
-assumed to be entry notional. This is a FACT (``is_fact=True``), kept strictly
+accrues a CREDIT (Invariant P). ``Notional(τ_k)`` is the UNSIGNED |position notional|
+AT ``τ_k`` (it changes with price and partial reduces) read from Nautilus state, never
+assumed to be entry notional — the trade's ``side`` factor supplies the sign (audit
+C-1: a SIGNED notional here would double-sign, flipping a short's funding credit into
+a cost; the tests pin the unsigned+side convention). This is a FACT (``is_fact=True``), kept strictly
 separate from the forecast (Invariant A).
 """
 
@@ -29,8 +31,8 @@ class FundingAccrual:
     ) -> float:
         """``Σ side * Notional(τ_k) * r_k`` over stamps in [t_entry, t_now] (§5.5, FACT).
 
-        ``FundingEvent.notional_at_stamp`` is the signed position notional at each
-        stamp (Invariant N: read, not recomputed). The result is signed (Invariant P):
+        ``FundingEvent.notional_at_stamp`` is the UNSIGNED |position notional| at each
+        stamp (Invariant N: read, not recomputed); ``side`` supplies the sign. The result is signed (Invariant P):
         positive = money out for a long paying positive funding.
         """
         total = 0.0

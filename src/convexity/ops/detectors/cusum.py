@@ -75,16 +75,19 @@ class CUSUM:
 
 
 def arl_0_siegmund(d: float, h: float) -> float:
-    """Siegmund (1985) Wald-approximation ARL_0 for a one-sided Gaussian CUSUM (OPS.md sec 4.3).
+    """Siegmund (1985) corrected-diffusion ARL_0 for a one-sided Gaussian CUSUM (OPS.md sec 4.3).
 
-    ``ARL_0(d, h) ~= (exp(2*d*h) - 2*d*h - 1) / (2*d^2)`` — the expected number of observations
-    between false alarms when the standardized innovation really is iid N(0,1). Valid for
-    ``d, h > 0``. This is the closed form OPS.md sec 4.3 uses to solve for ``h*``; it is a
-    large-ARL_0 asymptotic, appropriate here (``ARL_0 ~ 1000 >> 52 weeks/yr``).
+    ``ARL_0(d, h) ~= (exp(2*d*b) - 2*d*b - 1) / (2*d^2)`` with ``b = h + 1.166`` — the expected
+    number of observations between false alarms when the standardized innovation really is iid
+    N(0,1). The ``+1.166`` is Siegmund's excess-over-boundary (overshoot) constant ``rho`` for
+    standardized Gaussian increments; OMITTING it (the raw Wald form ``b = h``) understates ARL_0
+    ~3.2x at the shipped ``(d=0.5, h*=6.23)`` — MC-verified: corrected form 3242 vs 100k-run MC
+    3201-3220, agreement ~1%. Valid for ``d, h > 0``; a large-ARL_0 asymptotic, appropriate here.
     """
     if d <= 0.0 or h <= 0.0:
         raise ValueError(f"d and h must be > 0, got d={d}, h={h}")
-    x = 2.0 * d * h
+    b = h + 1.166  # Siegmund's Gaussian excess-over-boundary correction
+    x = 2.0 * d * b
     return (math.exp(x) - x - 1.0) / (2.0 * d * d)
 
 
@@ -93,8 +96,11 @@ def solve_boundary(d: float, arl_0_target: float, *, lo: float = 1e-6, hi: float
     """Solve ``arl_0_siegmund(d, h) == arl_0_target`` for ``h`` by bisection (OPS.md sec 4.3).
 
     A one-time scalar root-find on the monotone-increasing Siegmund exponential — no ML, no grid
-    search (P8). With ``d = 0.5`` and ``arl_0_target = 1000`` this reproduces ``h* ~= 6.23`` (the
-    RED constant this module ships, sec 4.3 [DERIVED]).
+    search (P8). With ``d = 0.5`` and ``arl_0_target = 1000`` the corrected form gives
+    ``h_min ~= 5.06`` — the FLOOR consistent with the 1000-week ARL_0 target; the shipped RED
+    constant ``h* = 6.23`` sits deliberately ABOVE it (margin), delivering ARL_0 ~= 3242
+    (sec 4.3 [DERIVED]; an exact-1000 ARL_0 would put the per-year false-HALT at ~5.1%,
+    marginally OVER the <=5%/yr budget — the margin is required, not cosmetic).
     """
     if arl_0_target <= 0.0:
         raise ValueError(f"arl_0_target must be > 0, got {arl_0_target}")

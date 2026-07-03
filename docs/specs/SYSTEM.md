@@ -275,19 +275,28 @@ training observation whose signal-construction window overlaps a test observatio
 ### 3.2 Embargo width — restated for the weekly horizon
 
 ```
-embargo_weeks = max( 1,  ceil( L_max / 7 ) )
+embargo_weeks(fully conservative) = ceil( L_max / 7 )  =  ceil(16/7)  =  3 weeks
+embargo_weeks(committed)          = 1 week             (the recorded-baseline configuration)
 ```
 
-where `L_max` is the longest lookback in the deployed band (16 trading days ⇒ `ceil(16/7) = 3`
-weeks would be the fully conservative figure for the *signal*-construction window; the
-currently-committed implementation in `src/convexity/system/xsec_validate.py::purged_walkforward` and
-`src/convexity/system/cpcv.py::_split_weeks` uses `embargo_weeks = 1`, i.e. this section's own derived floor of
-"**at least 1 rebalance period**" (the formula immediately above). This is the direct restatement of the old spec's Invariant HC
-("embargo = max label horizon, never the mean/typical horizon") with the label horizon replaced by
-the **rebalance period** as the floor — the old spec's phrase "at least one label horizon" becomes
-here "at least one rebalance period," the direct re-derivation for the new risk unit. Widening the
-embargo to the full 3-week signal-construction bound is a documented, cheap robustness check
-(Section 8.2) rather than the committed default, because at `n_obs ≈ 258` weekly observations
+where `L_max` is the longest lookback in the deployed band (16 trading days). **Honest status
+(audit SY-5): the committed `embargo_weeks = 1` is SHORTER than the signal-construction window
+(12–16 trading days ≈ 2–3 weeks)** — a training week 1–3 weeks after a test block computes its
+momentum signal (and its 28-day vol estimate ≈ 4 weeks) partly from closes INSIDE the test block.
+An earlier revision of this section presented `1` as the output of a `max(1, ceil(L_max/7))`
+formula, which actually evaluates to `3` — that framing was internally inconsistent and is
+retracted. Why the 1-week configuration is nonetheless the committed one, stated rather than
+implied: (i) there are NO fitted parameters anywhere in the pipeline (weights are mechanical
+functions of ranks), so feature-window overlap cannot leak through parameter estimation — the only
+coupling channel is PBO's argmax-IS *selection* step, a second-order effect; (ii) every recorded
+baseline (naive/CPCV/PBO/frac_pos/haircut) was measured under `embargo = 1`, so changing it now is
+PARITY-SENSITIVE — it would move every recorded number and sever comparability with `docs/EDGE.md`;
+(iii) at `n_obs ≈ 258` weekly observations every additional embargoed week is a non-trivial
+fraction of the sample the DSR gate needs. The old spec's Invariant HC ("embargo = max label
+horizon") maps here to "at least one rebalance period" as the FLOOR, which `1` satisfies; the full
+3-week signal-window bound is the documented robustness re-run (Section 8.2) — LdP's own
+prescription (embargo ≥ feature horizon) sides with 3, and a future re-baselining should adopt it,
+because at `n_obs ≈ 258` weekly observations
 (Section 5.3) every additional embargoed week is a non-trivial fraction of the sample the DSR gate
 needs (Section 5.5's MinTRL discipline is exactly why this trade-off is made explicit rather than
 silently defaulted to the conservative extreme).
@@ -338,12 +347,21 @@ n_weeks  ≈ 258   (≈5 years of weekly observations)
 ```
 
 **Result (the number this spec must be read against):** mean OOS path Sharpe ≈ **0.91** versus the
-naive single-path (full-sample) Sharpe of ≈**0.98** — a haircut of only **≈0.07**. This is
+naive single-path (full-sample) Sharpe of ≈**0.99** — a haircut of only **≈0.07**. This is
 qualitatively different from, and the polar opposite of, the old directional-breakout book's CPCV
 result, where the OOS path distribution straddled zero and the report was flagged
 `luck_artifact=True` (`docs/EDGE.md` §(a), background). Here there is **no OOS collapse**: the
 CPCV mean sits within a small haircut of the naive number, which is the CPCV verdict a genuine
 (rather than overfit) edge is supposed to produce.
+
+> **Provenance of the numbers above (re-measured 2026-07-03).** The recorded values were re-run
+> after the engine turnover-drift fix (audit PF-1: carried weights were double-drifted, overstating
+> cost every week): naive L=14 `0.9794 -> 0.9872`, CPCV mean-path `0.9061 -> 0.9141`, PBO at the
+> committed `(8,2)` partition `0.3571 -> 0.3929`, per-partition range across the pre-registered set
+> `{(8,2),(6,2),(10,3)}` = `[0.3083, 0.4667]` (bounds unchanged at 2dp), `frac_pos = 1.00` and
+> haircut `= 0.0732` both unchanged; measured DSR (7-lookback family, L=14 member) `0.807 -> 0.796`
+> with PSR `0.994 -> 0.988` and MinTRL ≈ 1013wk at that multiplicity — the failure mode stays
+> `insufficient_track_record`, the same qualitative verdict throughout.
 
 ### 4.3 `frac_pos` is the primary promotion statistic; `p05` is partition-fragile — and here is why
 
@@ -428,18 +446,18 @@ fraction with `λ ≤ 0`.
 
 **Worked example — what is a digest-cited fact vs. what is an illustrative reconstruction of that
 fact (kept explicitly separate, per the rigor bar).** `docs/EDGE.md` §(c)/TL;DR cites exactly ONE
-PBO number for this book, at a single decimal of precision: **`PBO ≈ 0.36`** ("moderate"), computed
+PBO number for this book, at a single decimal of precision: **`PBO ≈ 0.39`** ("moderate"), computed
 by `src/convexity/system/cpcv.py::compute_pbo` over the lookback family
 (`L ∈ {12, 14, 16}` trading days, `src/convexity/signal/signals.py::momentum_signal`) at the
 committed `N=8` groups, `k_test=2` (`C(8,2)=28` splits), `embargo=1` week configuration (Section
-4.2's committed CPCV setup). **That single digest-cited number, `PBO ≈ 0.36`, is the only figure in
+4.2's committed CPCV setup). **That single digest-cited number, `PBO ≈ 0.39`, is the only figure in
 this subsection that is directly traceable to `docs/EDGE.md` by name.**
 
-The more granular breakdown that follows — **`PBO = 0.357`**, "`L=12` won 21 of 28 splits," the
+The more granular breakdown that follows — **`PBO = 0.393`**, "`L=12` won 21 of 28 splits," the
 partition-sensitivity range **`[0.31, 0.47]`** — is **NOT separately present in `docs/EDGE.md`** and
 is presented here as an **illustrative, internally-consistent reconstruction of a plausible
 split-level breakdown that would produce EDGE.md's `0.36`**, not as an independently-verified,
-separately-run result. It is constructed to be arithmetically consistent (0.357 rounds to the
+separately-run result. It is constructed to be arithmetically consistent (0.393 rounds to the
 digest's 0.36, and a `[0.31, 0.47]` range brackets both numbers), but no run log in this repo
 currently records the individual `λ_s` values or the per-split IS-winner tally, so the "21 of 28"
 and "`[0.31, 0.47]`" figures should be read as **a worked illustration of what BLdP's method looks
@@ -449,13 +467,13 @@ actually reports, not as a second, more-precise measurement superseding it.** An
 logging addition, out of scope for this spec-writing pass) should REPLACE this illustrative
 breakdown with the actual per-split ledger, and this paragraph should be deleted once that happens.
 The RESULT stated below (moderate PBO, three-zone convention, mandatory-band deployment) does not
-depend on which of `0.36` or `0.357` is used — both land in the same `[0.2, 0.5)` zone — so the
+depend on which of `0.39` or `0.393` is used — both land in the same `[0.2, 0.5)` zone — so the
 promotion-relevant conclusion is not sensitive to this precision gap, but the gap itself is
 disclosed rather than hidden.
 
 **Consequence for how PBO must be reported and used (RED, Section 6).** A PBO in the moderate
 `0.31-0.47` neighborhood (digest point estimate `0.36`; illustrative split-level reconstruction
-`0.357`) is neither the "PBO ≈ 0 clean pass" of a config with no overfitting fingerprint, nor the
+`0.393`) is neither the "PBO ≈ 0 clean pass" of a config with no overfitting fingerprint, nor the
 "PBO ≈ 1, purely overfit noise" of a spurious backtest — it sits in a genuine middle band. Because
 any point estimate of PBO is inherently partition-sensitive (Section 4.4's re-partitioning argument
 below), **PBO must be reported as a range, not a point estimate**, and the promotion policy must be
@@ -464,7 +482,7 @@ robust to anywhere in that range. This spec adopts the three-zone convention:
 ```
 PBO < 0.2                    : "clean pass" — deploy the single best-scoring config with confidence.
 0.2 ≤ PBO < 0.5               : "deploy the ensemble/band, not a point estimate" — exactly our own
-                                situation (PBO ≈ 0.36 per docs/EDGE.md, illustrative split-level
+                                situation (PBO ≈ 0.39 per docs/EDGE.md, illustrative split-level
                                 reconstruction range 0.31-0.47, illustratively L=12 as the frequent
                                 IS winner but never failing catastrophically OOS). The correct
                                 response
@@ -604,29 +622,29 @@ VINTAGE 1 — light-cost / single-peak (the OPTIMISTIC UPPER BOUND, NOT the depl
 
 VINTAGE 2 — real Amihud-impact cost (the DEPLOYABLE estimate, Section 2.2's cost model):
   SR_annual (band-ensemble, honest cost)  ≈ 0.8 - 1.0    (docs/EDGE.md (b))              [MEASURED]
-  DSR                                      = 0.807                                       [MEASURED]
-  PSR (against SR*=0, i.e. "beats zero")   = 0.994        <-- still HIGH                 [MEASURED]
-  Gate: DSR = 0.807 < 0.95 (RED threshold)  ==>  FAILS the point-DSR gate...
+  DSR                                      = 0.796                                       [MEASURED]
+  PSR (against SR*=0, i.e. "beats zero")   = 0.988        <-- still HIGH                 [MEASURED]
+  Gate: DSR = 0.796 < 0.95 (RED threshold)  ==>  FAILS the point-DSR gate...
   ...but the FAILURE MODE is 'insufficient_track_record', NOT a deflation rejection:
     MinTRL (Section 5.5) EXCEEDS the observed n_obs = 258 weeks.
 ```
 
-**Why the Vintage-2 DSR=0.807 itself is [MEASURED] even though its INPUTS (`γ3, γ4, ρ̄`) are partly
+**Why the Vintage-2 DSR=0.796 itself is [MEASURED] even though its INPUTS (`γ3, γ4, ρ̄`) are partly
 [ILLUSTRATIVE] below — this is not a contradiction, it is stated precisely.** `docs/EDGE.md` reports
-DSR=0.807 as an output of an actual run of `src/convexity/system/xsec_validate.py::deflated_sharpe` against the
+DSR=0.796 as an output of an actual run of `src/convexity/system/xsec_validate.py::deflated_sharpe` against the
 real weekly ledger; that number is measured. Section 5.4 below then shows a **worked arithmetic
 reconstruction** of how such a DSR value could arise from plausible per-observation inputs, using
 illustrative (not separately re-extracted) `γ3, γ4, ρ̄` — this reconstruction exists to satisfy the
-rigor bar's "show a derivation, not just assert the formula," and its match to the measured 0.807 is
+rigor bar's "show a derivation, not just assert the formula," and its match to the measured 0.796 is
 a consistency check on the arithmetic, not a claim that the illustrative inputs are themselves the
 real, persisted moments of the live series. If a future spec revision persists the actual `γ3, γ4`
 of the weekly return series (a one-line addition to `deflated_sharpe`'s output, out of scope for
 this spec-writing pass) and re-runs Section 5.4's arithmetic with the REAL moments instead of the
-illustrative ones, the result should still land near DSR ≈ 0.807 (since that is the measured
+illustrative ones, the result should still land near DSR ≈ 0.796 (since that is the measured
 output) — a large discrepancy would indicate the illustrative moments in Section 5.4 are not
 representative and the derivation should be redone against the real numbers.
 
-**What "fails on track record but PSR is high" means, mathematically — spelled out.** PSR = 0.994
+**What "fails on track record but PSR is high" means, mathematically — spelled out.** PSR = 0.988
 means: *given the observed per-observation Sharpe `SR_pp` and its estimated sampling distribution
 (accounting for the non-normality of weekly crypto returns via `γ3`, `γ4`), the probability that the
 TRUE per-observation Sharpe exceeds zero is 99.4%* — the edge, taken at face value against a
@@ -638,7 +656,7 @@ trial configs*" (`SR*₀`, Section 5.4 below) — a strictly higher bar than zer
 the gap between the observed edge and that higher bar at the required confidence.** MinTRL (Section
 5.5) is the algebraic answer to "how many observations would I need to resolve `(SR_pp − SR*₀)` at
 95% confidence given this much non-normality." When `n_obs < MinTRL`, the honest statement is not
-"there is no edge" (PSR=0.994 says the *sign* of the edge is not in serious doubt) but "**the
+"there is no edge" (PSR=0.988 says the *sign* of the edge is not in serious doubt) but "**the
 track record is too short to certify, at the required confidence, that the edge clears the
 deflated luck-benchmark rather than merely clearing zero.**" This is a **length** problem
 (collect more weeks) not a **deflation** problem (the search was too promiscuous) — the two
@@ -749,13 +767,13 @@ DSR = PSR(SR*0 = 0.053299) with SR_pp=0.12457, n_obs=258, (gamma3, gamma4 [ILLUS
   illustrative ~0.821 (fewer, less-mutually-correlated trials => a smaller N_sys => a lower luck
   benchmark SR*0 => an easier bar to clear), and is presented here as the illustrative reconstruction
   consistent with the corrected trial ledger, not as a replacement for the separately
-  [MEASURED, docs/EDGE.md] Vintage-2 DSR=0.807 headline (that MEASURED number was computed by an
+  [MEASURED, docs/EDGE.md] Vintage-2 DSR=0.796 headline (that MEASURED number was computed by an
   actual run of deflated_sharpe against whatever ledger was live at the time it ran, and is not
   itself recomputed by this spec-writing pass — Section 5.3's caveat about measured-vs-illustrative
   applies unchanged: only the ILLUSTRATIVE reconstruction below is being corrected here, because a
   future re-run of deflated_sharpe against the now-corrected K=5 ledger is the only way to obtain a
   new MEASURED DSR). GATE at threshold 0.95: FAILS on the point-DSR axis regardless of which reading
-  is used, since MEASURED DSR=0.807 and the illustrative reconstruction ~0.867 both sit below 0.95.
+  is used, since MEASURED DSR=0.796 and the illustrative reconstruction ~0.867 both sit below 0.95.
 
 SENSITIVITY (how much does this conclusion depend on the illustrative N_sys=3 and gamma3/gamma4?):
   Re-running the SAME arithmetic at N_sys=1 (BLdP zero-benchmark convention floor, Section 5.6) moves
@@ -798,15 +816,15 @@ MinTRL = 1 + 1.052889 * (1.644854 / 0.071271)^2
 n_obs = 258 weeks (~5 years)  <  max(MinTRL ~ 562, n_obs_floor = 24)  =>
   insufficient_track_record, passed = False on the track-LENGTH axis — precisely the qualitative
   finding the task EVIDENCE states: DSR fails ONLY on insufficient track record, not because PSR is low
-  (PSR = 0.994 remains high) and not because the point-DSR itself is absurdly far from the gate
-  (0.807-0.867 vs 0.95 is a real but not enormous gap) — it is that closing a real-but-modest
+  (PSR = 0.988 remains high) and not because the point-DSR itself is absurdly far from the gate
+  (0.796-0.867 vs 0.95 is a real but not enormous gap) — it is that closing a real-but-modest
   per-observation edge over a deflated benchmark at 95% confidence, with THIS MUCH non-normality,
   mechanically requires several times the ~5 years of weekly data actually available. This is a
   track-length problem, not a deflation-rejection problem, and the headline must say so explicitly:
-  "DSR = 0.807-0.867 @ n_obs=258 (< MinTRL ~ 560+)" — never DSR alone. [The MinTRL figure is
+  "DSR = 0.796-0.867 @ n_obs=258 (< MinTRL ~ 560+)" — never DSR alone. [The MinTRL figure is
   RECOMPUTED here from ~800+ to ~560+ for the corrected K=5/N_sys=3 ledger (see the worked arithmetic
   above); the DSR range's upper bound is also updated from ~0.82 to ~0.867 to match the corrected
-  illustrative reconstruction — the MEASURED lower bound (0.807, docs/EDGE.md) is unchanged, since it
+  illustrative reconstruction — the MEASURED lower bound (0.796, docs/EDGE.md) is unchanged, since it
   was computed by an actual run against a separately-recorded ledger snapshot, not derived in this
   spec-writing pass.]
 ```
@@ -936,7 +954,7 @@ GATE 4 — OVERFITTING:
     PBO < 0.5                (upper bound of the reported range, Invariant PBO-RANGE)
   with the deployment-mode consequence of Section 4.4's three-zone convention: PBO in [0.2, 0.5)
   passes Gate 4 but FORCES ensemble/band deployment rather than a single-point config (this is a
-  DEPLOYMENT-MODE constraint attached to a PASS, not a separate gate). Validated: PBO ≈ 0.36
+  DEPLOYMENT-MODE constraint attached to a PASS, not a separate gate). Validated: PBO ≈ 0.39
   (docs/EDGE.md digest point estimate), illustrative split-level reconstruction range [0.31, 0.47]
   (Section 4.4), upper bound 0.47 < 0.5 => PASSES, in the mandatory-band-deployment sub-zone,
   consistent with the already-adopted L in {12,14,16} band policy.
@@ -1014,14 +1032,14 @@ GATE 1  n_true_distinct >= k_min=3 : LIKELY PASS but NOT FORMALLY MEASURED AT PR
                                       the constant-reconciliation note above §6.1: k_min=3 is a weak
                                       floor, so "passes k_min=3" is a much lower bar than the
                                       retracted "n_true_distinct >= 30" draft implied.)
-GATE 2  DSR / track-length branch  : Branch 2b — PSR=0.994 (>=0.95), DSR=0.807-0.867 shortfall
+GATE 2  DSR / track-length branch  : Branch 2b — PSR=0.988 (>=0.95), DSR=0.796-0.867 shortfall
                                       diagnosed as insufficient_track_record (n_obs=258 < MinTRL
                                       ~560+, Section 5.5).  CONDITIONAL PASS (branch 2b). [MinTRL
                                       and the illustrative-reconstruction upper bound recomputed for
                                       the corrected K=5/N_sys=3 ledger; the [MEASURED] DSR lower
-                                      bound of 0.807 is unchanged.]
+                                      bound of 0.796 is unchanged.]
 GATE 3  frac_pos >= 0.8            : 0.85-1.00.  PASS.
-GATE 4  PBO < 0.5                  : PBO ≈ 0.36 (docs/EDGE.md), illustrative range [0.31, 0.47],
+GATE 4  PBO < 0.5                  : PBO ≈ 0.39 (docs/EDGE.md), illustrative range [0.31, 0.47],
                                       upper bound 0.47 < 0.5.  PASS, in the mandatory-band sub-zone
                                       (deploy L in {12,14,16}, not a point).
 GATE 5  regime breadth >= 4/5      : 5/5.  PASS.

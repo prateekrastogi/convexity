@@ -11,6 +11,9 @@ future contributor deleted the shrinkage step (the exact Marchenko-Pastur bug), 
 
 from __future__ import annotations
 
+import numpy as np
+import pytest
+
 from convexity.regime.measures import turbulence as tb
 from convexity.regime.synth.generate import iid_no_structure_panel
 
@@ -54,3 +57,22 @@ def test_true_absorption_ratio_of_iid_panel_is_one_over_N_in_population():
     ar_lw = tb.absorption_ratio(tb.ledoit_wolf_shrunk_covariance(panel)[0])
     population = 1.0 / n_symbols
     assert abs(ar_lw - population) < abs(ar_sample - population)
+
+
+def test_ledoit_wolf_delta_star_is_scale_invariant():
+    """LW 2003's shrinkage intensity is dimensionless — delta*(x) == delta*(c*x) for any c > 0
+    (audit R-1: an earlier revision divided the rho_hat cross-term by sqrt(var_i*var_j), making
+    delta* scale-VARIANT — at realistic decimal-return scales it clamped to 0, silently disabling
+    shrinkage; a faithful Appendix-B implementation is scale-invariant by construction)."""
+    rng = np.random.default_rng(3)
+    f = rng.standard_normal(120)
+    betas = np.linspace(0.2, 2.0, 10)[:, None]
+    x = betas * f[None, :] * 0.02 + rng.standard_normal((10, 120)) * 0.01
+    _, d1 = tb.ledoit_wolf_shrunk_covariance(x)
+    _, d100 = tb.ledoit_wolf_shrunk_covariance(x * 100.0)
+    _, d001 = tb.ledoit_wolf_shrunk_covariance(x * 0.01)
+    assert d1 == pytest.approx(d100, abs=1e-10)
+    assert d1 == pytest.approx(d001, abs=1e-10)
+    # heterogeneous-beta factor structure: the constant-correlation target is genuinely wrong, so
+    # the optimal intensity is INTERIOR — not clipped to 0 (no shrinkage) or 1 (pure target).
+    assert 0.0 < d1 < 1.0

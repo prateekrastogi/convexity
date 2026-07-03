@@ -44,7 +44,7 @@ REGIMES_ALL_POSITIVE = {
 def _dsr_result(
     *,
     dsr: float = 0.96,
-    psr: float = 0.994,
+    psr: float = 0.988,
     n_obs: int = 258,
     min_trl: float = 120.0,
     n_obs_sufficient: bool | None = None,
@@ -192,7 +192,7 @@ def test_gate2_branch_2a_clean_dsr_pass():
 
 def test_gate2_branch_2b_track_length_conditional_pass():
     """DSR short of 0.95 but PSR(0) high and n_obs < MinTRL: the §5.5 honest-reading branch."""
-    d = _dsr_result(dsr=0.807, psr=0.994, n_obs=258, min_trl=562.0)
+    d = _dsr_result(dsr=0.796, psr=0.988, n_obs=258, min_trl=562.0)
     report = _run(_candidate(dsr=d))
     assert report.gates[1].passed
     assert report.gates[1].reason == "track_length_branch_2b"
@@ -202,7 +202,7 @@ def test_gate2_branch_2b_track_length_conditional_pass():
 
 def test_gate2_fails_when_track_is_long_enough_to_have_refuted_the_edge():
     """n_obs >= MinTRL with DSR still short: more data would not have saved it (§6.1)."""
-    d = _dsr_result(dsr=0.90, psr=0.994, n_obs=600, min_trl=562.0)
+    d = _dsr_result(dsr=0.90, psr=0.988, n_obs=600, min_trl=562.0)
     report = _run(_candidate(dsr=d))
     assert not report.gates[1].passed
     assert report.gates[1].reason == "dsr_shortfall_not_track_length"
@@ -377,7 +377,7 @@ def test_gate2_branch_2b_reads_engine_sufficiency_not_raw_min_trl():
     n_obs = 15  # MinTRL(10) <= n_obs(15) < n_obs_floor(24): the disagreement window
     assert min_trl < n_obs < n_obs_floor
     assert n_obs >= min_trl  # the RAW gloss says "long enough" — the wrong answer
-    d = _dsr_result(dsr=0.80, psr=0.994, n_obs=n_obs, min_trl=min_trl)
+    d = _dsr_result(dsr=0.80, psr=0.988, n_obs=n_obs, min_trl=min_trl)
     assert not d.n_obs_sufficient  # engine's authoritative diagnosis: track too short
     report = _run(_candidate(dsr=d))
     gate2 = report.gates[1]
@@ -386,7 +386,7 @@ def test_gate2_branch_2b_reads_engine_sufficiency_not_raw_min_trl():
     assert "gate2_conditional_pass_insufficient_track_record" in report.reason_codes
     # And the contrapositive: engine says sufficient (n_obs >= floor) with DSR still short => FAIL,
     # even though for a small MinTRL the raw ``n_obs < MinTRL`` gloss is also False here.
-    d_suff = _dsr_result(dsr=0.80, psr=0.994, n_obs=30, min_trl=min_trl)
+    d_suff = _dsr_result(dsr=0.80, psr=0.988, n_obs=30, min_trl=min_trl)
     assert d_suff.n_obs_sufficient
     report2 = _run(_candidate(dsr=d_suff))
     assert not report2.gates[1].passed

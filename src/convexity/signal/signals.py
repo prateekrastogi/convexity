@@ -72,9 +72,11 @@ def _pct_rank(values: np.ndarray) -> np.ndarray:
 def momentum_signal(panel: Panel, d: int, *, lookback: int, skip: int) -> np.ndarray:
     """Cross-sectional momentum RANK at rebalance day ``d`` (higher rank -> long). No lookahead.
 
-    Return over ``[d - skip - lookback, d - skip]``. A symbol is eligible iff both endpoint closes are
-    present AND it is listed across the whole window (``listed`` True at both endpoints implies live
-    span covers them, since the live span is contiguous per symbol). All indices are <= d.
+    Return over ``[d - skip - lookback, d - skip]``. A symbol is eligible iff both endpoint closes
+    are present AND ``listed`` is True at both ENDPOINTS — endpoint-only by design: the 2-point
+    return uses only the endpoint closes, so interior non-listed days inside the window are
+    tolerated (they occur on the real lake — shared data gaps — so the old "live span is contiguous
+    per symbol" claim was false; audit P-1). All indices are <= d.
     """
     end = d - skip
     start = d - skip - lookback

@@ -140,11 +140,12 @@ def test_n50_gap_state_none_prices_normally():
 
 def test_amihud_undefined_falls_back_to_class_constant_never_zero():
     # COST.md Section 10 / P5: an undefined Amihud (NaN / non-positive: thin sample) falls back to
-    # CRYPTO_FRICTION.impact — never zero, never an extrapolated thin-sample fit.
+    # 2x CRYPTO_FRICTION.impact (class-WORST, audit C-2) — never zero, never a thin-sample
+    # fit, never the neutral median anchor.
     m = _model()
-    assert m.impact_frac(float("nan"), ANCHOR_NOTIONAL) == CRYPTO_FRICTION.impact
-    assert m.impact_frac(0.0, ANCHOR_NOTIONAL) == CRYPTO_FRICTION.impact
-    assert m.impact_frac(-1e-9, ANCHOR_NOTIONAL) == CRYPTO_FRICTION.impact
+    assert m.impact_frac(float("nan"), ANCHOR_NOTIONAL) == 2.0 * CRYPTO_FRICTION.impact
+    assert m.impact_frac(0.0, ANCHOR_NOTIONAL) == 2.0 * CRYPTO_FRICTION.impact
+    assert m.impact_frac(-1e-9, ANCHOR_NOTIONAL) == 2.0 * CRYPTO_FRICTION.impact
     assert CRYPTO_FRICTION.impact > 0.0
 
 

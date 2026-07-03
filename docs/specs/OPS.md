@@ -220,7 +220,7 @@ a day-count.
 | `delta_target` | Standardized Sharpe shift size the chart is tuned to detect (`= 1.0`) | RED | 4.3 |
 | `n_confirm` | Consecutive healthy weeks required to exit DEGRADE/HALT back to RUN | RED | 4.4 |
 | `g_degrade` | Gross multiplier applied while in DEGRADE (`e.g. 0.5`) | RED | 4.4 |
-| `PBO` | Probability of backtest overfitting (`= 0.357`, `SYSTEM.md` §4.4) | SYSTEM-owned | 4.3 |
+| `PBO` | Probability of backtest overfitting (`= 0.393`, `SYSTEM.md` §4.4) | SYSTEM-owned | 4.3 |
 | `frac_pos` | Fraction of CPCV paths with positive OOS Sharpe (`0.85–1.00`) | SYSTEM-owned | 4.1, 4.3 |
 | `PSR`, `MinTRL`, `n_obs` | Probabilistic Sharpe, min track-record length, observed weeks (`SYSTEM.md` §5.3–5.5) | SYSTEM-owned | 4.3 |
 | `W_exec` | Execution-window budget (`≡ EXECUTION.md`'s `Delta`, AMBER, ~1–4h) | AMBER (EXECUTION-owned) | 5.1 |
@@ -711,10 +711,19 @@ simulation under the `N(0,1)` null (permitted here as a ONE-TIME offline
 calibration — not a live-fitted model — consistent with P8):
 
 ```
-ARL_0(d, h)  ≈  ( exp( 2·d·h ) − 2·d·h − 1 ) / ( 2·d^2 )        [Siegmund 1985, Wald-approximation
+ARL_0(d, h)  ≈  ( exp( 2·d·b ) − 2·d·b − 1 ) / ( 2·d^2 ),   b = h + 1.166
+                                                                [Siegmund 1985, CORRECTED-diffusion
                                                                    form for a Gaussian one-sided CUSUM
                                                                    with reference value d and boundary h;
-                                                                   valid for d, h > 0]
+                                                                   valid for d, h > 0. The +1.166 is
+                                                                   Siegmund's excess-over-boundary
+                                                                   (overshoot) constant for standardized
+                                                                   Gaussian increments; the UNCORRECTED
+                                                                   b = h form an earlier revision showed
+                                                                   here understates ARL_0 ~3.2x at the
+                                                                   shipped (d=0.5, h*=6.23) — MC-verified
+                                                                   (corrected: 3242 vs 100k-run MC
+                                                                   3201-3220, ~1% agreement)]
 ```
 
 - `d = delta_target/2` where `delta_target` is the standardized Sharpe shift
@@ -728,7 +737,7 @@ ARL_0(d, h)  ≈  ( exp( 2·d·h ) − 2·d·h − 1 ) / ( 2·d^2 )        [Sieg
 - **Why `delta_target = 1.0` and not a more aggressive (smaller) shift.** A
   smaller `delta_target` would detect a smaller Sharpe drift faster, but the
   strategy's own overfitting diagnostic argues against chasing that
-  sensitivity: `SYSTEM.md` §4.4 reports **PBO = 0.357** for the deployed
+  sensitivity: `SYSTEM.md` §4.4 reports **PBO = 0.393** for the deployed
   lookback family (partition-sensitivity range `[0.31, 0.47]` across
   alternative `(N, k_test)` CPCV choices), i.e. the in-sample-best
   configuration's edge over the family median is itself only moderately
@@ -736,7 +745,7 @@ ARL_0(d, h)  ≈  ( exp( 2·d·h ) − 2·d·h − 1 ) / ( 2·d^2 )        [Sieg
   standardized drift would be reacting at a sensitivity finer than the
   strategy's own validation can currently distinguish signal from
   partition-noise at — it would risk false-alarming on exactly the kind of
-  benign cross-partition Sharpe wobble PBO=0.357 already says is expected
+  benign cross-partition Sharpe wobble PBO=0.393 already says is expected
   under a real, but moderately-overfit-flagged, edge. `delta_target = 1.0`
   (a full standardized-Sharpe unit) is deliberately set coarser than that
   noise floor: it targets "the edge is plausibly gone," not "the edge moved
@@ -744,11 +753,19 @@ ARL_0(d, h)  ≈  ( exp( 2·d·h ) − 2·d·h − 1 ) / ( 2·d^2 )        [Sieg
   reasoning direction as `mu_0`'s choice of the lower `SR_0 = 0.85` bound
   (conservative in the same direction, harder to false-alarm), applied to the
   shift-size parameter rather than the null mean.
-- Solving `ARL_0(0.5, h) = 1000` for `h` via the Siegmund formula (numeric
-  root-find/bisection on the exponential — no ML, a one-time scalar solve)
-  gives `h* ≈ 6.23` `[DERIVED]`. This module ships `h* = 6.23` as a RED
-  constant derived exactly this way, with the derivation reproducible
-  offline (`ops/validate/arl.py`, §7) rather than re-solved live.
+- Solving `ARL_0(0.5, h) = 1000` for `h` via the CORRECTED Siegmund formula
+  (numeric root-find/bisection on the exponential — no ML, a one-time scalar
+  solve) gives the FLOOR `h_min ≈ 5.06` `[DERIVED]`. This module ships
+  `h* = 6.23` — deliberately ABOVE the floor — delivering `ARL_0 ≈ 3242`
+  (MC-verified: 100k-run MC 3201-3220, ~1% agreement), i.e. a per-year
+  false-HALT probability of ~1.6%, comfortably within the ≤5%/yr budget.
+  The margin is REQUIRED, not cosmetic: an exact-1000 `ARL_0` puts the
+  per-year rate at `1−(1−1/1000)^52.18 ≈ 5.1%`, marginally OVER budget.
+  (An earlier revision displayed the uncorrected formula and claimed
+  `h* = 6.23` solves `ARL_0 = 1000` exactly — that was the formula error
+  above, not a different design; the shipped constant is unchanged.) The
+  derivation is reproducible offline (`ops/validate/arl.py`, §7), never
+  re-solved live.
 - With this calibration, the corresponding `ARL_1` (detection speed once a
   true `delta_target = 1.0` shift occurs) is materially shorter than
   `ARL_0` by construction (the whole point of CUSUM vs a fixed-threshold
@@ -761,7 +778,7 @@ ARL_0(d, h)  ≈  ( exp( 2·d·h ) − 2·d·h − 1 ) / ( 2·d^2 )        [Sieg
   itself flags as **track-length-insufficient**: `n_obs ≈ 258` weekly
   observations (`SYSTEM.md` §5.2) versus a required `MinTRL ≈ 824` weeks
   (`SYSTEM.md` §5.5) for the deflated-Sharpe gate to certify the edge at its
-  stated confidence — the strategy passes on `PSR = 0.994` (the *sign* of the
+  stated confidence — the strategy passes on `PSR = 0.988` (the *sign* of the
   edge is not in serious doubt) but fails the DSR gate specifically on
   track-record length, not on a low point estimate (`SYSTEM.md` §5.3-5.5).
   Consequently, `ARL_0_target = 1000` weeks (≈19 years) is calibrated against
@@ -1394,15 +1411,16 @@ unhealthy episodes, at the calibrated false-alarm rate."
       from `SYSTEM.md`. Code comments must show the derivation, not assert the
       number; see the References-section note on which spec owns which number.
 - [ ] `frac_pos` (0.85-1.00), CPCV mean OOS path Sharpe (≈0.91 vs naive
-      ≈0.98), and PBO (0.357, range [0.31, 0.47]) referenced in code
+      ≈0.99), and PBO (0.393, range [0.31, 0.47]) referenced in code
       comments/docstrings are cited to `SYSTEM.md` §4.2-§4.4, never to
       `docs/EDGE.md` (which does not contain these figures) — a grep-style
       CI check that no code comment attributes these specific numbers to
       EDGE.md is a cheap regression guard against the mis-citation this spec
       itself once carried.
 - [ ] `(d, h*)` calibration reproducible via `validate/arl.py`; the shipped
-      `h* = 6.23` matches the value the Siegmund-formula solve produces for
-      `ARL_0_target = 1000`, `d = 0.5`.
+      `h* = 6.23` sits at-or-above the FLOOR `h_min ≈ 5.06` the corrected-
+      Siegmund solve produces for `ARL_0_target = 1000`, `d = 0.5`, and
+      delivers `ARL_0 ≈ 3242` (MC-verified).
 - [ ] Invariant CAL's Monte-Carlo test passes (empirical `ARL_0` within MC
       error of target; `ARL_1 << ARL_0` under the injected shift).
 - [ ] Invariant MONO test passes (no single-observation self-heal from
@@ -1596,9 +1614,9 @@ unhealthy episodes, at the calibrated false-alarm rate."
   spec's kill-switch calibration is grounded against: mean OOS path Sharpe
   **≈0.91** vs naive single-path **≈0.98** (haircut **≈0.07**, `SYSTEM.md`
   §4.2), `frac_pos` **0.85–1.00** (§4.3, Invariant CPCV-STAT), and PBO
-  **= 0.357** (partition-sensitivity range **[0.31, 0.47]**, §4.4) — cited
+  **= 0.393** (partition-sensitivity range **[0.31, 0.47]**, §4.4) — cited
   here (P4, §4.3) rather than to `EDGE.md`, which does not contain these
-  numbers. Also §5.2–§5.5 for the DSR track-record finding (PSR = 0.994,
+  numbers. Also §5.2–§5.5 for the DSR track-record finding (PSR = 0.988,
   `n_obs ≈ 258` weeks `<` MinTRL `≈ 824` weeks, "insufficient track record,"
   §5.5) this spec's §4.3 track-record-tension note relies on.
 - `docs/specs/REGIME.md` §4 (CUSUM/ARL construction, independently
@@ -1674,7 +1692,7 @@ unhealthy episodes, at the calibrated false-alarm rate."
   (`ARL_0_target = 1000` weeks, slightly above the ≈1,018-week requirement
   derived from the stated 5%/yr budget, never below it) — but both should be
   treated as pending, not silently resolved.
-- **PBO = 0.357 (`SYSTEM.md` §4.4, partition-sensitivity range
+- **PBO = 0.393 (`SYSTEM.md` §4.4, partition-sensitivity range
   `[0.31, 0.47]`) is moderate, not clean, and every RED constant that reads
   as "conservative because of the strategy's own uncertainty" (`SR_0`'s
   lower-bound choice §4.2, `delta_target = 1.0`'s coarseness §4.3) is

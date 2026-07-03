@@ -174,11 +174,11 @@ def _recorded_baseline_like_weekly(n_weeks: int = 258, seed: int = 0) -> np.ndar
     """A weekly net series shaped like the RECORDED CPCV baseline (task provenance).
 
     The recorded baselines (scripts/xsec_cpcv.py on the 100-crypto point-in-time panel, N=8/k=2/28
-    paths/1wk embargo) are: naive full-sample Sharpe ~0.979 (L=14), CPCV mean-path Sharpe ~0.906,
+    paths/1wk embargo) are: naive full-sample Sharpe ~0.987 (L=14), CPCV mean-path Sharpe ~0.914,
     haircut ~0.07, frac_pos 0.85-1.00. A ~258-week (~5yr) series with per-week Sharpe consistent with
     an annualized ~0.95 reproduces that statistical SHAPE through the SAME ``path_distribution``
     partition (COST.md Section 8.3), so the parity anchor the task calls out is exercised at the
-    STATISTIC level here, not merely at partition cardinality. The exact 0.906/0.07 numbers are the
+    STATISTIC level here, not merely at partition cardinality. The exact 0.914/0.07 numbers are the
     real-lake promotion-time anchor (scripts/xsec_cpcv.py), verified there rather than on synthetic
     data — see the module note below.
     """

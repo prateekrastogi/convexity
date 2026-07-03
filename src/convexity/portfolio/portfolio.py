@@ -104,6 +104,11 @@ def quantile_weights(
     def _leg(idx: np.ndarray, target: float) -> None:
         if weighting == "volscaled" and vol is not None:
             iv = np.array([1.0 / vol[i] if np.isfinite(vol[i]) and vol[i] > 0 else np.nan for i in idx])
+            # guard the OUTPUT too (audit PF-2): a subnormal vol (>0, finite, < ~1e-308) makes
+            # 1/vol overflow to inf -> inf/inf = NaN weight leaking into the book. Non-finite iv
+            # falls into the existing leg-mean fallback. Numerically a NO-OP for every real input
+            # (real daily vols are either 0 -- already guarded -- or >> 1e-308).
+            iv[~np.isfinite(iv)] = np.nan
             if np.all(~np.isfinite(iv)):
                 mag = np.full(idx.size, 1.0 / idx.size)
             else:

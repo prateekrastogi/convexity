@@ -1055,7 +1055,7 @@ honest, cited exactly (never invented):
   would be expected to show as an anomalously LOW, too-good PBO).
 - **DSR** (Bailey & Lopez de Prado 2014 deflated Sharpe, reusing
   `convexity.system.validate.deflated.DeflatedSharpe`) fails ONLY on
-  insufficient track length: PSR ≈ **0.994** (high) against a MinTRL that
+  insufficient track length: PSR ≈ **0.988** (high) against a MinTRL that
   exceeds the available ≈5-year / 258-weekly-observation sample once the
   multi-testing-inflated trial count is paid for — a track-RECORD-length
   problem, not a deflation rejection. This is orthogonal to universe

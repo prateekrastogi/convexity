@@ -27,7 +27,9 @@ class FundingEvent:
 
     ts: int  # epoch-ms of the funding stamp (Binance USDT-M: 00:00/08:00/16:00 UTC)
     rate: float  # realized funding rate r_k at this stamp
-    notional_at_stamp: float  # signed position notional at the instant (read from Nautilus state)
+    notional_at_stamp: float  # UNSIGNED |position notional| at the stamp (read from Nautilus
+    # state); the trade's Side supplies the sign in every consumer (audit C-1: a signed value
+    # here would double-sign a short's funding, flipping its credit into a cost)
 
 
 @dataclass(frozen=True)

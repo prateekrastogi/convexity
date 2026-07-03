@@ -11,9 +11,14 @@ standardized weekly Sharpe surprise ``z_k``:
     PROMOTE when S_k ≥ h_promote
 
 In-control model (§6.3): ``z_k ~ N(0,1)`` i.i.d. — the same per-observation standardized convention
-DSR's z-test uses. ``k_ref``/``h_promote`` are calibrated to a target ``ARL_0 ≈ 52`` weeks via the
-Hawkins & Olwell (1998) closed form ``ARL_0 ≈ exp(2·k_ref·h_promote)/(2·k_ref²)``. The ``validate/``
-Monte-Carlo check runs ONLY on synthetic ``N(0,1)`` draws, never on realized live P&L (P5/P7).
+DSR's z-test uses. ``k_ref``/``h_promote`` are calibrated against an ``ARL_0 >= 52``-week FLOOR via
+Siegmund (1985)'s corrected-diffusion closed form ``ARL_0 ≈ (exp(2·k_ref·b) − 2·k_ref·b − 1) /
+(2·k_ref²)`` with ``b = h_promote + 1.166`` (the Gaussian excess-over-boundary constant; an earlier
+revision used the uncorrected ``exp(2kh)/(2k²)`` form, misattributed to Hawkins & Olwell 1998, which
+understates ARL_0 ~45% at these constants). Shipped ``(k_ref=0.25, h_promote=5.0)`` DELIVERS
+``ARL_0 ≈ 141.9`` (100k-run MC: 141.7-141.8, ~0.1% agreement) — one false promotion per ~2.7
+in-control years, comfortably above the floor. The ``validate/`` Monte-Carlo check runs ONLY on
+synthetic ``N(0,1)`` draws, never on realized live P&L (P5/P7).
 """
 
 from __future__ import annotations
@@ -25,13 +30,19 @@ import numpy as np
 
 
 def arl0_closed_form(k_ref: float, h_promote: float) -> float:
-    """Closed-form one-sided-Gaussian-CUSUM in-control ARL (LEVERAGE.md §6.3, Hawkins & Olwell 1998).
+    """Corrected-Siegmund one-sided-Gaussian-CUSUM in-control ARL (LEVERAGE.md §6.3, Siegmund 1985).
 
-    ``ARL_0 ≈ exp(2·k_ref·h_promote) / (2·k_ref²)`` — the expected number of in-control weeks before
-    a FALSE promotion (§6.3). Used to derive ``h_promote`` from a target ``ARL_0`` and as the target
-    the ``validate/arl.py`` Monte-Carlo check verifies the actual recursion against (§10).
+    ``ARL_0 ≈ (exp(2·k_ref·b) − 2·k_ref·b − 1) / (2·k_ref²)`` with ``b = h_promote + 1.166``
+    (Siegmund's excess-over-boundary constant for standardized Gaussian increments) — the expected
+    number of in-control weeks before a FALSE promotion (§6.3). At the shipped ``(0.25, 5.0)`` this
+    gives 141.9 vs 100k-run MC 141.7-141.8 (~0.1% agreement); the earlier uncorrected
+    ``exp(2kh)/(2k²)`` form gave 97.5 (45% understatement). Used to check ``h_promote`` against the
+    ARL_0 floor and as the target ``validate/arl.py``'s Monte-Carlo verifies the recursion against
+    (§10).
     """
-    return math.exp(2.0 * k_ref * h_promote) / (2.0 * k_ref * k_ref)
+    b = h_promote + 1.166  # Siegmund's Gaussian excess-over-boundary correction
+    x = 2.0 * k_ref * b
+    return (math.exp(x) - x - 1.0) / (2.0 * k_ref * k_ref)
 
 
 def cusum_step(s_prev: float, z_k: float, k_ref: float) -> float:

@@ -23,6 +23,12 @@ half-spread and impact are the conservative research fallbacks (crypto-major ~1b
 impact at low size), matching ``research.config``.
 
 This is deliberately honest about turnover: names entering/leaving the legs AND weight drift both cost.
+
+KNOWN LIMITATION (audit PF-3, documented not fixed — changing it moves the recorded baselines): a
+name delisting MID-WEEK contributes ZERO price P&L for that entire week (even its live portion) and
+its forced close incurs NO exit friction (the next rebalance sees it already at weight 0). Rare in a
+top-liquidity universe, sign-indefinite on P&L, slightly understates cost; a partial-week return to
+the last live close + one exit's friction would be the fuller treatment (PARITY-SENSITIVE).
 At weekly cadence the friction is paid ~52x/yr, not thousands of times — the whole point of the
 low-turnover premise.
 """

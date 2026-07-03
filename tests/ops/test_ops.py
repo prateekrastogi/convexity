@@ -414,22 +414,30 @@ def _pairwise_ratios(leg: np.ndarray, *, exclude: int) -> np.ndarray:
 
 # ======================================================================== Invariant CAL (sec 4.3)
 
-def test_cal_h_star_reproduces_6_23():
-    """OPS.md sec 4.3 / sec 12: the shipped h* = 6.23 is what solving ARL_0(0.5, h) = 1000 produces.
+def test_cal_h_star_floor_and_margin():
+    """OPS.md sec 4.3 / sec 12: the corrected-Siegmund solve for ARL_0(0.5, h) = 1000 gives the
+    FLOOR h_min ~= 5.06; the shipped h* = 6.23 sits deliberately above it (margin — an exact-1000
+    ARL_0 would put the per-year false-HALT at ~5.1%, marginally over the <=5%/yr budget).
 
     Delegates the solve to ops.validate.arl (the sec-8 named home of the reproducible calibration),
     NOT an inline re-solve — the auditor's flag that the calibration was inlined into the test."""
-    h = solve_h_star(delta_target=DEFAULTS.delta_target, arl_0_target=DEFAULTS.arl_0_target)
-    assert h == pytest.approx(6.23, abs=0.01)
-    # And the shipped RED constant matches the solve to two decimals.
-    assert DEFAULTS.h_star == pytest.approx(round(h, 2), abs=0.005)
+    h_min = solve_h_star(delta_target=DEFAULTS.delta_target, arl_0_target=DEFAULTS.arl_0_target)
+    assert h_min == pytest.approx(5.06, abs=0.01)
+    # The shipped RED constant sits AT OR ABOVE the floor (floor + deliberate margin).
+    assert DEFAULTS.h_star >= h_min
+    assert DEFAULTS.h_star == pytest.approx(6.23)
     assert DEFAULTS.d == pytest.approx(0.5)
     # solve_boundary and solve_h_star agree (solve_h_star is the delta_target->d convenience).
-    assert solve_boundary(0.5, 1000.0) == pytest.approx(h)
+    assert solve_boundary(0.5, 1000.0) == pytest.approx(h_min)
 
 
-def test_cal_siegmund_arl_monotone_and_positive():
-    assert arl_0_siegmund(0.5, 6.23) == pytest.approx(1000.0, rel=0.02)
+def test_cal_siegmund_arl_matches_mc_and_monotone():
+    # Corrected-Siegmund form at the shipped (d, h*): 3242.1 vs 100k-run MC 3201-3220 (~1%
+    # agreement; audit probe + independent 30k-run MC). The uncorrected b=h form gave 1001 — a
+    # 3.2x understatement this pin would catch if it regressed.
+    assert arl_0_siegmund(0.5, 6.23) == pytest.approx(3242.0, rel=0.02)
+    # MC cross-check pinned from the audit (100k runs: 3201.4) — closed form within 5% of MC.
+    assert arl_0_siegmund(0.5, 6.23) == pytest.approx(3201.4, rel=0.05)
     # ARL_0 increases with the boundary h.
     assert arl_0_siegmund(0.5, 7.0) > arl_0_siegmund(0.5, 6.23)
 
@@ -440,10 +448,12 @@ def test_cal_monte_carlo_false_alarm_rate_within_budget():
 
     Delegates the MC to ops.validate.arl.mc_arl_0 (the sec-8 named calibration home) instead of
     reimplementing the loop in the test. The two-sided [2500, 7000] band BINDS h* mis-calibration:
-    the shipped h*=6.23 gives MC ARL_0 ~4000 (this seed/size); a too-low h*=5.5 gives ~1535 and a
-    too-high h*=7.5 gives ~16055, both outside the band. The ~4x gap above the 1000-week Siegmund
-    design target is the spec-disclosed conservatism of the large-ARL Wald approximation (sec 4.3:
-    achieved ARL_0 is slightly ABOVE the 5%/yr budget, never below)."""
+    the shipped h*=6.23 gives MC ARL_0 ~4000 (this seed/size; true value ~3220 per 100k-run MC);
+    a too-low h*=5.5 gives ~1535 and a too-high h*=7.5 gives ~16055, both outside the band. The
+    corrected-Siegmund closed form (3242) now AGREES with MC to ~1% — the old "~4x gap ...
+    disclosed conservatism of the Wald approximation" story was the uncorrected formula's error,
+    not approximation conservatism (the shipped h* delivers ARL_0 ~3242 >= the 1000-week floor,
+    per-year false-HALT ~1.6% <= 5%/yr budget)."""
     arl_0 = mc_arl_0(d=DEFAULTS.d, h_star=DEFAULTS.h_star, n_years=4000, seed=0)
     assert 2500.0 < arl_0 < 7000.0, (
         f"empirical ARL_0 {arl_0:.0f} outside the calibrated [2500, 7000] band — "
@@ -467,7 +477,9 @@ def test_cal_calibrate_and_verify_report_is_reproducible():
     reproduces to two decimals, per-year false-HALT is under the 5%/yr budget, and ARL_1 << ARL_0."""
     rep = calibrate_and_verify(delta_target=DEFAULTS.delta_target, arl_0_target=DEFAULTS.arl_0_target,
                                h_star=DEFAULTS.h_star, n_years_null=2000, n_reps_alt=1000, seed=0)
-    assert round(rep.h_star_solved, 2) == DEFAULTS.h_star
+    # floor + margin semantics: the shipped h* sits at-or-above the corrected-Siegmund floor.
+    assert DEFAULTS.h_star >= rep.h_star_solved
+    assert rep.h_star_solved == pytest.approx(5.06, abs=0.01)
     assert rep.per_year_false_halt < 0.05
     assert rep.arl_1_mc < rep.arl_0_mc
     assert rep.arl_1_mc < 100.0

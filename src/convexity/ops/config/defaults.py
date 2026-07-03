@@ -57,10 +57,12 @@ class OpsDefaults:
     # ---- sec 4.3 CUSUM design constants ----
     delta_target: float = 1.0  # [ILLUSTRATIVE-RED] OPS.md sec 4.3: standardized Sharpe shift the chart detects fastest
     # d = delta_target/2 (classical reference/allowance value; OPS.md sec 4.3, == REGIME.md's `k`).
-    # h* = 6.23 is the boundary the Siegmund ARL solve produces for ARL_0_target=1000, d=0.5
-    # (OPS.md sec 4.3 [DERIVED]; reproducible offline, this constant is not re-solved live).
-    h_star: float = 6.23  # [DERIVED-RED] OPS.md sec 4.3
-    arl_0_target: float = 1000.0  # [ILLUSTRATIVE-RED] OPS.md sec 4.3: ~19.5yr, >=5%/yr false-HALT budget
+    # h* = 6.23 sits ABOVE the corrected-Siegmund floor h_min ~= 5.06 for ARL_0_target=1000, d=0.5
+    # (OPS.md sec 4.3 [DERIVED]): delivered ARL_0 ~= 3242 (MC 3220, ~1% agreement), per-year
+    # false-HALT ~= 1.6% -- within the <=5%/yr budget WITH margin (an exact-1000 ARL_0 would sit at
+    # ~5.1%/yr, marginally over). Reproducible offline; this constant is not re-solved live.
+    h_star: float = 6.23  # [DERIVED-RED] OPS.md sec 4.3 (floor 5.06 + deliberate margin)
+    arl_0_target: float = 1000.0  # [ILLUSTRATIVE-RED] OPS.md sec 4.3: ARL_0 FLOOR (~19.5yr); <=5%/yr false-HALT budget
 
     # ---- sec 4.4 escalation-from-CUSUM constants ----
     g_degrade: float = 0.5  # [ILLUSTRATIVE-RED] OPS.md sec 4.4: gross multiplier while in DEGRADE
