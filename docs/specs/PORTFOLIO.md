@@ -1406,10 +1406,8 @@ def run_ensemble(panel: Panel, cfgs: list[XSecConfig]) -> XSecResult:
 ```
 
 Pass when (the exact test a future implementer must satisfy, in
-`tests/research/xsec/test_ensemble.py` — this file now exists, 417 lines,
-covering exactly the E5/E8/dollar-neutrality assertions below; note its own
-path was not renamed off `research/xsec` during the promotion refactor even
-though `src/` was — flagged as a judgment call, out of `docs/specs/` scope):
+`tests/portfolio/test_ensemble.py` — this file now exists, 417 lines,
+covering exactly the E5/E8/dollar-neutrality assertions below):
 (i) `run_ensemble` constructs no `Panel` internally and accepts exactly one
 `Panel` instance, passed by reference to every per-`cfg` call — a test
 asserts `id(panel)` (or, since `Panel` is a frozen dataclass, an equality

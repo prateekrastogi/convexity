@@ -1047,29 +1047,41 @@ end-to-end, not just THAT it cannot:
 
   * GATE 1 requires an actual promotion-report RUN through `n_true_distinct` counting logic. The
     counting LOGIC (Kish-effective-count / clustering, `src/convexity/system/cpcv.py` + `trials.py`'s
-    `TrialLedger.n_sys`) exists and is reused correctly elsewhere in this spec (Section 5.6), but
-    there is, as of this spec, no single function that assembles "GATE 1 AND ... AND GATE 6" into
-    one `PROMOTABLE` boolean and runs it end-to-end — `src/convexity/system/validate/promotion.py`
-    (the only plausibly-relevant module) implements a DIFFERENT thing: the §8.2 `ForwardGate`
-    re-promotion cadence check, not the six-gate conjunction below. A repo-wide search for
-    `n_true_distinct`, `PROMOTABLE`, or a `GATE 1`..`GATE 6` enumeration returns no hits outside
-    this spec file itself. **This section (§6) is therefore a FORMALIZATION of the promotion rule
-    that the codebase should implement, not a description of an already-implemented and merely
-    unrun check.** A future implementation pass should add a
-    `src/convexity/system/validate/promotion_gate.py` (name TBD, deliberately not claimed as
-    existing) that composes the already-existing pieces (`deflated.py`, `cpcv.py`, `walkforward.py`,
-    `trials.py`, plus the not-yet-written Gate-6 cost-stress module) into the single boolean this
-    section specifies. Until that module exists, "run the promotion gate" means manually checking
-    each of the six sub-results this table lists, by hand, against a human reading of this spec —
-    which is exactly the fragile, scattered-checking failure mode §6's own opening paragraph says it
-    is trying to eliminate, so closing this implementation gap is the highest-priority SYSTEM
-    follow-up.
-  * GATE 6 additionally requires CODE that has not been written at all (see the Gate-6 row above) —
-    a strictly earlier-stage gap than "logic exists, just needs assembling into one conjunction."
+    `TrialLedger.n_sys`) exists and is reused correctly elsewhere in this spec (Section 5.6). Status
+    update — the assembly function this bullet said did not exist NOW EXISTS:
+    `src/convexity/system/validate/promotion_gate.py`'s `PromotionGate.evaluate(candidate:
+    PromotionCandidate, defaults: PromotionGateDefaults | None = None) -> PromotionReport` composes
+    `deflated.py` (`DeflatedSharpe`/`DSRResult`), `trials.py` (`TrialLedger.n_sys`'s
+    `n_true_distinct`), `src/convexity/system/cpcv.py` (`frac_pos`, PBO), and COST's
+    `friction_stress` output into exactly the `GATE1 AND GATE2 AND ... AND GATE6` conjunction this
+    section specifies, returning a `PromotionReport.promotable: bool` plus a per-gate
+    `GateResult` audit trail (`gates[0]` is always Gate 1, checked first, before any DSR ranking —
+    matching this section's ordering requirement) — superseding the "no single function... no hits
+    outside this spec file" status this bullet originally recorded. `promotion.py` remains the
+    DIFFERENT §8.2 `ForwardGate` re-promotion cadence check, not this conjunction — the two are
+    intentionally separate modules (`promotion.py`'s own module docstring now cross-references
+    `promotion_gate.py` for this reason). Two divergences from this section's contract as originally
+    read, both on the side of the implementation being MORE conservative than a literal reading
+    requires: (1) Gate 6 fails CLOSED (`cost_stress=None` on the candidate is scored as a Gate-6
+    FAIL, not skipped/deferred) rather than this section's framing of Gate 6 as simply "not yet
+    checkable"; (2) Gate 4's PBO evidence must carry all three pre-registered CPCV partitions
+    (§4.4/§12 edge case 9) and a ledger-snapshot timestamp within `max_snapshot_skew` of Gate 1's,
+    or Gate 4 fails outright — a schema/consistency check this section's prose does not spell out
+    at this location. This gate's numeric pass/fail has not been re-run on the live candidate as
+    part of this docs-accuracy pass — only the assembly-function-exists status is corrected here;
+    whether the conjunction now returns PROMOTABLE=True is a separate judgment call left open
+    (running it is a SYSTEM/COST validation task, not a documentation fix). 583 tests pass repo-wide
+    as of this update, including `tests/system/test_promotion_gate.py` (25 tests) for this module.
+  * GATE 6's dependency code also now EXISTS (see the Gate-6 row above: `friction_stress.py` and
+    `spread_impact.py` are both implemented) — the code-existence gap this bullet originally
+    recorded is resolved, on the same terms as Gate 1 above: existence of the code/logic is
+    confirmed, but this gate's own numeric pass/fail has not been re-run as part of this
+    docs-accuracy pass.
   * Gates 2-5 above are grounded in numbers already reported in `docs/EDGE.md`/this spec's own
     worked examples (Sections 4-5), so those four are the genuinely-checkable-today rows; Gates 1
-    and 6 are the two rows this spec can formalize but not yet demonstrate as passing, for the two
-    DIFFERENT reasons just stated (missing assembly vs. missing code).
+    and 6 are the two rows whose code/assembly now exists but whose live numeric verdict has not
+    yet been demonstrated end-to-end — the SAME open reason for both now (a validation run, not a
+    documentation fix), no longer two different reasons.
 
 This is consistent with `docs/EDGE.md`'s framing of the book as a "candidate, not confirmed" system.
 Gate 2 is a CONDITIONAL pass under the track-length branch, which is

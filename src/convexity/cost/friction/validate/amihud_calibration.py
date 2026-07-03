@@ -101,7 +101,7 @@ def walk_forward_drift(
 
     REAL-LAKE RESULT (measured, no longer synthetic-only). Run causally against
     ``panel.build_dollar_volume`` on the true 100-crypto point-in-time lake over 2020->2024
-    (``tests/research/xsec/cost/test_cost_validate.py::
+    (``tests/cost/test_cost_validate.py::
     test_walk_forward_drift_on_real_lake_reports_large_governance_drift``), the observed drift is
     LARGE — ``c_rel_range ~= 1.4``, ``k_amihud_rel_range ~= 1.1`` — because crypto liquidity expanded
     by more than an order of magnitude over the sample. That large drift is precisely the intended

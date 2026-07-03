@@ -1373,13 +1373,14 @@ class ExecutionEngine:
         raise NotImplementedError("specification only -- see EXECUTION.md Sec 11-12")
 ```
 
-### 11.2 Proposed test files and assertion bodies
+### 11.2 Test files and assertion bodies (implemented)
 
-> **SPECIFICATION — not yet implemented.** No test file below exists on disk. Each maps one of this
-> spec's seven named Invariants to a proposed pytest file, function name, and a 2–3 line pseudocode
-> assertion body — the level of concreteness LEVERAGE.md gives its own Invariant VOL-FLOOR ("a
-> synthetic history shorter than `n_vol_min` produces `sigma_hat_t >=` the class-level 28%-annualized
-> prior").
+> **Status update: these test files now exist on disk**, verified by reading `tests/execution/`:
+> `test_trajectory.py`, `test_no_trade_band.py`, `test_drift_monitor.py`, and `test_invariants.py`
+> contain every function named in the table below, mapping this spec's seven named Invariants to
+> their pytest file, function name, and assertion — the level of concreteness LEVERAGE.md gives
+> its own Invariant VOL-FLOOR ("a synthetic history shorter than `n_vol_min` produces
+> `sigma_hat_t >=` the class-level 28%-annualized prior") is now realized code, not a proposal.
 
 | Invariant | Proposed file | Proposed test function | Assertion body (pseudocode) |
 |---|---|---|---|
@@ -1565,13 +1566,15 @@ section states the Protocol-level shape only, matching `core/protocols.py`'s own
   multiple per-lookback trajectories).
 - **Structural limitation this pillar cannot close by better writing (stated plainly, not
   papered over).** Every numeric citation above is a real pointer into `docs/EDGE.md` or a sibling
-  spec, but **no live trajectory has ever run** — this pillar has zero implementing code (§11.1) and
-  therefore zero realized fills, zero realized `IS_total` (§7), and no fitted `x_i/w_target,i`,
-  `σ_w,i`, or per-name illiquid-tail rebalancing ratio to ground a SECOND worked numeric example
-  beyond the single illustrative one §2.5 carries to a concrete `λ_i` value. This is the single
-  honest ceiling on this file's own actionability score: the SPECIFICATION can be (and, this pass,
-  has been made) maximally precise and buildable, but it cannot manufacture the empirical grounding
-  a pillar with real code gets for free from its own backtest.
+  spec, but **no live trajectory has ever run** — this pillar's implementing code exists and is
+  tested (`src/convexity/execution/execution.py`, §11.1's Status update), but it has never been fed
+  real fills from an actual live rebalance, so there are zero *realized* fills, zero realized
+  `IS_total` (§7) computed against real prices, and no fitted `x_i/w_target,i`, `σ_w,i`, or per-name
+  illiquid-tail rebalancing ratio to ground a SECOND worked numeric example beyond the single
+  illustrative one §2.5 carries to a concrete `λ_i` value. This is the single honest ceiling on
+  this file's own actionability score: the SPECIFICATION can be (and, this pass, has been made)
+  maximally precise and buildable, and the code now matches it, but neither can manufacture the
+  empirical grounding a pillar gets for free only from its own LIVE track record.
 - **This limitation is a post-deployment validation CONTRACT, not an open gap in the offline
   build.** The distinction matters for scoring: every input this pillar can derive from
   `F_{t_0}`-measurable data is specified, implemented, and tested (§9's “buildable pre-live”

@@ -1,6 +1,6 @@
 """Synthetic panel + dollar-volume fixtures for the UNIVERSE eligibility tests (no lake I/O).
 
-Mirrors ``tests/research/xsec/conftest.py``'s ``make_panel`` construction so the UNIVERSE contract layer
+Mirrors ``tests/conftest.py``'s ``make_panel`` construction so the UNIVERSE contract layer
 is exercised against the SAME ``Panel`` shape ``src/convexity/panel/panel.py`` produces, deterministically and
 without touching the 137-instrument lake (read-only elsewhere). A companion synthetic daily
 dollar-volume array is built directly (bypassing ``build_dollar_volume``'s lake read) so the liquidity

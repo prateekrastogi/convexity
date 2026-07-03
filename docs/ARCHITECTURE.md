@@ -271,14 +271,15 @@ discipline; what changed is the unit each layer operates on.
   any panel row after rebalance day `d` must not change the signal/weights at `d`), the
   single-call-site gross invariant (§2 above), dollar-neutrality (long leg sums to +0.5, short leg
   to −0.5), and the point-in-time listed mask (a delisted name is closed at its last live bar, a
-  not-yet-listed name never enters a cross-section). These live under `tests/research/xsec/`.
+  not-yet-listed name never enters a cross-section). These live under `tests/{cost,portfolio,regime,signal,system}/`.
 * **Worked-example regression fixtures** — each spec's numbered worked example (e.g. COST.md's
   §9 end-to-end friction reconciliation, SYSTEM.md's §5.3 DSR worked numbers, REGIME.md's §3.5
   CUSUM-ARL calibration) is reproduced bit-for-bit from its tabulated inputs, exactly as Appendix
   A §8.2 already required for the directional pillars.
-  `tests/research/xsec/{test_accounting,test_breadth,test_cpcv,test_engine_panel,
-  test_metrics_validate,test_multiasset,test_overlay,test_portfolio,test_signals}.py` are the
-  live instances of this layer.
+  `tests/cost/{test_accounting,test_breadth}.py`, `tests/system/{test_cpcv,
+  test_metrics_validate}.py`, `tests/portfolio/{test_engine_panel,test_multiasset,
+  test_portfolio}.py`, `tests/regime/test_overlay.py`, and `tests/signal/test_signals.py`
+  are the live instances of this layer.
 - **Property tests** — the monotonicities each spec asserts (e.g. `frac_pos` robustness to N/k
   choice, Sharpe's gross-invariance from PORTFOLIO.md §2.3's Lemma 1) are swept and asserted
   explicitly, no `hypothesis` dependency required — same discipline as Appendix A §8.3.
@@ -288,7 +289,7 @@ discipline; what changed is the unit each layer operates on.
 
 Every pillar's tests need **no external data** — the cross-sectional engine reuses the same
 seeded-synthetic-generator discipline the old architecture's §8 closing note required
-(`tests/research/xsec/conftest.py` fixtures), so invariant and worked-example tests never touch
+(`tests/conftest.py` fixtures), so invariant and worked-example tests never touch
 the 137-instrument production data lake.
 
 ---

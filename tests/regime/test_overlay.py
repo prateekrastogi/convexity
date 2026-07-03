@@ -13,7 +13,7 @@ from convexity.regime.overlay import (
     vol_target_scale,
 )
 
-from tests.research.xsec.conftest import make_panel
+from tests.conftest import make_panel
 
 
 def _btc_panel():

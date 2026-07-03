@@ -1289,28 +1289,26 @@ discipline this repo's `pyproject.toml` and sibling specs already enforce.
 
 ---
 
-## 11. Directory layout and build contract (target; not yet fully built)
+## 11. Directory layout and build contract (implemented — see Status update below)
 
-**STRUCTURAL / DISCLOSED LIMITATION, stated plainly.** Unlike
-`docs/specs/LEVERAGE.md` and `docs/specs/SYSTEM.md`, which formalize pillars
-sitting atop already-substantially-built code (`src/convexity/system/xsec_validate.py`,
-`cpcv.py`, `portfolio.py` all exist and are cited by exact function
-signature/line-level behavior throughout those two files), this spec's
-Sections 2.2–2.3 (hysteresis) and Section 4 (shortability) formalize
-mechanisms that **do not exist in code yet** — Section 8 already lists them
-as RED/AMBER buckets with no runtime implementation, and Section 2.3's
-`σ_rank` is [ILLUSTRATIVE] precisely because there is no persisted run to
-measure it from. This means these two sections are necessarily less densely
-grounded in real code than LEVERAGE's or SYSTEM's equivalent sections — there
-is no line number to cite for a mechanism that has not been written. This is
-the same class of gap the task's own EXECUTION.md pillar carries for the same
-reason (no implementing code yet), and the honest response is identical: make
-the SPECIFICATION itself a complete, unambiguous build contract — exact
-function signatures with types, the exact file path each will live at, and
-the exact test file/assertion a future implementer must satisfy — clearly
-labeled as **not yet implemented**, never presented as if it already existed.
-Every signature below raises `NotImplementedError` today; none of this is
-runnable code, and none of it should be read as a claim that it is.
+**Status update: this section's directory layout and build contract are now implemented.**
+This section originally recorded Sections 2.2–2.3 (hysteresis) and Section 4 (shortability) as
+mechanisms that did not yet exist in code. That is no longer the case: every module in the
+directory layout below exists on disk exactly as laid out, and every function signature in
+§11.1 is implemented — verified by reading each file: `src/convexity/universe/liquidity/hysteresis.py`
+(`hysteresis_step`), `src/convexity/universe/shortability/liquidity_gate.py` (`short_liquid`),
+`src/convexity/universe/shortability/venue_gate.py` (`short_permitted`),
+`src/convexity/universe/validate/pit_check.py` (`pit_check`, `corrupt_future`),
+`src/convexity/universe/eligibility/{stopping_times.py,history_gate.py}`,
+`src/convexity/universe/liquidity/ranking.py`, and `src/convexity/universe/universe_api.py`
+(`build_book`, `build_eligibility`, `build_shortability`) — essentially zero `NotImplementedError`
+stubs remain (the one `raise NotImplementedError` in `liquidity_gate.py::short_liquid` is a
+defensive guard against a caller passing `threshold_fn=None`, not an unimplemented stub — see
+that module's docstring and §4.2's disclosed limitation, which still stands: no numeric
+short-liquidity threshold is fabricated). The signatures in §11.1 below remain the BUILD
+CONTRACT this spec laid out; the real implementations follow this same contract and style
+(verified by reading each file), so what follows is preserved as the spec's own record of that
+contract, not a claim that it is still unbuilt.
 
 ```text
 universe/
@@ -1338,17 +1336,20 @@ Existing, already-implemented substrate this spec formalizes and extends:
 `src/convexity/panel/panel.py` (point-in-time `listed` mask, `trailing_dollar_volume`,
 `build_dollar_volume`), `src/convexity/panel/sleeve.py` (`sleeve_symbols`,
 `effective_breadth`), `src/convexity/panel/candidates.py` (`load_universe`, `all_symbols`),
-`src/convexity/panel/UNIVERSE.md` (the candidate symbol tables). Not yet implemented:
-the hysteresis state machine (Section 2.2), the explicit `U_t^short` gate
-(Section 4), and the `pit_check.py` structural test (Invariant PIT).
+`src/convexity/panel/UNIVERSE.md` (the candidate symbol tables). Also now implemented (Status
+update above): the hysteresis state machine (Section 2.2, `liquidity/hysteresis.py`), the
+explicit `U_t^short` gate (Section 4, `shortability/{venue_gate.py,liquidity_gate.py}` composed
+in `universe_api.py::build_shortability`), and the `pit_check.py` structural test (Invariant PIT).
 
-### 11.1 Proposed function signatures (SPECIFICATION ONLY — not yet implemented)
+### 11.1 Function signatures (build contract — implemented; see Status update in §11)
 
-> Every signature below is a **build contract**, not existing code. Types and
-> docstrings pin down the exact call surface a future implementer must match;
-> `raise NotImplementedError` is the honest current body. Style matches
-> `src/convexity/panel/panel.py`'s existing dataclass/type-hint conventions so the
-> real implementation slots in without a style migration.
+> Every signature below is the **build contract** this spec laid out. It is now implemented —
+> see the Status update at the top of §11 for the exact file/function mapping. The illustrative
+> bodies below (each still showing `raise NotImplementedError`) are preserved verbatim as the
+> spec's own record of the contract a future implementer had to match; they are SPECIFICATION
+> TEXT, not a claim about the current state of `src/convexity/universe/`. Style matches
+> `src/convexity/panel/panel.py`'s existing dataclass/type-hint conventions, and the real
+> implementation follows it.
 
 ```python
 from __future__ import annotations
@@ -1446,13 +1447,13 @@ def pit_check(
     raise NotImplementedError("specification only -- see UNIVERSE.md Sec 7, Invariant PIT")
 ```
 
-### 11.2 Proposed test files and assertion bodies (SPECIFICATION — not yet implemented)
+### 11.2 Test files and assertion bodies (implemented — see Status update in §11)
 
-> No test file below exists on disk. Each row maps one of this spec's named
-> Invariants to a proposed pytest file, function name, and assertion body —
-> the same level of concreteness `docs/specs/EXECUTION.md` §11.2 gives its
-> own not-yet-implemented pillar, and the same level LEVERAGE.md gives its
-> own Invariant VOL-FLOOR.
+> Every test file and function name below exists on disk exactly as named, verified by reading
+> `tests/universe/`. Each row maps one of this spec's named Invariants to its pytest file,
+> function name, and assertion — originally proposed at the same level of concreteness
+> `docs/specs/EXECUTION.md` §11.2 and LEVERAGE.md's Invariant VOL-FLOOR give their own test
+> tables; that concreteness is now realized code, not a proposal.
 
 | Invariant | Test file | Function name | Assertion body |
 |---|---|---|---|

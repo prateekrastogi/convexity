@@ -1,7 +1,7 @@
 """End-to-end integration test for the full 9-pillar weekly pipeline (scripts/xsec_pipeline.py).
 
 Lake-gated (runs only where the real crypto lake exists, i.e. arb-vm) exactly like COST's
-real-lake e2e (tests/research/xsec/cost/test_cost_validate.py). It drives ``run_pipeline`` on a
+real-lake e2e (tests/cost/test_cost_validate.py). It drives ``run_pipeline`` on a
 real symbol slice and asserts the shared composition wiring actually fires EVERY pillar and
 produces a coherent weekly book — the integration TODOs the pillar implementers each left
 (UNIVERSE->SIGNAL->PORTFOLIO->LEVERAGE->REGIME->EXECUTION->COST->SYSTEM->OPS) are exercised in one

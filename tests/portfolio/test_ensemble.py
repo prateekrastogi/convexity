@@ -18,7 +18,7 @@ from convexity.portfolio.engine import (
     run_ensemble,
 )
 from convexity.panel.panel import Panel
-from tests.research.xsec.conftest import make_panel
+from tests.conftest import make_panel
 
 # "machine-epsilon tolerance" (§13): leg sums are a handful of terms around 0.5, so a few ulps.
 EPS = 1e-14

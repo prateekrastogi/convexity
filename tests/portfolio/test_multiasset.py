@@ -19,7 +19,7 @@ from convexity.panel.sleeve import (
     effective_breadth,
 )
 
-from .conftest import make_panel
+from tests.conftest import make_panel
 
 
 def test_effective_breadth_bounds():

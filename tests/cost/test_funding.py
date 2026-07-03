@@ -1,7 +1,7 @@
 """Invariant F-stamp companion cases (COST.md Section 6.2, Section 10 delist edge case).
 
 The plain sign convention (short credited on positive funding, long pays) is already covered by
-tests/research/xsec/test_accounting.py; these tests cover what that file does not: the accrual is
+tests/cost/test_accounting.py; these tests cover what that file does not: the accrual is
 a listed-masked PER-STAMP sum, so a mid-week sign flip combined with a mid-week delisting is
 priced on the days actually held — never a flat weekly-average applied across the delist gap.
 """
