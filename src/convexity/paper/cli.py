@@ -27,7 +27,13 @@ from convexity.panel.candidates import all_symbols
 from convexity.panel.panel import Panel, build_dollar_volume, build_panel
 from convexity.paper.capital import sizing_nav
 from convexity.paper.journal import Journal
-from convexity.paper.policy import build_plan, ensemble_target_weights, order_intents, size_gross
+from convexity.paper.policy import (
+    OrderIntent,
+    build_plan,
+    ensemble_target_weights,
+    order_intents,
+    size_gross,
+)
 from convexity.paper.topup import extend_panel, fetch_tails
 from convexity.portfolio.engine import XSecConfig, band_configs, run, run_ensemble
 from convexity.portfolio.portfolio import realized_vol
@@ -128,7 +134,10 @@ def cmd_rebalance(args: argparse.Namespace) -> None:
 
     w_scaled = w_target * g_t
     prices = panel.close[d]
-    if positions:
+    if args.live:
+        # LIVE: the carried book is ALWAYS the venue's actual positions (an empty account is a
+        # flat book — never the journal heuristic, which a crashed run's record would poison;
+        # learned in the first supervised session 2026-07-03).
         w_carried = np.array([
             positions.get(sym, 0.0) * (prices[i] if np.isfinite(prices[i]) else 0.0) / nav
             for i, sym in enumerate(panel.symbols)])
@@ -154,11 +163,76 @@ def cmd_rebalance(args: argparse.Namespace) -> None:
              mode="live" if args.live else "dry")
 
     if args.live:
-        from convexity.paper.gateway import submit_intent
+        from convexity.execution.execution import quantize_price, quantize_qty
+        from convexity.paper.gateway import GatewayError, cancel_open_orders, submit_intent
+        from convexity.paper.policy import fmt_step
+        from convexity.paper.topup import fetch_book_tickers, fetch_live_filters
+
+        # Idempotent safety: a rerun (crash recovery) must never double-submit — clear any
+        # resting orders on the intent symbols first.
+        for sym in sorted({it.symbol for it in intents}):
+            try:
+                cancel_open_orders(sym)
+            except GatewayError:
+                pass
+        # LIVE quantization surfaces (both single public calls, learned 2026-07-03):
+        # (a) maker peg = the PASSIVE touch (buy joins best bid, sell best ask) — last-price pegs
+        #     draw -5022 post-only rejections; (b) tick/lot from the venue's CURRENT exchangeInfo
+        #     — the candidates.md snapshot drifts and draws -4014.
+        book = fetch_book_tickers()
+        live_f = fetch_live_filters()
+        ok = failed = 0
+        import httpx as _httpx
+
         for it in intents:
-            resp = submit_intent(it)
-            print(f"[live] {it.symbol} {it.qty:+} {it.tactic} -> {resp}")
-        j.append("submitted", d_iso, n=len(intents))
+            live_it = it
+            # refresh THIS symbol's quote at submission time — the batch snapshot goes stale
+            # over a ~60s sequential loop and stale pegs draw -5022 (learned 2026-07-03).
+            try:
+                _bt = _httpx.get("https://fapi.binance.com/fapi/v1/ticker/bookTicker",
+                                 params={"symbol": it.symbol}, timeout=5).json()
+                bidask = (float(_bt["bidPrice"]), float(_bt["askPrice"]))
+            except Exception:
+                bidask = book.get(it.symbol)
+            lf = live_f.get(it.symbol)
+            if bidask and lf and it.tactic == "POST_ONLY_MAKER":
+                tick, lot, min_qty, min_notional = lf
+                side = 1 if it.qty > 0 else -1
+                bid, ask = bidask
+                # degenerate book (halted/delisting on the venue: empty side or crossed/locked
+                # quotes -- e.g. NFPUSDT on demo showed bid=0.0) => untradeable this week; skip
+                # loudly rather than fire orders the venue rejects with generic -4014/-5022s.
+                if bid <= 0.0 or ask <= 0.0 or ask <= bid:
+                    j.append("order_skip", d_iso, symbol=it.symbol,
+                             reason=f"degenerate book bid={bid} ask={ask} (halted/delisted?)")
+                    print(f"[live] {it.symbol} SKIPPED: degenerate book bid={bid} ask={ask}")
+                    continue
+                # one tick INSIDE the passive touch: joining the exact best bid/ask still
+                # crosses when the market ticks through during submit latency (-5022 cluster,
+                # learned 2026-07-03); one tick of queue-priority sacrifice buys post-only safety.
+                peg = (bid - tick) if side == 1 else (ask + tick)
+                ref = quantize_price(peg, tick, side=side)
+                qty = quantize_qty(it.qty, lot_size=lot, min_qty=min_qty)
+                if qty == 0.0 or abs(qty) * ref < min_notional:
+                    j.append("order_skip", d_iso, symbol=it.symbol,
+                             reason="below live min_qty/min_notional after re-quantize")
+                    continue
+                live_it = OrderIntent(symbol=it.symbol, qty=qty, tactic=it.tactic,
+                                      ref_price=ref, slice_idx=it.slice_idx,
+                                      n_slices=it.n_slices, reduce_only=it.reduce_only,
+                                      qty_str=fmt_step(abs(qty), lot),
+                                      price_str=fmt_step(ref, tick))
+            try:
+                resp = submit_intent(live_it)
+                ok += 1
+                print(f"[live] {live_it.symbol} {live_it.qty:+} {live_it.tactic} "
+                      f"@ {live_it.price_str} -> {resp['status']}")
+            except GatewayError as e:
+                failed += 1
+                print(f"[live] {live_it.symbol} FAILED (isolated, book continues): {e}")
+                j.append("order_error", d_iso, symbol=live_it.symbol, error=str(e)[:300])
+        j.append("submitted", d_iso, n_ok=ok, n_failed=failed)
+        print(f"[live] submitted {ok}/{len(intents)} (failed {failed}, journaled)")
     else:
         for it in intents[:12]:
             sgn = "+" if it.qty > 0 else "-"
@@ -185,17 +259,37 @@ def cmd_finalize(args: argparse.Namespace) -> None:
         cancel_open_orders(s)
     snap = account_snapshot()
     crossed = 0
+    from convexity.execution.execution import quantize_qty
+    from convexity.paper.gateway import GatewayError
+    from convexity.paper.policy import fmt_step
+    from convexity.paper.topup import fetch_live_filters
+
+    live_f = fetch_live_filters()
+    failed = 0
     for it in orders["intents"]:
         want = float(it["qty"])
         have = snap.positions.get(it["symbol"], 0.0)  # net position vs intended delta: v1 heuristic
         remainder = want if abs(have) < 1e-12 else 0.0
         if remainder != 0.0:
-            submit_intent(OrderIntent(symbol=it["symbol"], qty=remainder, tactic="MARKET",
-                                      ref_price=it["ref_price"], slice_idx=0, n_slices=1,
-                                      reduce_only=False))
-            crossed += 1
-    j.append("finalized", orders["asof"], crossed=crossed)
-    print(f"[finalize] crossed {crossed} remainders")
+            lf = live_f.get(it["symbol"])
+            if lf:
+                _tick, lot, min_qty, _mn = lf
+                remainder = quantize_qty(remainder, lot_size=lot, min_qty=min_qty)
+                if remainder == 0.0:
+                    continue
+            try:
+                submit_intent(OrderIntent(symbol=it["symbol"], qty=remainder, tactic="MARKET",
+                                          ref_price=it["ref_price"], slice_idx=0, n_slices=1,
+                                          reduce_only=False,
+                                          qty_str=fmt_step(abs(remainder), lf[1]) if lf else ""))
+                crossed += 1
+            except GatewayError as e:
+                failed += 1
+                j.append("order_error", orders["asof"], symbol=it["symbol"],
+                         error=f"finalize: {str(e)[:280]}")
+                print(f"[finalize] {it['symbol']} FAILED (isolated): {e}")
+    j.append("finalized", orders["asof"], crossed=crossed, failed=failed)
+    print(f"[finalize] crossed {crossed} remainders ({failed} failed, journaled)")
 
 
 def cmd_recon(args: argparse.Namespace) -> None:

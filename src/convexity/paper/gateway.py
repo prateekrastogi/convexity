@@ -83,8 +83,11 @@ def account_snapshot() -> AccountSnapshot:
 
     async def go() -> AccountSnapshot:
         info = await api.query_futures_account_info(recv_window="5000")
+        # V3 account info returns positions=None (learned live 2026-07-03); position_risk is the
+        # authoritative per-symbol position surface.
+        risk = await api.query_futures_position_risk(recv_window="5000")
         positions: dict[str, float] = {}
-        for p in getattr(info, "positions", None) or ():
+        for p in risk or ():
             amt = float(p.positionAmt)
             if amt != 0.0:
                 positions[str(p.symbol)] = amt

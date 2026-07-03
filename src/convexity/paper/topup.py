@@ -22,6 +22,52 @@ from convexity.panel.panel import MS_PER_DAY, Panel
 FAPI = "https://fapi.binance.com"
 
 
+def fetch_ticker_prices() -> dict[str, float]:
+    """Current last price for ALL symbols in one public call (order-peg input, PAPER.md §4)."""
+    with httpx.Client(timeout=15.0) as client:
+        r = client.get(f"{FAPI}/fapi/v1/ticker/price")
+        r.raise_for_status()
+        return {row["symbol"]: float(row["price"]) for row in r.json()}
+
+
+def fetch_book_tickers() -> dict[str, tuple[float, float]]:
+    """(best_bid, best_ask) for ALL symbols in one public call.
+
+    The maker peg (PAPER.md §4): a BUY joins the BEST BID and a SELL the BEST ASK — pegging to the
+    last trade can sit on the crossing side and draws Binance -5022 post-only rejections (learned
+    in the first supervised session, 2026-07-03)."""
+    with httpx.Client(timeout=15.0) as client:
+        r = client.get(f"{FAPI}/fapi/v1/ticker/bookTicker")
+        r.raise_for_status()
+        return {row["symbol"]: (float(row["bidPrice"]), float(row["askPrice"]))
+                for row in r.json()}
+
+
+def fetch_live_filters() -> dict[str, tuple[float, float, float, float]]:
+    """(tick, lot, min_qty, min_notional) from the venue's CURRENT exchangeInfo — one call.
+
+    The candidates.md filters are a committed SNAPSHOT (EXECUTION.md §16's documented limitation);
+    Binance revises tick/lot occasionally, and a stale tick draws -4014 at submission (learned in
+    the first supervised session). Live sessions quantize against THESE; research keeps the
+    snapshot."""
+    with httpx.Client(timeout=30.0) as client:
+        r = client.get(f"{FAPI}/fapi/v1/exchangeInfo")
+        r.raise_for_status()
+        out: dict[str, tuple[float, float, float, float]] = {}
+        for s in r.json()["symbols"]:
+            fs = {f["filterType"]: f for f in s["filters"]}
+            try:
+                out[s["symbol"]] = (
+                    float(fs["PRICE_FILTER"]["tickSize"]),
+                    float(fs["LOT_SIZE"]["stepSize"]),
+                    float(fs["LOT_SIZE"]["minQty"]),
+                    float(fs.get("MIN_NOTIONAL", {}).get("notional", 5.0)),
+                )
+            except KeyError:
+                continue
+        return out
+
+
 def last_completed_day_ms(now_ms: int | None = None) -> int:
     """Epoch-ms of 00:00 UTC of the last COMPLETED UTC day (never the running day)."""
     now = int(time.time() * 1000) if now_ms is None else int(now_ms)
