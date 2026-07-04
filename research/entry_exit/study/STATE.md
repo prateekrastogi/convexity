@@ -1,51 +1,44 @@
-# COMMODITY STUDY — STATE (the /loop resume brain)
+# STUDY STATE — research/entry_exit/study (resume brain; no loop currently armed)
 
-Loop: cron `50486e00`, every 5h at :07, session-only. Every firing reads THIS file first and
-continues from NEXT ACTION; a running VM background job makes the firing a heartbeat (check
-progress via its log, update this file, never duplicate). Checkpoint + commit (`commodity` branch)
-after every stage. All work under `research/entry_exit/study/`; never touch `src/convexity` or the
-live paper system.
+## Program 1 — directional entry/exit model study: CLOSED (SUPERSEDED 2026-07-04)
 
-## Stages
+Superseded by the owner's pivot to the SWING XSEC program below before stage 3 completed.
+Record: prereg + ADDENDUM1/2 frozen and committed; stage 2 BASELINE = DEAD (pooled gross ≈ +2bp ≈ 0,
+net@12bp −9.8bp; re-confirms the convexity EDGE gross≈0 verdict on these 7 perps); ADDENDUM 1
+anchor-reproduction = CL negative under EVERY session anchor incl. the exact MCX construction and
+its original window (the MCX crude positive was instrument-specific cold-open microstructure, not
+transferable to USD perps); stage 3 candidate family was killed by owner at 288/~3,360 records —
+partial checkpoint kept at `results_candidates.jsonl` (resume-safe via done-keys) but NOT planned
+to resume. Directional constructions on this universe: measured dead twice over.
 
-| # | Stage | Status |
-|---|---|---|
-| 0 | Pre-registration frozen + committed (COMMODITY_PREREG.md + ADDENDUM1 + ADDENDUM2) | ✅ `efecd2b`+ |
-| 1 | Data prep: 1-min → per-symbol DAILY decision frames (`prep_frames.py` → `frames/{SYM}.parquet`, gitignored) | ✅ 7 frames, ~1330 valid days each |
-| 2 | Baseline (`run_baseline.py`): 6 declared cells × 7 symbols, full-sample + CPCV(8,2,10) net-of-cost → `results_baseline.json` | ✅ `54c06d1` — **BASELINE DEAD as prior predicted** (pooled gross ≈ +2bp ≈ 0; net@12bp −9.8bp primary; XAU/XAG mildly + but drop-top-3 negative everywhere) |
-| 2b | ADDENDUM 1 anchor-reproduction diagnostic → `results_anchor_repro.json` | ✅ — CL negative under EVERY anchor incl. exact MCX construction & its original window (which was CL-perp's WORST); the MCX crude positive = instrument-specific cold-open microstructure, does not transfer to USD perps |
-| 3 | Candidates (`run_candidates.py`): ADDENDUM2 family (12 entry-points × 5 exit-variants × HAR = ~120 configs/sym), expanding WF 5-blocks/4-scored, embargo 10d, JSONL checkpoints | 🔄 RUNNING (bg; log `run_candidates.log`; ~3-5h; resume-safe) |
-| 4 | Gates: aggregate jsonl → per config×symbol OOS metrics; DSR at ledger N_eff (~168 raw) via `entry_exit.validation.deflated_sharpe` (per-observation), PBO via `convexity.system.cpcv.compute_pbo` over the family matrix, drop-top-3, paired bootstrap vs baseline PRIMARY on the same OOS days, parsimony penalty (models expose `.k`) → `results_selection.json` | ⬜ |
-| 5 | REPORT.md: baseline vs optimal, per-commodity ranking, quarter/full-Kelly + DD-vs-leverage, win/EV/Sharpe/DD tables, multiplicity verdicts; report in chat; cleanup per research conventions | ⬜ |
-| 6 | DONE → cancel loop (CronList → CronDelete, current job `50486e00`) | ⬜ |
+## Program 2 — SWING XSEC COMMODITY (active)
 
-## Invariants (binding)
+Owner-supplied factor menu (carry, basis-momentum, liquidity-provision reversal, momentum, skew,
+hedging-pressure, vol-managed overlay) accepted with constructibility analysis: carry/basis-momentum
+BLOCKED without external CME curve data (perps have no term structure; funding ≠ convenience
+yield); the rest constructible from lake + COT. Honest targets: 0.5–0.7 lake-only, 0.85–1.15 with
+curves; >1.5 = alarm.
 
-- Prereg FROZEN (main + addenda): only ledger configs may run/be claimed; N_eff charges the full
-  family (~120 candidate configs + 6 baseline + 42 addendum-1 cells).
-- Net-of-cost always (12bp RT primary; 6/24bp + ±5bp/day funding scenarios reported).
-- Purity: train-fold fit, FROZEN for test; filtered/causal only (F_{t-1} via ScanCursor); entry at
-  decision-day close for baseline AND candidates (matched; candidates carry no intraday info).
-- Honesty: report negatives plainly; adopt only what passes ALL five §6 gates; never fabricate.
-- Compute = VM background python (nohup, `.venv/bin/python`); write-local-then-scp
-  (COPYFILE_DISABLE=1, never heredoc-edit over ssh); scripts + small JSON/JSONL committed;
-  parquet/frames gitignored.
+| Step | Status |
+|---|---|
+| Prereg DRAFT (`SWING_PREREG_DRAFT.md` v0.1 — freeze blocked on: duka extension landed + COT verified + OWNER curve-source decision) | ✅ drafted, committed |
+| Data 1: Dukascopy backward-extension (XAU 2009+, XAG 2008-06+, CL/NATGAS 2013+, COPPER 2012+; XPT/XPD have no pre-2021 duka history — probed) via `scripts/backfill_dukascopy_hist.py` | 🔄 RUNNING (bg; 18,867 code-days; ~19h politeness-paced; log `data/backfill_duka_hist.out`; resume = re-run same command) |
+| Data 2: CFTC Disaggregated COT 2006-06→now via `scripts/backfill_cot.py` → `data/cot/cot_disagg.parquet` | ✅ 7 symbols × 1,046 reports; NYMEX/COMEX-anchored mapping (Feb-2022 renames handled: NAT GAS NYME, COPPER- #1; WTI ICE-Europe look-alike excluded; loud double-mapping guard) |
+| Data 3: CME term-structure source for F1 carry + F2 basis-momentum | ⬜ OWNER DECISION (Norgate ~$40/mo, databento one-off pull, or defer F1/F2 to an amendment) |
+| Re-stitch after duka lands: extend `scripts/stitch_tradfi_1m.py` output back to the new floors; verify seams/splits; rebuild frames | ⬜ after Data 1 |
+| FREEZE prereg → build factors on the crypto-book machinery (panel/run_book/CPCV/DSR/PBO) → validate → report | ⬜ |
+
+## Invariants (binding, unchanged)
+
+Prereg-before-run; net-of-cost {6,12,24}bp + funding scenarios; PIT panel entry; COT read only at
+`usable_from` ≤ rebalance; N_eff charges the full declared grid; deployed book = the pre-named
+ensemble, never the best cell; negatives recorded in docs/EDGE.md; write-local-then-scp; VM
+background compute; never touch src/convexity or the live paper system.
 
 ## NEXT ACTION
 
-Stage 3 is RUNNING in background (`pgrep -f run_candidates.py`; log
-`research/entry_exit/study/run_candidates.log`; checkpoints `results_candidates.jsonl`, expected
-≈ 7 syms × 4 folds × 12 entries × ≤10 exit×HAR combos ≈ up to ~3,360 records; BOCPD entries are
-the slow ones). On firing:
-- ALIVE → heartbeat: report `wc -l results_candidates.jsonl` progress, update this file, end.
-- DEAD + incomplete → relaunch the same command (it resumes from the JSONL done-keys).
-- COMPLETE ("CANDIDATES DONE" in the log) → stage 4 then 5 per the table above. For stage 4:
-  pool the 4 folds per (config, symbol) by concatenating trades; OOS day-count for annualization =
-  the 4 scored blocks' spans; paired comparison uses the baseline PRIMARY cell (W120_s0.5)
-  restricted to the same OOS-day union; then stage 5 REPORT.md + chat report; then stage 6 cancel
-  the loop (`50486e00`).
-
-## DONE (definition)
-
-REPORT.md committed + results reported in chat → cancel loop `50486e00`, confirm, stop. On any
-firing after DONE: confirm and do nothing.
+Wait for the duka hist job ("HIST DONE" in `data/backfill_duka_hist.out`; if dead earlier, re-run —
+resume-safe). Then: re-stitch the 5 extended codes into `data/stitched/` (ratio-adjust at the
+duka→perp seam exactly as the original stitch; validate largest non-gap moves are real events),
+rebuild study frames, verify weekly-obs count (~690 at breadth ≥5 from 2013). In parallel the OWNER
+decides Data 3 (curve source). Then freeze `SWING_PREREG` (dated) and begin the factor build.
