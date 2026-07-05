@@ -17,8 +17,11 @@ import numpy as np
 import pandas as pd
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE))
-import swing_pipeline as sp  # noqa: E402  (data layer + metrics/cpcv/dsr; reads main-checkout data)
+sys.path.insert(0, str(HERE))                 # swing_pipeline.py (same dir)
+sys.path.insert(0, str(HERE.parents[1]))      # the WORKTREE research/ so `entry_exit` resolves here
+# (swing_pipeline inserts the MAIN checkout's research/, which lacks entry_exit — the import walks on
+# to this worktree path and finds it; data reads still hit the main checkout's shared on-disk lake).
+import swing_pipeline as sp  # noqa: E402
 
 OUT = HERE
 WK = 52.0
@@ -47,6 +50,40 @@ def invvol(rvol: np.ndarray) -> np.ndarray:
     return out
 
 
+def gnorm(W: np.ndarray) -> np.ndarray:
+    """Scale each week to unit gross (sum|w|=1), preserving inverse-vol tilts. Sharpe is
+    scale-invariant so this does NOT change any Sharpe/DSR/per-year; it only makes the level
+    metrics (cagr/maxDD via cumprod) finite instead of blowing through -100% under raw 1/vol
+    leverage. The 10% vol-target overlay then sets the deployable book scale."""
+    g = np.abs(W).sum(axis=1, keepdims=True)
+    return np.divide(W, g, out=np.zeros_like(W), where=g > 0)
+
+
+def pbo_cscv(M: np.ndarray, S: int = 8) -> float:
+    """Combinatorially-symmetric CV probability of backtest overfitting over a config matrix
+    M (T x C of per-week net returns; all configs share swing_pipeline's valid mask so rows align).
+    PBO = fraction of train/test splits where the IS-best config lands below the OOS median."""
+    from itertools import combinations
+    T, C = M.shape
+    if C < 2 or T < 40:
+        return float("nan")
+    edges = np.linspace(0, T, S + 1).astype(int)
+    blocks = [np.arange(edges[i], edges[i + 1]) for i in range(S)]
+    below = 0
+    tot = 0
+    for combo in combinations(range(S), S // 2):
+        cs = set(combo)
+        isx = np.concatenate([blocks[i] for i in combo])
+        oos = np.concatenate([blocks[i] for i in range(S) if i not in cs])
+        iss = M[isx].mean(0) / (M[isx].std(0) + 1e-12)
+        oss = M[oos].mean(0) / (M[oos].std(0) + 1e-12)
+        best = int(np.argmax(iss))
+        rank = (oss <= oss[best]).mean()      # relative OOS rank of the IS winner
+        below += int(rank <= 0.5)
+        tot += 1
+    return round(below / tot, 3)
+
+
 def weekly_logret(wret: np.ndarray) -> np.ndarray:
     return np.log1p(np.where(np.isfinite(wret), wret, np.nan))
 
@@ -73,7 +110,7 @@ def carry_sign(carry: np.ndarray, listed: np.ndarray) -> np.ndarray:
 
 
 def net_of(W: np.ndarray, wret: np.ndarray, rt=RT_BP, fund=0.0):
-    return sp.net_series(W, wret, rt, fund)
+    return sp.net_series(gnorm(W), wret, rt, fund)
 
 
 def per_year(net: np.ndarray, valid: np.ndarray, fridays: pd.DatetimeIndex) -> dict:
@@ -127,15 +164,18 @@ def main() -> None:
     results = {"panel": {"n_weeks": int(n), "span": f"{fridays[0].date()}..{fridays[-1].date()}",
                          "breadth_med": int(np.median(listed.sum(1)))}, "sleeves": {}, "combined": {}}
 
+    fam = {}  # config -> net array (shared valid mask => all aligned) for PBO
     # ---- S1 TSMOM per-L + band ensemble (all 7, vol-scaled directional) ----
     s1_L = {}
     for L in LBANDS:
         W = tsigns[L] * iv
         s1_L[L] = W
         net, turn, valid = net_of(W, wret)
+        fam[f"S1_L{L}"] = net
         results["sleeves"][f"S1_tsmom_L{L}"] = summarize(net, turn, valid, fridays, 15, f"S1_L{L}")
     s1_band = np.mean([tsigns[L] for L in LBANDS], axis=0) * iv   # band ensemble
     net, turn, valid = net_of(s1_band, wret)
+    fam["S1_band"] = net
     results["sleeves"]["S1_tsmom_band"] = summarize(net, turn, valid, fridays, 15, "S1_band")
 
     # ---- S2 carry-on-storables (TS, {CL,NG,HG}) ----
@@ -143,6 +183,7 @@ def main() -> None:
     for i in STOR:
         s2[:, i] = csign[:, i] * iv[:, i]
     net, turn, valid = net_of(s2, wret)
+    fam["S2_carry"] = net
     results["sleeves"]["S2_carry_storable"] = summarize(net, turn, valid, fridays, 15, "S2")
 
     # ---- S3 interaction: carry-gated / veto trend on storables ----
@@ -156,6 +197,7 @@ def main() -> None:
         s3_veto[:, i] = np.where(disagree, 0.0, band_sign[:, i]) * iv[:, i]
     for nm, W in (("S3_gate_storable", s3_gate), ("S3_veto_storable", s3_veto)):
         net, turn, valid = net_of(W, wret)
+        fam[nm] = net
         results["sleeves"][nm] = summarize(net, turn, valid, fridays, 15, nm)
 
     # ---- S5 KRT overlay (COT flow-shock reversal, storables+all where COT exists) ----
@@ -170,41 +212,67 @@ def main() -> None:
             hot = fin & (row >= med)
             s5[t, hot] = -np.sign(prev1[t, hot]) * iv[t, hot]
     net, turn, valid = net_of(s5, wret)
+    fam["S5_krt"] = net
     results["sleeves"]["S5_krt"] = summarize(net, turn, valid, fridays, 15, "S5")
 
-    # ---- COMBINED (pre-named): preciouses S1-band trend + storables (S2 + S3-gate) ----
-    comb = np.zeros((n, m))
-    for i in CLUSTERS["precious"]:
-        comb[:, i] = s1_band[:, i]
-    for i in STOR:
-        comb[:, i] = s2[:, i] + s3_gate[:, i]
-    comb += 0.2 * s5  # S5 <=20% risk share (declared)
-    comb = cluster_risk_parity(comb, wret)
-    net_raw, turn, valid = net_of(comb, wret)
-    net_vt = sp.vol_target(net_raw)
-    cm = summarize(net_raw, turn, valid, fridays, 15, "combined")
-    cm["voltarget"] = sp.metrics(net_vt)
-    cm["voltarget"]["per_year"] = per_year(net_vt, valid, fridays)
-    for rt in RT_SCEN:
-        nn, _, _ = net_of(comb, wret, rt)
-        cm[f"sharpe_rt{int(rt)}"] = round(float(sp.per_obs_sharpe(nn) * sqrt(WK)), 3)
-    for fb in (-FUND_BP, FUND_BP):
-        nn, _, _ = net_of(comb, wret, RT_BP, fb)
-        cm[f"sharpe_fund{int(fb):+d}"] = round(float(sp.per_obs_sharpe(nn) * sqrt(WK)), 3)
-    if net_raw.mean() > 0 and net_raw.var() > 0:
-        kelly = float(net_raw.mean() / net_raw.var())
-        cm["kelly_full"] = round(kelly, 2)
-        cm["kelly_quarter_lev"] = round(0.25 * kelly, 2)
-    results["combined"]["book"] = cm
+    # ---- COMBINED (pre-named): preciouses S1-band trend + storables (S2 + S3-gate) [+ 0.2 S5] ----
+    def build_comb(with_s5: bool) -> np.ndarray:
+        c = np.zeros((n, m))
+        for i in CLUSTERS["precious"]:
+            c[:, i] = s1_band[:, i]
+        for i in STOR:
+            c[:, i] = s2[:, i] + s3_gate[:, i]
+        if with_s5:
+            c = c + 0.2 * s5  # S5 <=20% risk share (declared in prereg)
+        return cluster_risk_parity(c, wret)
+
+    for tag, with_s5 in (("book", True), ("book_ex_s5", False)):
+        comb = build_comb(with_s5)
+        net_raw, turn, valid = net_of(comb, wret)   # net_of already gnorm's the book to unit gross
+        net_vt = sp.vol_target(net_raw)              # 10% ann vol overlay on the deployable series
+        cm = summarize(net_raw, turn, valid, fridays, 15, tag)
+        cm["voltarget"] = sp.metrics(net_vt)
+        cm["voltarget"]["per_year"] = per_year(net_vt, valid, fridays)
+        for rt in RT_SCEN:
+            nn, _, _ = net_of(comb, wret, rt)
+            cm[f"sharpe_rt{int(rt)}"] = round(float(sp.per_obs_sharpe(nn) * sqrt(WK)), 3)
+        for fb in (-FUND_BP, FUND_BP):
+            nn, _, _ = net_of(comb, wret, RT_BP, fb)
+            cm[f"sharpe_fund{int(fb):+d}"] = round(float(sp.per_obs_sharpe(nn) * sqrt(WK)), 3)
+        if net_raw.mean() > 0 and net_raw.var() > 0:
+            kelly = float(net_raw.mean() / net_raw.var())
+            cm["kelly_full"] = round(kelly, 2)
+            cm["kelly_quarter_lev"] = round(0.25 * kelly, 2)
+        if tag == "book":
+            fam["combined"] = net_raw
+        results["combined"][tag] = cm
+
+    # ---- PBO over the config family (all share swing valid mask => aligned rows) ----
+    fam_keys = [k for k in ("S1_L13", "S1_L26", "S1_L39", "S1_L52", "S1_band",
+                            "S2_carry", "S3_gate_storable", "S3_veto_storable", "combined")
+                if k in fam]
+    M = np.column_stack([fam[k] for k in fam_keys])
+    results["pbo"] = {"configs": fam_keys, "pbo_cscv": pbo_cscv(M),
+                      "note": "PBO<=0.25 passes; higher = IS winner fails OOS (overfit-prone)"}
 
     (OUT / "results_durable.json").write_text(json.dumps(results, indent=1, default=str))
+    bk = results["combined"]["book"]
     print("DURABLE DONE ->", OUT / "results_durable.json", flush=True)
-    print("combined:", {k: cm.get(k) for k in ("sharpe_ann", "sharpe_rt6", "maxdd_pct", "cagr_pct")},
-          "DSR=", cm["dsr"].get("dsr"))
-    print("combined per-year:", cm.get("per_year"))
-    print("S1_band:", {k: results["sleeves"]["S1_tsmom_band"].get(k)
-                       for k in ("sharpe_ann", "cpcv_frac_pos")},
-          "per-year:", results["sleeves"]["S1_tsmom_band"].get("per_year"))
+    print("combined book:", {k: bk.get(k) for k in
+                             ("sharpe_ann", "sharpe_rt6", "ev_bp_nmwk", "win_pct",
+                              "maxdd_pct", "cagr_pct", "drop5_sharpe", "top5_share")},
+          "DSR=", bk["dsr"].get("dsr"))
+    print("combined voltarget:", {k: bk["voltarget"].get(k)
+                                   for k in ("sharpe_ann", "maxdd_pct", "cagr_pct")})
+    print("combined per-year:", bk.get("per_year"))
+    print("combined EX-S5:", {k: results["combined"]["book_ex_s5"].get(k)
+                              for k in ("sharpe_ann", "maxdd_pct", "cagr_pct")},
+          "DSR=", results["combined"]["book_ex_s5"]["dsr"].get("dsr"))
+    print("PBO:", results["pbo"]["pbo_cscv"], "over", results["pbo"]["configs"])
+    for k in ("S1_tsmom_L52", "S1_tsmom_band", "S2_carry_storable"):
+        v = results["sleeves"][k]
+        print(f"{k}: Sh={v.get('sharpe_ann')} maxDD={v.get('maxdd_pct')} cagr={v.get('cagr_pct')} "
+              f"drop5={v.get('drop5_sharpe')} DSR={v['dsr'].get('dsr')}")
 
 
 if __name__ == "__main__":
