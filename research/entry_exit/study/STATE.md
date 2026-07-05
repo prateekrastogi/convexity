@@ -1,44 +1,54 @@
-# STUDY STATE — research/entry_exit/study (resume brain; no loop currently armed)
+# STUDY STATE — research/entry_exit/study (resume brain). Loop: cron ea55c4d6 (5h backstop).
 
-## Program 1 — directional entry/exit model study: CLOSED (SUPERSEDED 2026-07-04)
+## Program 2 — SWING XSEC COMMODITY (active). Data ALL landed.
 
-Superseded by the owner's pivot to the SWING XSEC program below before stage 3 completed.
-Record: prereg + ADDENDUM1/2 frozen and committed; stage 2 BASELINE = DEAD (pooled gross ≈ +2bp ≈ 0,
-net@12bp −9.8bp; re-confirms the convexity EDGE gross≈0 verdict on these 7 perps); ADDENDUM 1
-anchor-reproduction = CL negative under EVERY session anchor incl. the exact MCX construction and
-its original window (the MCX crude positive was instrument-specific cold-open microstructure, not
-transferable to USD perps); stage 3 candidate family was killed by owner at 288/~3,360 records —
-partial checkpoint kept at `results_candidates.jsonl` (resume-safe via done-keys) but NOT planned
-to resume. Directional constructions on this universe: measured dead twice over.
+- COT ✅ (data/cot/cot_disagg.parquet, 7 syms x ~1046 reports, usable_from lag).
+- Databento curves ✅ (data/curves/databento/*.csv raw WITH instrument_id; parsed parquet lacks it —
+  the pipeline reads the RAW csvs). 7 roots x ranks 0-7, 2010-06+.
+- Dukascopy extension ✅ (HIST DONE) but **NOT USED** by this daily study (superseded — see below).
 
-## Program 2 — SWING XSEC COMMODITY (active)
+## KEY DECISION (supersedes SWING_PREREG_DRAFT steps 1-2)
 
-Owner-supplied factor menu (carry, basis-momentum, liquidity-provision reversal, momentum, skew,
-hedging-pressure, vol-managed overlay) accepted with constructibility analysis: carry/basis-momentum
-BLOCKED without external CME curve data (perps have no term structure; funding ≠ convenience
-yield); the rest constructible from lake + COT. Honest targets: 0.5–0.7 lake-only, 0.85–1.15 with
-curves; >1.5 = alarm.
+Price basis = **databento FRONT-MONTH daily settles**, roll-aware returns via instrument_id change
+on rank 0 (roll day return = c0_t / c1_{t-1}). Uniform panel: **839 Friday weeks, breadth 7
+throughout, 2010-06..2026-07** — longer & cleaner than the duka-stitch (which had per-name floors +
+XPT/XPD only 2021). No 1-min re-stitch / prep_frames needed (those were the directional-ORB frames).
+Perp = execution vehicle only (tracking error negligible at swing horizon, covered by cost model).
 
-| Step | Status |
-|---|---|
-| Prereg DRAFT (`SWING_PREREG_DRAFT.md` v0.1 — freeze blocked on: duka extension landed + COT verified + OWNER curve-source decision) | ✅ drafted, committed |
-| Data 1: Dukascopy backward-extension (XAU 2009+, XAG 2008-06+, CL/NATGAS 2013+, COPPER 2012+; XPT/XPD have no pre-2021 duka history — probed) via `scripts/backfill_dukascopy_hist.py` | 🔄 RUNNING (bg; 18,867 code-days; ~19h politeness-paced; log `data/backfill_duka_hist.out`; resume = re-run same command) |
-| Data 2: CFTC Disaggregated COT 2006-06→now via `scripts/backfill_cot.py` → `data/cot/cot_disagg.parquet` | ✅ 7 symbols × 1,046 reports; NYMEX/COMEX-anchored mapping (Feb-2022 renames handled: NAT GAS NYME, COPPER- #1; WTI ICE-Europe look-alike excluded; loud double-mapping guard) |
-| Data 3: term-structure source for F1 carry + F2 basis-momentum | 🔎 FREE COMPOSITE FOUND (2026-07-04): EIA API = WTI+HenryHub contracts 1-4 daily (RCLC1-4/RNGC1-4, decades, free key) → F1/F2 complete for CL+NG; metals = rates-carry (gold/silver carry degenerate per the owner research — no curve needed); copper = LME cash-3M via Westmetall as a DECLARED venue proxy (verify feed at wiring); CHRIS deprecated/stale (ruled out). Optional exact-everything: databento $125 signup credit covers all-months daily settles 2010+ for all 7 roots (~few $ of credit; needs owner signup). NEXT: wire EIA (+Westmetall) fetchers; databento top-up if owner signs up |
-| Re-stitch after duka lands: extend `scripts/stitch_tradfi_1m.py` output back to the new floors; verify seams/splits; rebuild frames | ⬜ after Data 1 |
-| FREEZE prereg → build factors on the crypto-book machinery (panel/run_book/CPCV/DSR/PBO) → validate → report | ⬜ |
+## BUG FOUND + FIXED (why never trust an all-negative first pass)
 
-## Invariants (binding, unchanged)
+First run: ALL factors negative incl. carry (−0.38 gross) — a red flag vs 35yr carry evidence.
+Diagnostic proved it was DATA CONTAMINATION: WTI 2020-04-20 settled −$2.67 → spurious −116%/−439%
+"returns" through the negative price, detonating the dollar-neutral book. Carry decile spread is
+correctly POSITIVE (+8.1bp/wk most-backwardated vs most-contango). FIX (swing_pipeline.root_daily,
+declared data hygiene): invalidate any return computed through a non-positive price; winsorize daily
+returns to ±40% (no legit daily move for these 7 reaches it). Re-running now.
 
-Prereg-before-run; net-of-cost {6,12,24}bp + funding scenarios; PIT panel entry; COT read only at
-`usable_from` ≤ rebalance; N_eff charges the full declared grid; deployed book = the pre-named
-ensemble, never the best cell; negatives recorded in docs/EDGE.md; write-local-then-scp; VM
-background compute; never touch src/convexity or the live paper system.
+## Pipeline (research/entry_exit/study/swing_pipeline.py) — self-contained
 
-## NEXT ACTION
+Loads raw curve csvs + COT → roll-aware daily returns → weekly Friday panel (adj index, carry =
+annualized log(c0/c1) by data-derived per-root roll spacing, rvol20, skew40/60, COT dmm/pnet) →
+factors F1 carry, F2 basis-mom (4wk Δcarry), F3 reversal (−prev1wk, COT-flow-top-half conditioned;
++uncond variant), F4 mom{6,8,10}, F5 skew{40,60}, F6 mom8×hedging-pressure → inverse-vol
+dollar-neutral gross-1 weight matrices → net {6,12,24}bp + funding → ensembles {F3+F4+F5},{+F6},
+{+F1+F2 all} + vol-target overlay → CPCV(8,k2) paths, per-obs DSR @ N_eff≈13, drop-top-5, Kelly.
+Output research/entry_exit/study/results_swing.json.
 
-Wait for the duka hist job ("HIST DONE" in `data/backfill_duka_hist.out`; if dead earlier, re-run —
-resume-safe). Then: re-stitch the 5 extended codes into `data/stitched/` (ratio-adjust at the
-duka→perp seam exactly as the original stitch; validate largest non-gap moves are real events),
-rebuild study frames, verify weekly-obs count (~690 at breadth ≥5 from 2013). In parallel the OWNER
-decides Data 3 (curve source). Then freeze `SWING_PREREG` (dated) and begin the factor build.
+## STATUS: ✅ DONE 2026-07-05 — reported to owner; loop ea55c4d6 cancelled.
+
+VERDICT: NO deployable edge on the 7-perp universe. Clean, verified NEGATIVE (not a bug):
+- Panel 839 wk breadth-7 2010-2026 (databento front-month, roll-aware).
+- Every factor net-negative; best = skew ~−0.2; ensembles −0.6 to −0.9; DSR ≈ 0.00 all.
+- Carry raw extreme spread +1.68bp/wk (Sharpe +0.01) ≈ zero → net-negative after 2/2 book + cost.
+- Bug found+fixed first (WTI 2020-04-20 −$2.67 → spurious −116%/−439% returns; winsorized). Engine
+  then VERIFIED: pipeline k=1 gross (+1.69bp) == independent decile (+1.68bp), no sign/align bug.
+- Mechanism: 4/7 are precious metals (degenerate carry) + breadth 7 too small for a quantile book
+  (fundamental law) + short-mom decay + turnover. Curve factors make it WORSE (metal-heavy).
+Artifacts committed on `commodity`: SWING_PREREG.md (frozen), REPORT.md, results_swing.json,
+swing_pipeline.py, diag.py, ab.py. To ever revisit: needs a 20-30 name CME/LME dated-futures
+universe (different data + execution program), NOT a construction tweak on these 7 perps.
+
+## Invariants
+Prereg-before-claim; net-of-cost; no-lookahead (weight_t uses data ≤ t, scored on t→t+1; COT
+usable_from ≤ Friday t); deployed pick = pre-named ensemble passing gates, never best cell; never
+fabricate; VM bg compute; write-local-then-scp; never touch src/convexity or live paper.

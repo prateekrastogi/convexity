@@ -1,0 +1,18 @@
+/home/speculation/convexity/.venv/lib/python3.12/site-packages/pandas/core/arraylike.py:402: RuntimeWarning: invalid value encountered in log
+  result = getattr(ufunc, method)(*inputs, **kwargs)
+panel: 839 Friday weeks 2010-06-11..2026-07-03; breadth median=7 min=7 max=7
+SWING DONE -> /home/speculation/convexity/research/entry_exit/study/results_swing.json
+{
+ "E_core_F3F4F5": {
+  "sharpe": -0.61,
+  "dsr": 0.0
+ },
+ "E_plusF6": {
+  "sharpe": -0.692,
+  "dsr": 0.0
+ },
+ "E_all_curve": {
+  "sharpe": -0.932,
+  "dsr": 0.0
+ }
+}
