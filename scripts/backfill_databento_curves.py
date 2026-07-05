@@ -99,19 +99,25 @@ def main() -> None:
             print(f"TOTAL ${total:.2f} (debit if pulled; this dry-run spends nothing)")
             return
         if mode == "--pull":
+            # each 16-yr continuous-symbol request takes minutes SERVER-side -> parallelize the
+            # waiting (5 concurrent; httpx.Client is thread-safe; retries live inside pull_rank)
+            from concurrent.futures import ThreadPoolExecutor, as_completed
+            tasks = [(root, rank, schema)
+                     for root in ROOTS for rank in range(DEPTH) for schema in SCHEMAS]
             bars, stats, failed = [], [], []
-            for root in ROOTS:
-                for rank in range(DEPTH):
+            with ThreadPoolExecutor(5) as ex:
+                futs = {ex.submit(pull_rank, client, r, k, s): (r, k, s) for r, k, s in tasks}
+                for f in as_completed(futs):
+                    r, k, s = futs[f]
                     try:
-                        b = pull_rank(client, root, rank, "ohlcv-1d")
-                        if b is not None:
-                            bars.append(b)
-                        s = pull_rank(client, root, rank, "statistics")
-                        if s is not None:
-                            stats.append(s)
+                        df = f.result()
                     except Exception as e:  # one bad symbol must not kill the run
-                        failed.append(f"{root}.c.{rank}: {type(e).__name__}")
-                        print(f"  {root}.c.{rank}: FAILED {e!r} — continuing", flush=True)
+                        failed.append(f"{r}.c.{k}/{s}: {type(e).__name__}")
+                        print(f"  {r}.c.{k}/{s}: FAILED {e!r} — continuing", flush=True)
+                        continue
+                    if df is None:
+                        continue
+                    (bars if s == "ohlcv-1d" else stats).append(df)
             if failed:
                 print(f"INCOMPLETE ({len(failed)} failures — rerun to resume): {failed}", flush=True)
             bar = pd.concat(bars, ignore_index=True)

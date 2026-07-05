@@ -23,6 +23,10 @@ spec = importlib.util.spec_from_file_location("duka", REPO / "scripts" / "backfi
 duka = importlib.util.module_from_spec(spec)
 sys.modules["duka"] = duka
 spec.loader.exec_module(duka)
+# 2x the module's conservative default: this run is 5 codes (not 35 instruments), and per-thread
+# request spacing is unchanged, so aggregate rate ~doubles; Dukascopy 503s (if any) self-regulate
+# via the module's existing backoff, and errored days are simply retried on the next run.
+duka.WORKERS = 12
 
 FLOORS = {  # probed earliest-with-data (2026-07-04); generous by <=1yr is cheap, wrong by 3yr is not
     "XAUUSD": dt.date(2009, 1, 1),
