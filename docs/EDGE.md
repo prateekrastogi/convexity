@@ -185,21 +185,46 @@ This is the whole reason cross-sectional backtests lie, so the discipline was he
 
 ## (e) Next
 
-- **Status (2026-07): everything upstream of papering is DONE.** The 9 pillar specs are
-  implemented and test-covered (613 tests), independently math-audited (a turnover double-drift
-  fix re-measured the records: naive 0.987 / CPCV mean 0.914 / PBO 0.39, frac_pos and haircut
-  unchanged), real Binance lot/tick/min-notional filters are wired, and the enhancement menu was
-  tested and rejected (§(d)). The paper rebalancer is the ONLY remaining build item.
-- **Paper the 12–16d lookback ensemble** (the band, vol-scaled quintile, ~60–75 names, weekly),
-  dollar-neutral, at quarter-Kelly gross.
-- **Open items / not yet done:**
-  - Exact real-cost CAGR reconciliation (nail down the Amihud size-cost → the ~20–25% figure).
-  - The **live/paper rebalancer is BUILT** (2026-07: `src/convexity/paper/`, spec
-    `docs/specs/PAPER.md`, systemd units `deploy/`): weekly oneshot sessions, targets parity-pinned
-    bit-for-bit to the engine, quarter-Kelly sizing over the USDT→USDC collateral waterfall (BTC
-    never), maker-first venue-legal orders, TWR flow handling, journal + reconciliation. Dry-run
-    verified end-to-end on the real lake; the Binance-demo gateway is EXPERIMENTAL until the first
-    SUPERVISED `--live` session (the remaining step before the timers go on).
+- **Status (2026-07): the crypto book is PAPERING.** The 9 pillar specs are implemented and
+  test-covered, independently math-audited (a turnover double-drift fix re-measured the records:
+  naive 0.987 / CPCV mean 0.914 / PBO 0.39, frac_pos and haircut unchanged), real Binance
+  lot/tick/min-notional filters are wired, and the enhancement menu was tested and rejected
+  (§(d)). The **live/paper rebalancer is LIVE on the demo** (first supervised session 2026-07-03,
+  weekly timers armed): `src/convexity/paper/`, spec `docs/specs/PAPER.md`, units `deploy/` —
+  12–16d band ensemble, dollar-neutral, quarter-Kelly gross, USDT→USDC waterfall (BTC never),
+  maker-first orders + finalize crossing + the domain-scoped orphan sweep, TWR flows, daily recon.
+- **Paper's mission:** measure maker fill rates (the +1.75%/yr E2 upside), the Friday phase
+  premium OOS, and accumulate DSR track weeks.
+- **Open items:** exact real-cost CAGR reconciliation (nail down the Amihud size-cost → the
+  ~20–25% figure).
+
+---
+
+## (f) The commodity book — three programs, one survivor (2026-07-05)
+
+The 7 Binance commodity/metal TradFi perps (XAU/XAG/XPT/XPD/COPPER/CL/NATGAS) were attacked with
+three pre-registered programs on the databento-futures + stitched-proxy lakes
+(`research/entry_exit/study/`):
+
+1. **Swing cross-sectional factors — DEAD** (`REPORT.md`): carry, basis-momentum, COT-reversal,
+   momentum, skew, hedging-pressure and ensembles ALL net-negative; breadth 7 (effective ~4,
+   4/7 degenerate-carry metals) cannot feed a quantile book.
+2. **Durable slow TSMOM + carry-on-storables — DEAD net** (`DURABLE_REPORT.md`): thesis direction
+   confirmed (slowest trend L52 +0.15 and carry +0.14 are the only positive cells) but magnitude
+   sub-noise — combined book 0.09, DSR 0.08, PBO 0.54, drop-top-5 negative. Same breadth wall.
+3. **RV pair mean reversion — the SURVIVOR** (`RV_REPORT.md`): 5 pre-named pairs, band z
+   {26,52,104}wk, half-life gate, pair RP, 10% vol target → **net 0.73 @12bp (0.54 @24bp),
+   maxDD 18.5%, drop-top-5 +0.57 (first-ever pass on this universe), CPCV 28/28 paths positive**;
+   DSR 0.856 and PBO 0.386 miss the frozen full-pass bar → **no real-money deploy; graduated to a
+   PAPER book instead** (plan-around 0.5–0.6 live; nearly uncorrelated diversifier to the crypto
+   book, not a co-equal).
+
+The RV book is implemented as a second, fully separated paper strategy (`docs/specs/PAPER.md`
+§11: disjoint symbol domains, own journal + virtual capital via `allocate`, domain-scoped orphan
+sweep, own timers) with weekly commodity-perp discovery + data refresh. Sizing v1 = the study's
+own 10% vol target — **quarter-Kelly is deferred until the paper track exists**; adopt only if
+paper tracks the backtest. This CLOSES commodity-directional research on this universe; the only
+path to more commodity Sharpe is breadth (a 25–40-market futures venue), not another signal.
 
 ---
 
