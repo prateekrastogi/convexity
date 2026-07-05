@@ -117,7 +117,13 @@ def build_panel(
     fund_cols: dict[str, pd.Series] = {}
     kept: list[str] = []
     for sym in symbols:
-        bars = load_bars(sym, lake_dir=lake_dir)
+        try:
+            bars = load_bars(sym, lake_dir=lake_dir)
+        except FileNotFoundError:
+            # a universe entry can precede its lake file (e.g. a discovery-overlay symbol whose
+            # stitch hasn't landed) — skip LOUDLY rather than kill every panel consumer.
+            print(f"[panel] {sym}: no lake file under {lake_dir} — skipped (universe/lake drift)")
+            continue
         if len(bars) == 0:
             continue
         dc = _daily_close(bars.ts, bars.c)

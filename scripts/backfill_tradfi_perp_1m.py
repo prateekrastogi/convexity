@@ -16,10 +16,8 @@ from __future__ import annotations
 
 import datetime as dt
 import io
-import json
 import logging
 import pathlib
-import re
 import time
 import zipfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -45,9 +43,15 @@ log = logging.getLogger("backfill_tradfi")
 
 
 def load_tradfi_perp_symbols() -> list[str]:
-    """The Binance perp `symbol` of every commodities + equities universe entry (SONY/NVO included)."""
-    block = re.search(r"```json\n(.*?)\n```", UNIVERSE_MD.read_text(), re.S).group(1)
-    d = json.loads(block)
+    """The Binance perp `symbol` of every commodities + equities universe entry (SONY/NVO included).
+
+    Uses the merged loader (committed candidates.md block + the gitignored discovery overlay,
+    ``convexity.panel.candidates.load_universe``) so a commodity perp discovered this week is
+    backfilled without a repo edit."""
+    import sys as _sys
+    _sys.path.insert(0, str(REPO / "src"))
+    from convexity.panel.candidates import load_universe
+    d = load_universe(UNIVERSE_MD, discovered_path=REPO / "data/universe/discovered.json")
     return [x["symbol"] for sleeve in ("commodities", "equities") for x in d[sleeve]]
 
 

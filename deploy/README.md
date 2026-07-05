@@ -30,3 +30,29 @@ downtime).
   explicit operator action only.
 - **Status / logs**: `python -m convexity.paper status`; `journalctl -u convexity-paper-rebalance
   -n 100`. Dry-run anything with the same commands minus `--live` (no keys needed).
+
+## Commodity book (PAPER.md §11) — separate units, separate monitoring
+
+The commodity RV pair book runs beside the crypto book on the SAME demo account but with its own
+journal, symbol domain, targets, timers and logs. Its units are installed by the same `cp` above
+but are **enabled separately and ONLY after the runbook below** (they stagger the crypto book:
+Sat 00:40 rebalance, 02:50 finalize, daily 00:45 recon, Fri 12:00 discovery):
+
+```bash
+sudo systemctl enable --now convexity-commodity-rebalance.timer \
+     convexity-commodity-finalize.timer convexity-commodity-recon.timer \
+     convexity-commodity-discovery.timer
+```
+
+Runbook BEFORE enabling (PAPER.md §11.5):
+1. **Allocate both books** — the shared account's equity belongs to two books now:
+   `python -m convexity.paper allocate --book crypto --amount <M>` and
+   `python -m convexity.paper allocate --book commodity --amount <N>`, N+M ≤ account USDT+USDC.
+   The commodity book REFUSES to trade live without an allocation.
+2. **One supervised session**: `python -m convexity.paper rebalance --live --book commodity` —
+   watch the 5 pairs' legs fill; confirm the orphan sweep logs touch ONLY commodity symbols.
+3. Enable the four timers.
+
+Monitor the commodity book independently: `python -m convexity.paper status --book commodity`;
+`journalctl -u convexity-commodity-rebalance -n 100`; journal at
+`data/paper/commodity/journal.jsonl`, discovery log at `data/paper/commodity/discovery.jsonl`.
