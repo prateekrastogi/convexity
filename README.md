@@ -108,13 +108,16 @@ targets parity-pinned bit-for-bit to the validated engine, quarter-Kelly gross, 
 collateral waterfall (BTC never — user mandate), maker-first venue-exact orders, TWR flow
 stripping, daily reconciliation + the domain-scoped orphan sweep.
 
-**Commodity RV pairs (BUILT, awaiting supervised first session)** — the surviving Program-4
+**Commodity RV pairs (LIVE on demo since 2026-07-06)** — the surviving Program-4
 candidate (`research/entry_exit/study/RV_REPORT.md`: backtest net 0.73, plan-around 0.5–0.6
 live): 5 pre-named pairs, band-z mean reversion, half-life gate, pair risk parity, 10% vol
 target (`src/convexity/signal/rv_pairs.py`). Runs as a SEPARATE book (PAPER.md §11): own journal,
 own virtual capital (`allocate`), own timers/logs; the shared account is never used to infer a
 book's equity. Every command is book-scoped: `python -m convexity.paper rebalance --book
-commodity` (dry-run needs no keys).
+commodity` (dry-run needs no keys). Live bootstrap notes: the account must sign the venue's
+TradFi-Perps agreement once (`gateway.sign_tradfi_agreement()`, else every order draws -4411),
+and pairs are gated on what the EXECUTION venue actually lists (the demo carries the metals but
+not CL/NATGAS yet, so the energy pair activates automatically when Binance adds them).
 
 ## Discipline (non-negotiable)
 

@@ -33,10 +33,15 @@ downtime).
 
 ## Commodity book (PAPER.md §11) — separate units, separate monitoring
 
+**STATUS: LIVE on the demo since 2026-07-06** (allocations crypto 8000 / commodity 2000; the
+TradFi-Perps agreement was signed via `gateway.sign_tradfi_agreement()` — any new account hits
+`-4411` on every TradFi order until this one-time signed call; the demo venue lists only the
+metal perps, so the CL-NATGAS pair is venue-gated out until Binance adds them, PAPER.md §11.3).
+
 The commodity RV pair book runs beside the crypto book on the SAME demo account but with its own
 journal, symbol domain, targets, timers and logs. Its units are installed by the same `cp` above
-but are **enabled separately and ONLY after the runbook below** (they stagger the crypto book:
-Sat 00:40 rebalance, 02:50 finalize, daily 00:45 recon, Fri 12:00 discovery):
+and stagger the crypto book (Sat 00:40 rebalance, 02:50 finalize, daily 00:45 recon, Fri 12:00
+discovery). For a fresh account, the runbook below MUST pass before enabling:
 
 ```bash
 sudo systemctl enable --now convexity-commodity-rebalance.timer \

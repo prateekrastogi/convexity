@@ -167,7 +167,14 @@ def sign_tradfi_agreement() -> str:
         )
         return str(resp)
 
-    return _run(go())
+    try:
+        return _run(go())
+    except GatewayError as e:
+        # the venue answers HTTP 200 with the literal body "SUCCESS" (documented) — Nautilus's
+        # JSON parser raises on it; that IS the success path (verified live 2026-07-06).
+        if "SUCCESS" in str(e):
+            return "SUCCESS"
+        raise
 
 
 def account_assets() -> dict[str, float]:
