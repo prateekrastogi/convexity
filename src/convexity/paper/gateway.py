@@ -75,10 +75,16 @@ def _run(coro):
 class AccountSnapshot:
     equity: float  # totalMarginBalance (wallet + unrealized PnL), USDT
     positions: dict[str, float]  # symbol -> signed position qty (base units)
+    unrealized: dict[str, float]  # symbol -> unrealized PnL (quote units), open positions only
 
 
 def account_snapshot() -> AccountSnapshot:
-    """Equity + open positions from the demo account (EXPERIMENTAL)."""
+    """Equity + open positions from the demo account (EXPERIMENTAL).
+
+    ``unrealized`` (per symbol, from position_risk) lets a BOOK sum the venue-truth unrealized
+    P&L over ITS OWN symbol domain (PAPER.md §11 book_recon) — the shared account's aggregate
+    equity blends every book and cannot attribute.
+    """
     _client, api, _clock = _build_api()
 
     async def go() -> AccountSnapshot:
@@ -87,11 +93,14 @@ def account_snapshot() -> AccountSnapshot:
         # authoritative per-symbol position surface.
         risk = await api.query_futures_position_risk(recv_window="5000")
         positions: dict[str, float] = {}
+        unrealized: dict[str, float] = {}
         for p in risk or ():
             amt = float(p.positionAmt)
             if amt != 0.0:
                 positions[str(p.symbol)] = amt
-        return AccountSnapshot(equity=float(info.totalMarginBalance), positions=positions)
+                unrealized[str(p.symbol)] = float(getattr(p, "unRealizedProfit", 0.0) or 0.0)
+        return AccountSnapshot(equity=float(info.totalMarginBalance), positions=positions,
+                               unrealized=unrealized)
 
     return _run(go())
 

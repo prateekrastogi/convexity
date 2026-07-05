@@ -1,0 +1,65 @@
+{
+ "jackknife": {
+  "drop_GC-SI": {
+   "sharpe": 0.728,
+   "H1": 0.684,
+   "H2": 0.783
+  },
+  "drop_GC-PL": {
+   "sharpe": 0.648,
+   "H1": 0.636,
+   "H2": 0.694
+  },
+  "drop_SI-PL": {
+   "sharpe": 0.54,
+   "H1": 0.446,
+   "H2": 0.624
+  },
+  "drop_PL-PA": {
+   "sharpe": 0.716,
+   "H1": 0.416,
+   "H2": 0.939
+  },
+  "drop_CL-NG": {
+   "sharpe": 0.593,
+   "H1": 0.504,
+   "H2": 0.68
+  }
+ },
+ "halves": {
+  "full_book": {
+   "H1": 0.608,
+   "H2": 0.843
+  }
+ },
+ "gate": {
+  "GC-SI": {
+   "active_frac": 0.85,
+   "solo_sharpe": -0.0
+  },
+  "GC-PL": {
+   "active_frac": 0.76,
+   "solo_sharpe": 0.184
+  },
+  "SI-PL": {
+   "active_frac": 0.81,
+   "solo_sharpe": 0.672
+  },
+  "PL-PA": {
+   "active_frac": 0.66,
+   "solo_sharpe": 0.005
+  },
+  "CL-NG": {
+   "active_frac": 0.74,
+   "solo_sharpe": 0.576
+  }
+ },
+ "turnover": {
+  "mean_gross_turn_wk": 0.391,
+  "cost_bp_wk_at12": 4.69
+ },
+ "full": {
+  "sharpe": 0.732,
+  "turn_mean": 0.391
+ }
+}

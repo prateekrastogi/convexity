@@ -22,10 +22,8 @@ from __future__ import annotations
 
 import datetime as dt
 import io
-import json
 import logging
 import pathlib
-import re
 import sys
 import time
 import zipfile
@@ -49,9 +47,14 @@ log = logging.getLogger("backfill_funding")
 
 
 def load_universe_symbols() -> list[str]:
-    """Every perp symbol in the universe (crypto + tradfi equities + commodities)."""
-    block = re.search(r"```json\n(.*?)\n```", UNIVERSE_MD.read_text(), re.S).group(1)
-    u = json.loads(block)
+    """Every perp symbol in the universe (crypto + tradfi equities + commodities).
+
+    Merged loader (committed block + gitignored discovery overlay) so a commodity perp
+    discovered this week gets funding history without a repo edit."""
+    import sys as _sys
+    _sys.path.insert(0, str(REPO / "src"))
+    from convexity.panel.candidates import load_universe
+    u = load_universe(UNIVERSE_MD, discovered_path=REPO / "data/universe/discovered.json")
     syms: list[str] = []
     for d in u["crypto"]:
         syms.append(d["symbol"])

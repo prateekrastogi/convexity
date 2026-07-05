@@ -1,9 +1,11 @@
-# convexity — crypto cross-sectional momentum research
+# convexity — cross-sectional momentum research + multi-book paper trading
 
 > The directional convex-breakout thesis this repo started from is **dead** (proven no gross
 > directional edge — see `docs/EDGE.md`). What survived the investigation is **crypto
-> cross-sectional momentum**: weekly, dollar-neutral, quintile, vol-scaled. This repo is now
-> stripped to the minimum needed to continue that one edge.
+> cross-sectional momentum**: weekly, dollar-neutral, quintile, vol-scaled — now LIVE as the
+> crypto paper book on the Binance demo. A second, independent **commodity RV pair book** (the
+> one surviving commodity candidate, `docs/EDGE.md` §(f)) is built beside it as a separate paper
+> strategy — own journal, symbol domain, sizing and timers (`docs/specs/PAPER.md` §11).
 
 ## The edge (one line)
 
@@ -21,14 +23,16 @@ biggest honesty flag). Full memo: **[`docs/EDGE.md`](docs/EDGE.md)**.
 (613 tests), independently math-audited (2 critical + 8 major defects found and fixed — including
 a turnover double-drift that overstated cost in every earlier backtest; baselines re-measured),
 real per-symbol Binance lot/tick filters wired, and the standard equity-momentum enhancement menu
-was pre-registered, tested, and REJECTED (`docs/EDGE.md` §(d)). The one remaining step is the
-live/paper rebalancer below.
+was pre-registered, tested, and REJECTED (`docs/EDGE.md` §(d)). The crypto paper rebalancer is
+LIVE on the demo (weekly timers since 2026-07-03); the commodity RV book is built and awaiting
+its supervised first session (`docs/specs/PAPER.md` §11.5).
 
 ## Layout
 
 ```
-src/convexity/           THE DEPLOYABLE PACKAGE — nine pillars + a shared panel foundation,
-                          self-contained (no dependency on research/, which no longer exists)
+src/convexity/           THE DEPLOYABLE PACKAGE — nine pillars + a shared panel foundation
+                          (research/ holds study records + reusable study machinery, never
+                          imported by the deployable package)
   panel/                    shared foundation: point-in-time daily panel, lake access
                             (data.py), asset-class/sleeve detection, candidate universe
   universe/                 UNIVERSE   — eligibility, liquidity ranking, shortability, PIT checks
@@ -42,6 +46,9 @@ src/convexity/           THE DEPLOYABLE PACKAGE — nine pillars + a shared pane
   system/                   SYSTEM     — Deflated Sharpe, purged walk-forward, CPCV/PBO,
                             promotion gate
   ops/                      OPS        — kill-switch, reconciliation, ARL-calibrated brakes
+  paper/                    PAPER      — the multi-book live/paper rebalancer (PAPER.md):
+                            books.py (disjoint book registry), cli.py (--book sessions),
+                            policy/gateway/journal/capital/topup
   core/                     shared types (Bars, InstrumentSpec, AssetClass), params, protocols
 
 docs/
@@ -49,8 +56,16 @@ docs/
   ARCHITECTURE.md           9-pillar data-flow + module map (historical directional architecture
                             preserved in Appendix A, not live)
   specs/                    UNIVERSE.md SIGNAL.md PORTFOLIO.md LEVERAGE.md COST.md EXECUTION.md
-                            REGIME.md SYSTEM.md OPS.md — the authoritative build contract (exact
-                            formulas, invariants, function signatures) for every pillar above
+                            REGIME.md SYSTEM.md OPS.md PAPER.md — the authoritative build contract
+                            (exact formulas, invariants, function signatures) for every pillar
+                            above; PAPER.md §11 = the multi-book design
+
+research/
+  entry_exit/               formal entry/exit model package (frozen preregistration discipline)
+  entry_exit/study/         the commodity study record: frozen preregs + reports + results for
+                            the swing-xsec (DEAD), durable-TSMOM/carry (DEAD) and RV-pair
+                            (SURVIVING candidate -> the commodity paper book) programs, plus the
+                            reusable pipelines (swing_pipeline.py = shared data layer)
 
 scripts/
   xsec_full.py              CANONICAL full sweep: momentum/carry grid x DSR x purged-WF x regime
@@ -58,6 +73,11 @@ scripts/
   xsec_pipeline.py           e2e entry point exercising all 9 pillars together on real data
   backfill_*_1m.py           self-contained lake backfill (crypto klines, funding, dukascopy, tradfi)
   stitch_tradfi_1m.py        tradfi-perp proxy stitching
+  discover_tradfi_perps.py   weekly commodity-perp discovery -> universe overlay + backfill
+                             (data/universe only — NEVER auto-traded)
+
+deploy/                   systemd units + runbook: crypto book timers (live) and commodity book
+                          timers (installed, enable only after PAPER.md §11.5 runbook)
 
 tests/                    one directory per pillar (core/ cost/ execution/ leverage/ ops/ regime/
                           system/ universe/) plus integration/ for the full e2e pipeline
@@ -80,15 +100,21 @@ PYTHONPATH=. .venv/bin/python scripts/xsec_pipeline.py
 .venv/bin/python -m pytest tests/ -q
 ```
 
-## The live strategy slot: paper rebalancer
+## The paper books
 
-**BUILT (2026-07)** — `src/convexity/paper/` (spec: `docs/specs/PAPER.md`; units + runbook:
-`deploy/`): scheduled weekly sessions (settle→target→size→plan→orders→journal), targets
-parity-pinned bit-for-bit to the validated engine, quarter-Kelly gross, USDT→USDC collateral
-waterfall (BTC never — user mandate), maker-first venue-exact orders, TWR flow stripping, daily
-reconciliation. Dry-run works with no keys (`python -m convexity.paper rebalance`); the demo
-gateway is EXPERIMENTAL until the first SUPERVISED `--live` session — run that before enabling
-the timers (`deploy/README.md`).
+**Crypto (LIVE on demo since 2026-07-03)** — `src/convexity/paper/` (spec: `docs/specs/PAPER.md`;
+units + runbook: `deploy/`): scheduled weekly sessions (settle→target→size→plan→orders→journal),
+targets parity-pinned bit-for-bit to the validated engine, quarter-Kelly gross, USDT→USDC
+collateral waterfall (BTC never — user mandate), maker-first venue-exact orders, TWR flow
+stripping, daily reconciliation + the domain-scoped orphan sweep.
+
+**Commodity RV pairs (BUILT, awaiting supervised first session)** — the surviving Program-4
+candidate (`research/entry_exit/study/RV_REPORT.md`: backtest net 0.73, plan-around 0.5–0.6
+live): 5 pre-named pairs, band-z mean reversion, half-life gate, pair risk parity, 10% vol
+target (`src/convexity/signal/rv_pairs.py`). Runs as a SEPARATE book (PAPER.md §11): own journal,
+own virtual capital (`allocate`), own timers/logs; the shared account is never used to infer a
+book's equity. Every command is book-scoped: `python -m convexity.paper rebalance --book
+commodity` (dry-run needs no keys).
 
 ## Discipline (non-negotiable)
 

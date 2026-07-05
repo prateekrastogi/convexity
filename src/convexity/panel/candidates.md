@@ -107,7 +107,8 @@ The block below is the machine-readable source of truth. `symbol` = Binance USDT
 {
   "meta": {"capital_usd": 1000, "resolution": "1m", "history_target_years": 5, "optimiser": "carver_ch25_dynamic",
     "crypto_filters_source": "fapi.binance.com/fapi/v1/exchangeInfo (LOT_SIZE/PRICE_FILTER/MIN_NOTIONAL), live snapshot",
-    "crypto_filters_note": "tick_size/lot_size/min_qty/min_notional on each crypto entry are REAL per-symbol Binance USDT-M futures filters, not a placeholder. Equities/commodities keep no tick/lot fields (dead sleeve, no live cross-sectional edge -- EDGE.md scope note). Filters are a CURRENT snapshot, not proven point-in-time-accurate across the 5yr backtest window -- see EXECUTION.md quantization section."},
+    "crypto_filters_note": "tick_size/lot_size/min_qty/min_notional on each crypto entry are REAL per-symbol Binance USDT-M futures filters, not a placeholder. COMMODITY entries carry the same real filters since the RV pair paper book (2026-07-05); equities keep no tick/lot fields (dead sleeve, no live cross-sectional edge -- EDGE.md scope note). Filters are a CURRENT snapshot, not proven point-in-time-accurate across the backtest window -- see EXECUTION.md quantization section; live sessions re-quantize against the venue's current exchangeInfo anyway.",
+    "commodity_perp_note": "Binance marks these underlyingType=COMMODITY / contractType=TRADIFI_PERPETUAL (the discovery predicate, scripts/discover_tradfi_perps.py); onboard = venue listing epoch-ms. Newly discovered venue commodity perps land in data/universe/discovered.json (gitignored overlay merged by load_universe) with data backfill -- NEVER auto-traded (the RV book's PAIRS are frozen research config)."},
   "crypto": [
     {"symbol": "BTCUSDT", "sector": "L1-major", "source": "binance", "tick_size": 0.1, "lot_size": 0.001, "min_qty": 0.001, "min_notional": 50.0},
     {"symbol": "ETHUSDT", "sector": "L1-major", "source": "binance", "tick_size": 0.01, "lot_size": 0.001, "min_qty": 0.001, "min_notional": 20.0},
@@ -243,13 +244,13 @@ The block below is the machine-readable source of truth. `symbol` = Binance USDT
     {"symbol": "IWMUSDT", "sector": "index-smallcap", "source": "dukascopy+binance", "dukascopy": "IWMUSUSD"}
   ],
   "commodities": [
-    {"symbol": "XAUUSDT", "sector": "precious-metal", "source": "dukascopy+binance", "dukascopy": "XAUUSD"},
-    {"symbol": "XAGUSDT", "sector": "precious-metal", "source": "dukascopy+binance", "dukascopy": "XAGUSD"},
-    {"symbol": "XPTUSDT", "sector": "precious-metal", "source": "dukascopy+binance", "dukascopy": "XPTCMDUSD"},
-    {"symbol": "XPDUSDT", "sector": "precious-metal", "source": "dukascopy+binance", "dukascopy": "XPDCMDUSD"},
-    {"symbol": "COPPERUSDT", "sector": "industrial-metal", "source": "dukascopy+binance", "dukascopy": "COPPERCMDUSD"},
-    {"symbol": "CLUSDT", "sector": "energy", "source": "dukascopy+binance", "dukascopy": "LIGHTCMDUSD"},
-    {"symbol": "NATGASUSDT", "sector": "energy", "source": "dukascopy+binance", "dukascopy": "GASCMDUSD"}
+    {"symbol": "XAUUSDT", "sector": "precious-metal", "source": "dukascopy+binance", "dukascopy": "XAUUSD", "tick_size": 0.01, "lot_size": 0.001, "min_qty": 0.001, "min_notional": 5.0, "onboard": 1765440300000},
+    {"symbol": "XAGUSDT", "sector": "precious-metal", "source": "dukascopy+binance", "dukascopy": "XAGUSD", "tick_size": 0.01, "lot_size": 0.001, "min_qty": 0.001, "min_notional": 5.0, "onboard": 1767780000000},
+    {"symbol": "XPTUSDT", "sector": "precious-metal", "source": "dukascopy+binance", "dukascopy": "XPTCMDUSD", "tick_size": 0.01, "lot_size": 0.001, "min_qty": 0.001, "min_notional": 5.0, "onboard": 1769767200000},
+    {"symbol": "XPDUSDT", "sector": "precious-metal", "source": "dukascopy+binance", "dukascopy": "XPDCMDUSD", "tick_size": 0.01, "lot_size": 0.001, "min_qty": 0.001, "min_notional": 5.0, "onboard": 1769768100000},
+    {"symbol": "COPPERUSDT", "sector": "industrial-metal", "source": "dukascopy+binance", "dukascopy": "COPPERCMDUSD", "tick_size": 0.001, "lot_size": 0.1, "min_qty": 0.1, "min_notional": 5.0, "onboard": 1772787600000},
+    {"symbol": "CLUSDT", "sector": "energy", "source": "dukascopy+binance", "dukascopy": "LIGHTCMDUSD", "tick_size": 0.01, "lot_size": 0.01, "min_qty": 0.01, "min_notional": 5.0, "onboard": 1775034000000},
+    {"symbol": "NATGASUSDT", "sector": "energy", "source": "dukascopy+binance", "dukascopy": "GASCMDUSD", "tick_size": 0.001, "lot_size": 0.1, "min_qty": 0.1, "min_notional": 5.0, "onboard": 1775035200000}
   ]
 }
 ```

@@ -117,3 +117,66 @@ passes (runbook). Dry-run exercises everything except the four gateway calls.
 exactness; intent lot/tick/min-notional legality + exact strings; the collateral waterfall
 (USDT-first, USDC fold-in, BTC never). Plus the dry-run weekly cycle exercised end-to-end on the
 real lake (two consecutive sessions: settle → target → size → plan → journal).
+
+## 11. Multi-book: the commodity RV pair book beside the crypto book (added 2026-07-05)
+
+ONE demo account, N strategies — raw venue state MISLEADS per-strategy book-keeping, so every
+venue-facing surface is scoped by a **book** (`paper/books.py`; `--book {crypto,commodity}` on
+every CLI command; each book = its own systemd units, so `journalctl -u convexity-commodity-*`
+monitors the commodity book independently of crypto).
+
+### 11.1 Books, domains, and the scoped orphan sweep
+
+A book owns: a SYMBOL DOMAIN (candidates.md sleeves; pairwise-DISJOINT, test-pinned), its own
+append-only JOURNAL (`data/paper/journal.jsonl` crypto — unchanged; `data/paper/commodity/…`
+commodity), and its dry-run quantization surface (`sleeve_filters`; commodity entries now carry
+the real venue filters). `orphan_close_intents` takes a REQUIRED `domain` — without it the crypto
+sweep would market-close the commodity book's fresh positions every Saturday. Carried-book reads,
+recon counts and the sweep all see only domain positions.
+
+### 11.2 Virtual capital + book-scoped settles (`allocate`)
+
+`python -m convexity.paper allocate --book X --amount N` splits the shared account into virtual
+books (append-only; Σ allocations ≤ account USDT+USDC is a runbook check the recon journals). In
+allocation mode a book's equity evolves by its OWN frozen-accounting settle (+ its journaled
+flows); every live session journals a `book_recon` (book model equity, domain positions, domain
+unrealized P&L via position_risk, shared account equity) so live-vs-model drift is MEASURED per
+book, never blended. The crypto book keeps its legacy whole-account settle until its first
+`allocate` (zero behavior change at merge); ONCE THE COMMODITY BOOK TRADES LIVE, BOTH BOOKS MUST
+BE ALLOCATED (runbook). Targets records now journal their `symbols` list; settles re-align by
+symbol (a book's panel can grow via discovery — positional alignment would silently mis-settle).
+
+### 11.3 The commodity strategy (frozen research config)
+
+`signal/rv_pairs.py` = the RV pair study's pre-named deployable EXACTLY (research/entry_exit/
+study/RV_PREREG.md, net 0.73 backtest / plan-around 0.5–0.6 live): 5 pre-named pairs (XAU-XAG,
+XAU-XPT, XAG-XPT, XPT-XPD, CL-NATGAS), band-ensemble z {26,52,104}wk on weekly-Friday log-ratio
+spreads, continuous sizing −clip(z,±2)/2, AR(1) half-life gate [1,26]wk, pair risk parity
+(26wk, [0.25,4]), unit gross, 10% vol target (26wk, [0.5,2]) — all recomputed from the panel
+each session (no journal state). Causality is canary-pinned (the study's unshifted-levels book
+prints Sharpe −3.8; tests re-pin the shift). Sizing = the study's own vol target; quarter-Kelly
+is DEFERRED until a paper track exists. Settle friction 17 bp RT (5 taker + 3 half-spread + 0.5
+impact, ×2), inside the study's {12,24} bp scenario band; the settle evolves the commodity book
+on its SCALED (vol-targeted) weights — the study's deployable series. Price basis = the stitched
+proxy+perp lake; measuring proxy→perp transfer is this paper book's mission.
+
+### 11.4 Discovery + data freshness (never auto-trade)
+
+`scripts/discover_tradfi_perps.py` (weekly timer, Fri 12:00 UTC): venue commodity perps
+(`underlyingType == COMMODITY`, the verified predicate) not yet in the universe are appended to
+the gitignored overlay `data/universe/discovered.json` (merged by `load_universe`, so panels,
+backfills and the ORPHAN-SWEEP DOMAIN see them), backfilled immediately (klines + funding) and
+perp-only-stitched. Filter drift and venue-missing symbols are reported loudly; new CRYPTO perps
+are reported FYI only — the crypto universe is frozen by design (survivorship-clean validated
+set). DISCOVERED SYMBOLS NEVER AUTO-TRADE: `rv_pairs.PAIRS` is frozen research config; promotion
+requires a new study. The weekly lake refresh now runs `backfill_tradfi_perp_1m.py` so the
+commodity lake stays as current as crypto's.
+
+### 11.5 Commodity runbook (deploy — DO NOT enable timers before this)
+
+1. Merge to main, redeploy units (`deploy/README.md`), keep timers DISABLED.
+2. `allocate --book commodity --amount <N>` AND `allocate --book crypto --amount <M>` with
+   N+M ≤ account USDT+USDC (BTC never counts).
+3. One SUPERVISED `rebalance --live --book commodity` (same doctrine as §8) — verify the demo
+   lists all 5 pairs' legs, fills, the orphan sweep touches nothing outside the domain.
+4. Only then enable `convexity-commodity-{rebalance,finalize,recon,discovery}.timer`.

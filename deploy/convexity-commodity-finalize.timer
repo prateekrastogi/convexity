@@ -1,0 +1,7 @@
+[Unit]
+Description=convexity commodity paper finalize (Sat 02:50 UTC, after crypto's 02:20)
+[Timer]
+OnCalendar=Sat *-*-* 02:50:00 UTC
+Persistent=true
+[Install]
+WantedBy=timers.target

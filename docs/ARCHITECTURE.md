@@ -75,7 +75,7 @@ downstream spec). One pass through the nine pillars turns `F_t` into next week's
 | 6 | **EXECUTION** | `docs/specs/EXECUTION.md` | How does the target book computed at the Friday close actually get filled — child-order trajectory, shortfall? | Specified only; **not yet built** — `src/convexity/cost/accounting.py::settle_week` still assumes a frictionless instantaneous Friday-close fill (the decision-price benchmark, not a fill price) |
 | 7 | **REGIME** | `docs/specs/REGIME.md` | Should the book's gross be cut (or a defensive overlay applied) given the current cross-sectional market state? | `src/convexity/regime/overlay.py` (`beta_hedge_returns`, `vol_target_scale`, `drawdown_stop_scale`) |
 | 8 | **SYSTEM** | `docs/specs/SYSTEM.md` | Does the resulting weekly return series survive the promotion gate (DSR, CPCV/PBO, purged walk-forward)? | `src/convexity/system/xsec_validate.py` (purged-WF + `DeflatedSharpe` wiring), `src/convexity/system/cpcv.py` (CPCV/PBO over the lookback family), reusing `src/convexity/system/validate/{deflated,cpcv,walkforward}.py` verbatim |
-| 9 | **OPS** | `docs/specs/OPS.md` | How is the live/paper book monitored operationally — reconciliation, kill-switch, SLA, forced-flatten? | Specified only; **not yet built** — no live/paper rebalancer exists yet to operate |
+| 9 | **OPS** | `docs/specs/OPS.md` | How is the live/paper book monitored operationally — reconciliation, kill-switch, SLA, forced-flatten? | `src/convexity/ops/` (flows/TWR, recon, kill-switch) consumed by the LIVE paper rebalancer `src/convexity/paper/` (`docs/specs/PAPER.md`; multi-book §11: crypto + commodity, per-book journals/recon) |
 
 Two supporting, non-pillar modules complete the picture: `src/convexity/portfolio/engine.py` is the driver
 that composes panel → signal → portfolio → accounting into one weekly series per config, and
@@ -184,9 +184,10 @@ portfolio return, not one trade's R-multiple"* (`PORTFOLIO.md` §0/§2; `SYSTEM.
                                                                   promotion gate (SYSTEM.md §6)
                                                                                │
                                                                                ▼
-                                            OPS (spec only — not yet built: monitoring,
-                                            kill-switch, reconciliation, forced-flatten
-                                            for the live/paper loop once it exists)
+                                            OPS -> PAPER (the live multi-book rebalancer,
+                                            docs/specs/PAPER.md: weekly oneshot sessions,
+                                            per-book journal/recon/orphan-sweep; crypto book
+                                            live, commodity RV book built)
 ```
 
 **The single-call-site gross invariant (never a double cut).** The gross-exposure scalar is set at
@@ -198,13 +199,12 @@ This is the same "never a double cut" principle the old directional system's App
 for its own exposure brakes (REGIME/LEVERAGE-governor/OPS-kill composing on disjoint axes rather
 than multiplying independently); it carries over unchanged to this graph.
 
-**Where the pipeline is genuinely incomplete today.** `EXECUTION.md` and `OPS.md` specify real
-pillars, but per `docs/EDGE.md` §(e) **the live/paper rebalancer is not yet built**.
-`src/convexity/` is research-and-validation-only: `accounting.settle_week` marks the whole week's P&L as if the book
-re-weighted atomically at the Friday closing print, which is the correct *decision-price
-benchmark* but not a real fill price (`EXECUTION.md` §0 states this gap explicitly). A future
-`strategy/`-style composition layer, analogous to Appendix A §1/§4's Nautilus adapter pattern, is
-the integration point once papering starts — do not pre-build it (`CLAUDE.md`, `README.md`).
+**Where the pipeline is genuinely incomplete today.** The live/paper rebalancer IS built and
+papering (`src/convexity/paper/`, `docs/specs/PAPER.md` — thin composition over the pillars;
+multi-book per §11). The remaining honest gap is accounting-level: `accounting.settle_week`
+marks the whole week's P&L as if the book re-weighted atomically at the Friday closing print,
+which is the correct *decision-price benchmark* but not a real fill price (`EXECUTION.md` §0
+states this gap explicitly) — closing it is precisely the paper track's TCA mission.
 
 ---
 
@@ -283,9 +283,10 @@ discipline; what changed is the unit each layer operates on.
 - **Property tests** — the monotonicities each spec asserts (e.g. `frac_pos` robustness to N/k
   choice, Sharpe's gross-invariance from PORTFOLIO.md §2.3's Lemma 1) are swept and asserted
   explicitly, no `hypothesis` dependency required — same discipline as Appendix A §8.3.
-* **Integration tests** — deferred. There is no live/paper rebalancer yet to integration-test
-  against Nautilus (§2 above); this layer activates once EXECUTION's live rebalancer and OPS's
-  monitoring loop are built.
+* **Integration tests** — the paper layer is covered by `tests/paper/` (parity pin, venue
+  formatting, waterfall, book scoping/orphan-sweep isolation, settle windows) + supervised
+  first `--live` sessions per book (`deploy/README.md`); deeper Nautilus integration tests
+  activate with the TCA build.
 
 Every pillar's tests need **no external data** — the cross-sectional engine reuses the same
 seeded-synthetic-generator discipline the old architecture's §8 closing note required
@@ -316,7 +317,8 @@ statement of each.
   `data.binance.vision` for bulk historical backfill. The only code written from scratch is the
   cross-sectional engine (`src/convexity/{panel,universe,signal,portfolio,leverage,cost,execution,
   regime,system,ops}/`), the data-layer backfill scripts
-  (`scripts/backfill_*_1m.py`), and — not yet built — the live/paper weekly rebalancer. Do not
+  (`scripts/backfill_*_1m.py`), and the live/paper weekly rebalancer (`src/convexity/paper/`,
+  reusing Nautilus's own Binance HTTP plumbing — never a hand-rolled signer). Do not
   reimplement an engine, a broker connector, a dataframe layer, or a backtest framework; do not
   add competing engines (freqtrade/hummingbot/vectorbt/zipline) or raw `python-binance`.
 * **Refuted/forbidden — do not reintroduce** (full list in `CLAUDE.md`): directional

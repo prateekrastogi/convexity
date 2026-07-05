@@ -48,8 +48,13 @@ GAP_MIN = 1.5         # > this many minutes between consecutive bars => a sessio
 
 
 def universe() -> list[dict]:
-    block = re.search(r"```json\n(.*?)\n```", UNIVERSE_MD.read_text(), re.S).group(1)
-    d = json.loads(block)
+    """Merged loader (committed block + the gitignored discovery overlay) so a commodity perp
+    discovered mid-cycle keeps getting RE-stitched by the weekly lake refresh — a raw-regex
+    parse of candidates.md would freeze it at discovery day (review finding 2026-07-05)."""
+    import sys as _sys
+    _sys.path.insert(0, str(REPO / "src"))
+    from convexity.panel.candidates import load_universe
+    d = load_universe(UNIVERSE_MD, discovered_path=REPO / "data/universe/discovered.json")
     out = []
     for sleeve in ("commodities", "equities", "crypto"):
         for x in d[sleeve]:

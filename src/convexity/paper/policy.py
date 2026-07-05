@@ -144,6 +144,7 @@ def order_intents(
     *,
     consolidate: bool = True,
     w_target: np.ndarray | None = None,
+    filters: dict[str, "object"] | None = None,
 ) -> list[OrderIntent]:
     """Turn the plan into venue-legal order intents against the REAL per-symbol filters.
 
@@ -156,14 +157,23 @@ def order_intents(
     ``w_target`` (optional): the plan's target weight vector — a FULL CLOSE (target 0, trade
     nonzero) is flagged ``reduce_only`` so the venue exempts it from MIN_NOTIONAL and it can
     never open or flip a position (PAPER.md §4.1, added 2026-07-05).
+
+    ``filters``: the BOOK's symbol->ExchangeFilters quantization surface (PAPER.md §11 —
+    ``books.book_filters``); a symbol absent from it is never traded by this book. ``None``
+    keeps the original crypto-only lookup (single-book back-compat).
     """
     out: list[OrderIntent] = []
     for i in np.flatnonzero(plan.trade != 0.0):
         sym = symbols[int(i)]
-        try:
-            f = crypto_filters(sym)
-        except KeyError:
-            continue  # non-crypto sleeve — never traded by this book
+        if filters is not None:
+            f = filters.get(sym)
+            if f is None:
+                continue  # outside the book's quantization surface — never traded by this book
+        else:
+            try:
+                f = crypto_filters(sym)
+            except KeyError:
+                continue  # non-crypto sleeve — never traded by this book
         px = float(prices[int(i)])
         if not (np.isfinite(px) and px > 0):
             continue
@@ -201,6 +211,8 @@ def orphan_close_intents(
     targets_by_symbol: dict[str, float],
     live_filters: dict[str, tuple[float, float, float, float]],
     prices_by_symbol: dict[str, float],
+    *,
+    domain: frozenset[str] | set[str],
 ) -> list[OrderIntent]:
     """Reduce-only MARKET closes for venue positions no rebalance intent covers (PAPER.md §4.1).
 
@@ -213,9 +225,16 @@ def orphan_close_intents(
     venue-level dust position the CALLER journals loudly (it cannot be closed by quantity at all).
     A symbol with a nonzero target but no intent is NOT an orphan (its trade sits inside the
     no-trade band by design) and is left alone.
+
+    ``domain`` (REQUIRED, PAPER.md §11): the calling BOOK's symbol domain. The shared venue account
+    holds every book's positions — without this scope the crypto book's sweep would market-close
+    the commodity book's freshly opened positions every Saturday (and vice versa). A position
+    outside ``domain`` belongs to another book and is NEVER this sweep's business.
     """
     out: list[OrderIntent] = []
     for sym, amt in sorted(positions.items()):
+        if sym not in domain:
+            continue  # another book's position — not ours to touch
         if sym in covered or abs(amt) < 1e-12:
             continue
         if abs(targets_by_symbol.get(sym, 0.0)) > 1e-12:
