@@ -11,6 +11,7 @@ from convexity.paper.policy import (
     ensemble_target_weights,
     fmt_step,
     order_intents,
+    orphan_close_intents,
     build_plan,
 )
 from convexity.paper.topup import extend_panel
@@ -120,3 +121,42 @@ def test_collateral_waterfall_usdt_first_usdc_fallback_btc_never():
     assert d2.excluded == {"BTC": 0.5}
     with pytest.raises(ValueError, match="BTC is excluded"):
         sizing_nav({"BTC": 1.0}, est_initial_margin=0.0)
+
+
+def test_order_intents_flag_full_closes_reduce_only():
+    """PAPER.md §4.1: a FULL CLOSE (target 0, carried nonzero) is reduce_only; opens are not."""
+    panel = _panel()
+    d = panel.n_days - 1
+    w_t = np.array([0.3, -0.3, 0.2, -0.2, 0.0, 0.0])
+    w_c = np.array([0.0, 0.0, 0.0, 0.0, 0.05, 0.0])
+    vols = np.full(panel.n_symbols, 0.03)
+    plan = build_plan(w_t, w_c, vols)
+    intents = order_intents(plan, panel.symbols, panel.close[d], nav=5_000.0, w_target=w_t)
+    flags = {i.symbol: (i.reduce_only, i.qty) for i in intents}
+    sym_close = panel.symbols[4]
+    assert sym_close in flags, "the full close must produce an intent"
+    ro, q = flags[sym_close]
+    assert ro is True and q < 0  # closing a long => sell, reduce-only
+    assert all(not v[0] for s, v in flags.items() if s != sym_close)
+
+
+def test_orphan_close_intents_reduce_only_market_and_dust():
+    """PAPER.md §4.1: orphans closed reduce-only MARKET; targeted/covered/dust names untouched."""
+    import pytest as _pt
+
+    positions = {"AAAUSDT": 5.0, "BBBUSDT": -3.2, "DUSTUSDT": 0.0004,
+                 "HELDUSDT": 2.0, "TGTUSDT": 1.0}
+    covered = {"HELDUSDT"}                      # has an intent this cycle
+    targets = {"TGTUSDT": 0.01}                 # targeted, inside the band -> NOT an orphan
+    filters = {s: (0.01, 0.001, 0.001, 5.0) for s in positions}
+    prices = {s: 10.0 for s in positions}
+    out = orphan_close_intents(positions, covered, targets, filters, prices)
+    by = {i.symbol: i for i in out}
+    assert set(by) == {"AAAUSDT", "BBBUSDT"}    # dust skipped, held/targeted untouched
+    assert by["AAAUSDT"].qty == _pt.approx(-5.0) and by["AAAUSDT"].reduce_only
+    assert by["AAAUSDT"].tactic == "MARKET"
+    assert by["BBBUSDT"].qty == _pt.approx(3.2) and by["BBBUSDT"].reduce_only
+    # a $4 notional orphan (0.35 * 10 < min_notional 5) is STILL closed: reduceOnly exempts it
+    out2 = orphan_close_intents({"CCCUSDT": 0.35}, set(), {}, {"CCCUSDT": (0.01, 0.01, 0.01, 5.0)},
+                                {"CCCUSDT": 10.0})
+    assert len(out2) == 1 and out2[0].qty == _pt.approx(-0.35) and out2[0].reduce_only

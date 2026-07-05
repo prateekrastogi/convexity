@@ -56,6 +56,17 @@ Almgren-Chriss slice schedule is journaled for TCA but not sliced live until mea
 justify the added order traffic; the finalize pass cancels resting makers and crosses remainders
 as MARKET.
 
+### 4.1 Reduce-only closes + the orphan sweep (added 2026-07-05)
+
+A FULL CLOSE (target weight 0, trade nonzero) is flagged ``reduceOnly`` end-to-end (intent →
+gateway ``new_order``), so the venue exempts it from MIN_NOTIONAL and it can never open or
+flip a position. After the intents submit, the ORPHAN SWEEP closes (reduce-only MARKET) every
+venue position that no intent covers and no target wants — the leak observed live 2026-07-05:
+names that rotate OUT of the 100-name panel between weeks could never be closed by the plan
+(11 stale bootstrap positions), and band-suppressed or min-notional-dropped closes strand the
+same way. Sub-lot dust that cannot be closed by quantity is journaled (``orphan_sweep.dust``),
+never silently retried. The finalize pass propagates each order's own ``reduce_only`` flag.
+
 ## 5. Journal (`data/paper/journal.jsonl`, append-only)
 
 The persisted history pure-recompute rebuilds from: `equity_mark`, `flow` (+`directive`),

@@ -32,6 +32,7 @@ from convexity.paper.policy import (
     build_plan,
     ensemble_target_weights,
     order_intents,
+    orphan_close_intents,
     size_gross,
 )
 from convexity.paper.topup import extend_panel, fetch_tails
@@ -151,7 +152,7 @@ def cmd_rebalance(args: argparse.Namespace) -> None:
             w_carried = np.zeros(panel.n_symbols)
     vols = realized_vol(panel, d, window=28)
     plan = build_plan(w_scaled, w_carried, vols)
-    intents = order_intents(plan, panel.symbols, prices, nav)
+    intents = order_intents(plan, panel.symbols, prices, nav, w_target=w_scaled)
     turn = plan.turnover_live
     print(f"[plan] turnover_live={turn:.4f} (backtest {plan.turnover_backtest:.4f}); "
           f"{len(intents)} order intents, {int((plan.trade == 0).sum())} names band-skipped/flat")
@@ -233,6 +234,35 @@ def cmd_rebalance(args: argparse.Namespace) -> None:
                 j.append("order_error", d_iso, symbol=live_it.symbol, error=str(e)[:300])
         j.append("submitted", d_iso, n_ok=ok, n_failed=failed)
         print(f"[live] submitted {ok}/{len(intents)} (failed {failed}, journaled)")
+        # ORPHAN SWEEP (PAPER.md §4.1, added 2026-07-05): close every venue position that no
+        # intent covers and no target wants — names rotated OUT of the panel between weeks
+        # (observed live: 11 stale bootstrap positions) or closes the band/min-notional
+        # dropped. Reduce-only MARKET (reduceOnly exempts MIN_NOTIONAL); sub-lot dust that
+        # cannot be closed by quantity is journaled loudly, never silently retried.
+        covered = {it.symbol for it in intents}
+        targets_by_sym = {sym: float(w_scaled[i]) for i, sym in enumerate(panel.symbols)}
+        live_px = {s: (b[0] + b[1]) / 2 for s, b in book.items()
+                   if b and b[0] > 0 and b[1] > 0}
+        orphans = orphan_close_intents(positions, covered, targets_by_sym, live_f, live_px)
+        o_ok = o_failed = 0
+        for oc in orphans:
+            try:
+                submit_intent(oc)
+                o_ok += 1
+                print(f"[live] ORPHAN CLOSE {oc.symbol} {oc.qty:+} reduce-only MARKET")
+            except GatewayError as e:
+                o_failed += 1
+                j.append("order_error", d_iso, symbol=oc.symbol,
+                         error=f"orphan close: {str(e)[:280]}")
+                print(f"[live] ORPHAN CLOSE {oc.symbol} FAILED (isolated): {e}")
+        dust = sorted({s for s, a in positions.items()
+                       if abs(a) > 1e-12 and s not in covered
+                       and abs(targets_by_sym.get(s, 0.0)) < 1e-12}
+                      - {oc.symbol for oc in orphans})
+        if orphans or dust:
+            j.append("orphan_sweep", d_iso, n_closed=o_ok, n_failed=o_failed, dust=dust)
+            print(f"[live] orphan sweep: {o_ok} closed, {o_failed} failed"
+                  + (f"; sub-lot dust left: {dust}" if dust else ""))
     else:
         for it in intents[:12]:
             sgn = "+" if it.qty > 0 else "-"
@@ -280,7 +310,7 @@ def cmd_finalize(args: argparse.Namespace) -> None:
             try:
                 submit_intent(OrderIntent(symbol=it["symbol"], qty=remainder, tactic="MARKET",
                                           ref_price=it["ref_price"], slice_idx=0, n_slices=1,
-                                          reduce_only=False,
+                                          reduce_only=bool(it.get("reduce_only", False)),
                                           qty_str=fmt_step(abs(remainder), lf[1]) if lf else ""))
                 crossed += 1
             except GatewayError as e:

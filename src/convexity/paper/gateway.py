@@ -113,11 +113,13 @@ def submit_intent(intent: OrderIntent) -> dict:
             resp = await api.new_order(
                 symbol=intent.symbol, side=side, order_type=BinanceOrderType.LIMIT,
                 time_in_force=BinanceTimeInForce.GTX,  # post-only: cancels if it would cross
+                reduce_only=("true" if intent.reduce_only else None),
                 quantity=intent.qty_str or str(abs(intent.qty)),
                 price=intent.price_str or str(intent.ref_price))
         else:
             resp = await api.new_order(
                 symbol=intent.symbol, side=side, order_type=BinanceOrderType.MARKET,
+                reduce_only=("true" if intent.reduce_only else None),
                 quantity=intent.qty_str or str(abs(intent.qty)))
         return {"symbol": intent.symbol, "orderId": getattr(resp, "orderId", None),
                 "status": str(getattr(resp, "status", ""))}

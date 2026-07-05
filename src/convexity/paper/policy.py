@@ -23,6 +23,7 @@ from convexity.execution.execution import (
     RebalancePlan,
     child_order_qty,
     quantize_price,
+    quantize_qty,
     tactic_for,
 )
 from convexity.leverage.engine_api import LeverageEngine
@@ -142,6 +143,7 @@ def order_intents(
     nav: float,
     *,
     consolidate: bool = True,
+    w_target: np.ndarray | None = None,
 ) -> list[OrderIntent]:
     """Turn the plan into venue-legal order intents against the REAL per-symbol filters.
 
@@ -150,6 +152,10 @@ def order_intents(
     journaled in the plan for TCA but not sliced live until the fill-rate data exists to justify
     the added order traffic. The window-end ``finalize`` pass crosses any unfilled remainder
     (LIMIT_IOC -> MARKET), matching ``tactic_for``'s final-slice fallback.
+
+    ``w_target`` (optional): the plan's target weight vector — a FULL CLOSE (target 0, trade
+    nonzero) is flagged ``reduce_only`` so the venue exempts it from MIN_NOTIONAL and it can
+    never open or flip a position (PAPER.md §4.1, added 2026-07-05).
     """
     out: list[OrderIntent] = []
     for i in np.flatnonzero(plan.trade != 0.0):
@@ -182,7 +188,48 @@ def order_intents(
             out.append(OrderIntent(
                 symbol=sym, qty=qty, tactic=tactic, ref_price=ref,
                 slice_idx=k, n_slices=n_s if not consolidate else 1,
-                reduce_only=False,
+                reduce_only=bool(w_target is not None
+                                 and abs(float(w_target[int(i)])) < 1e-12),
                 qty_str=fmt_step(abs(qty), f.lot_size),
                 price_str=fmt_step(ref, f.tick_size)))
     return out
+
+
+def orphan_close_intents(
+    positions: dict[str, float],
+    covered: set[str],
+    targets_by_symbol: dict[str, float],
+    live_filters: dict[str, tuple[float, float, float, float]],
+    prices_by_symbol: dict[str, float],
+) -> list[OrderIntent]:
+    """Reduce-only MARKET closes for venue positions no rebalance intent covers (PAPER.md §4.1).
+
+    THE ORPHAN SWEEP: a held name can rotate OUT of the panel between weeks (universe rotation), or
+    its close can be band-suppressed / min-notional-dropped — without this sweep such positions are
+    never closed (observed live 2026-07-05: 11 stale positions from the bootstrap book). Any venue
+    position whose symbol has no intent this cycle AND whose target weight is zero (absent from the
+    panel = zero) is closed reduce-only at market. ``reduceOnly`` exempts Binance's MIN_NOTIONAL, so
+    no notional floor is applied here; the lot grid still binds — a residual below min_qty/lot is a
+    venue-level dust position the CALLER journals loudly (it cannot be closed by quantity at all).
+    A symbol with a nonzero target but no intent is NOT an orphan (its trade sits inside the
+    no-trade band by design) and is left alone.
+    """
+    out: list[OrderIntent] = []
+    for sym, amt in sorted(positions.items()):
+        if sym in covered or abs(amt) < 1e-12:
+            continue
+        if abs(targets_by_symbol.get(sym, 0.0)) > 1e-12:
+            continue
+        lf = live_filters.get(sym)
+        if lf is None:
+            continue
+        _tick, lot, min_qty, _mn = lf
+        qty = quantize_qty(-amt, lot_size=lot, min_qty=min_qty)
+        if qty == 0.0:
+            continue
+        px = float(prices_by_symbol.get(sym, 0.0) or 0.0)
+        out.append(OrderIntent(symbol=sym, qty=qty, tactic="MARKET", ref_price=px,
+                               slice_idx=0, n_slices=1, reduce_only=True,
+                               qty_str=fmt_step(abs(qty), lot), price_str=""))
+    return out
+
