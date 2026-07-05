@@ -146,6 +146,29 @@ def cancel_open_orders(symbol: str) -> None:
     _run(go())
 
 
+def sign_tradfi_agreement() -> str:
+    """Sign the venue's TradFi-Perps agreement for this account (one-time; PAPER.md §11.5).
+
+    Any TradFi-perp order draws ``-4411 "Please sign TradFi-Perps agreement contract fapi"``
+    until the account has accepted the agreement — signable via the official SIGNED endpoint
+    ``POST /fapi/v1/stock/contract`` (USER_DATA, weight 50, response "SUCCESS"). Reuses the
+    Nautilus client's own ``sign_request`` (never a hand-rolled signer). Idempotent to re-run.
+    """
+    from nautilus_trader.core.nautilus_pyo3 import HttpMethod
+
+    client, _api, _clock = _build_api()
+
+    async def go() -> str:
+        resp = await client.sign_request(
+            http_method=HttpMethod.POST,
+            url_path="/fapi/v1/stock/contract",
+            payload={"recvWindow": "5000"},
+        )
+        return str(resp)
+
+    return _run(go())
+
+
 def account_assets() -> dict[str, float]:
     """Per-asset margin balances (EXPERIMENTAL) — feeds the USDT->USDC collateral waterfall."""
     _client, api, _clock = _build_api()
