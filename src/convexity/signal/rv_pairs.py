@@ -141,12 +141,19 @@ class RVBook:
     diag: dict = field(default_factory=dict)
 
 
-def book_weights(panel: Panel, d: int) -> RVBook:
+def book_weights(panel: Panel, d: int, *, tradeable: frozenset[str] | None = None) -> RVBook:
     """The RV book's target weights at Friday row ``d`` (aligned to ``panel.symbols``).
 
     Walks the WHOLE weekly history so pair risk parity and the vol target come from the exact
     backtest construction (pure recompute, no journal state). Symbols outside the pre-named PAIRS
     always get weight 0; a pair with a leg missing from the panel is inactive and reported.
+
+    ``tradeable`` (live sessions): symbols TRADING on the EXECUTION venue. A pair whose leg the
+    venue does not list is excluded WHOLE (never one leg — that would break dollar neutrality),
+    so the journaled/settled book only ever holds what the venue can actually hold (learned in
+    the first supervised session 2026-07-06: the demo venue lists the 4 metals but not CL/NATGAS
+    — an ungated model would settle CL-NG P&L on positions that can never exist). ``None`` (the
+    default, research/dry parity) applies no venue gate.
     """
     rows = friday_rows(panel.dates, d)
     n_w = rows.size
@@ -159,6 +166,9 @@ def book_weights(panel: Panel, d: int) -> RVBook:
     for a, b in PAIRS:
         if a not in sym_ix or b not in sym_ix:
             diag["inactive_pairs"].append(f"{a}-{b} (leg missing from panel)")
+            continue
+        if tradeable is not None and (a not in tradeable or b not in tradeable):
+            diag["inactive_pairs"].append(f"{a}-{b} (leg not tradeable on execution venue)")
             continue
         ia, ib = sym_ix[a], sym_ix[b]
         pw, gate = pair_weight_series(lp, ia, ib)

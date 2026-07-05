@@ -147,6 +147,25 @@ def test_missing_leg_deactivates_only_that_pair():
     assert rvb.w_target[ix["CLUSDT"]] == 0.0  # CL's only pair is inactive -> never traded
 
 
+def test_venue_gate_excludes_whole_pair_never_one_leg():
+    """PAPER.md §11.3 (learned live 2026-07-06): a leg the EXECUTION venue doesn't list excludes
+    its WHOLE pair (one-legged exclusion would break dollar neutrality); remaining pairs still
+    form a unit-gross dollar-neutral book; None applies no gate (research parity)."""
+    panel = _panel()
+    d = _last_friday(panel)
+    ix = {s: i for i, s in enumerate(panel.symbols)}
+    tradeable = frozenset(panel.symbols) - {"CLUSDT", "NATGASUSDT"}  # the real demo-venue gap
+    rvb = book_weights(panel, d, tradeable=tradeable)
+    assert any("CLUSDT-NATGASUSDT" in s for s in rvb.diag["inactive_pairs"])
+    w = rvb.w_target
+    assert w[ix["CLUSDT"]] == 0.0 and w[ix["NATGASUSDT"]] == 0.0
+    assert float(np.abs(rvb.w_unit[-1]).sum()) == pytest.approx(1.0, abs=1e-9)
+    assert float(w.sum()) == pytest.approx(0.0, abs=1e-9)
+    # ungated book (research parity) still trades the energy pair
+    w_all = book_weights(panel, d).w_target
+    assert w_all[ix["CLUSDT"]] != 0.0
+
+
 def test_symbols_outside_pairs_always_zero():
     panel = _panel()
     d = _last_friday(panel)

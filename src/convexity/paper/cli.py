@@ -248,7 +248,7 @@ def _settle_prior_week(j: Journal, spec: BookSpec, panel: Panel, d_now: int, liv
           f"equity {eq_start:.2f}->{eq_end:.2f} flows={len(flows)}")
 
 
-def _crypto_targets(panel: Panel, d: int, j: Journal):
+def _crypto_targets(panel: Panel, d: int, j: Journal, *, live: bool = False):  # noqa: ARG001
     """The validated crypto band-ensemble targets + quarter-Kelly gross (PAPER.md §3)."""
     from convexity.portfolio.engine import XSecConfig, band_configs, run, run_ensemble
     from convexity.system import metrics
@@ -265,13 +265,19 @@ def _crypto_targets(panel: Panel, d: int, j: Journal):
     return w_target, float(dec.g_t), dec.binding_ceiling, {}
 
 
-def _commodity_targets(panel: Panel, d: int, _j: Journal):
+def _commodity_targets(panel: Panel, d: int, _j: Journal, *, live: bool = False):
     """The RV pair book (RV_PREREG.md via signal.rv_pairs): weights arrive ALREADY vol-targeted
     (the study's own 10% S4 overlay is the book's sizing; quarter-Kelly is deferred until the
-    paper track exists — PAPER.md §11 deferral)."""
+    paper track exists — PAPER.md §11 deferral). Live sessions gate pairs on what the EXECUTION
+    venue actually lists (PAPER.md §11.3 — demo TradFi listings lag prod; an unlisted leg would
+    otherwise settle model P&L on positions that can never exist)."""
     from convexity.signal.rv_pairs import book_weights
 
-    rvb = book_weights(panel, d)
+    tradeable = None
+    if live:
+        from convexity.paper.topup import fetch_execution_venue_tradeable
+        tradeable = fetch_execution_venue_tradeable()
+    rvb = book_weights(panel, d, tradeable=tradeable)
     return rvb.w_unit[-1], rvb.vt_scale, "rv_vol_target", rvb.diag
 
 
@@ -292,7 +298,7 @@ def cmd_rebalance(args: argparse.Namespace) -> None:
 
     _settle_prior_week(j, spec, panel, d, args.live)
 
-    w_target, g_t, binding, diag = TARGETS_BY_BOOK[spec.name](panel, d, j)
+    w_target, g_t, binding, diag = TARGETS_BY_BOOK[spec.name](panel, d, j, live=args.live)
     if diag:
         print(f"[signal:{spec.name}] {json.dumps(diag, default=str)[:400]}")
 

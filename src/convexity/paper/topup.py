@@ -43,6 +43,21 @@ def fetch_book_tickers() -> dict[str, tuple[float, float]]:
                 for row in r.json()}
 
 
+def fetch_execution_venue_tradeable() -> frozenset[str]:
+    """Symbols with status TRADING on the EXECUTION venue (the Binance DEMO the gateway trades).
+
+    The research surfaces (filters, pegs, klines) read PROD fapi — near-identical for crypto,
+    but the demo's TradFi listings LAG prod (2026-07-06: metals live, CL/NATGAS absent). Live
+    sessions gate strategy universes on this set so the journaled book only holds what the
+    venue can hold; one public unauthenticated call.
+    """
+    with httpx.Client(timeout=30.0) as client:
+        r = client.get("https://demo-fapi.binance.com/fapi/v1/exchangeInfo")
+        r.raise_for_status()
+        return frozenset(s["symbol"] for s in r.json()["symbols"]
+                         if s.get("status") == "TRADING")
+
+
 def fetch_live_filters() -> dict[str, tuple[float, float, float, float]]:
     """(tick, lot, min_qty, min_notional) from the venue's CURRENT exchangeInfo — one call.
 

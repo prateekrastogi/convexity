@@ -154,8 +154,12 @@ XAU-XPT, XAG-XPT, XPT-XPD, CL-NATGAS), band-ensemble z {26,52,104}wk on weekly-F
 spreads, continuous sizing −clip(z,±2)/2, AR(1) half-life gate [1,26]wk, pair risk parity
 (26wk, [0.25,4]), unit gross, 10% vol target (26wk, [0.5,2]) — all recomputed from the panel
 each session (no journal state). Causality is canary-pinned (the study's unshifted-levels book
-prints Sharpe −3.8; tests re-pin the shift). Sizing = the study's own vol target; quarter-Kelly
-is DEFERRED until a paper track exists. Settle friction 17 bp RT (5 taker + 3 half-spread + 0.5
+prints Sharpe −3.8; tests re-pin the shift). LIVE sessions gate pairs on the EXECUTION venue's
+actual listings (`fetch_execution_venue_tradeable`, demo exchangeInfo): a pair whose leg the
+venue does not list is excluded WHOLE — learned in the first supervised session (2026-07-06:
+demo lists the 4 metals, not CL/NATGAS; an ungated model would settle energy-pair P&L on
+positions that can never exist). Sizing = the study's own vol target; quarter-Kelly is DEFERRED
+until a paper track exists. Settle friction 17 bp RT (5 taker + 3 half-spread + 0.5
 impact, ×2), inside the study's {12,24} bp scenario band; the settle evolves the commodity book
 on its SCALED (vol-targeted) weights — the study's deployable series. Price basis = the stitched
 proxy+perp lake; measuring proxy→perp transfer is this paper book's mission.
