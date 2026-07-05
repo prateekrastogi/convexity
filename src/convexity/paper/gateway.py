@@ -156,13 +156,14 @@ def sign_tradfi_agreement() -> str:
     """
     from nautilus_trader.core.nautilus_pyo3 import HttpMethod
 
-    client, _api, _clock = _build_api()
+    client, _api, clock = _build_api()
 
     async def go() -> str:
         resp = await client.sign_request(
             http_method=HttpMethod.POST,
             url_path="/fapi/v1/stock/contract",
-            payload={"recvWindow": "5000"},
+            # the raw sign_request does NOT inject timestamp (the endpoint classes normally do)
+            payload={"timestamp": str(clock.timestamp_ms()), "recvWindow": "5000"},
         )
         return str(resp)
 
