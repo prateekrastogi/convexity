@@ -53,17 +53,30 @@ def pull_rank(client: httpx.Client, root: str, rank: int, schema: str) -> pd.Dat
     tag = f"{root}_c{rank}_{schema.replace('-', '')}"
     cache = OUT / "databento" / f"{tag}.csv"
     if not cache.exists():
-        r = client.get(f"{BASE}/timeseries.get_range", params={
-            "dataset": DATASET, "symbols": f"{root}.c.{rank}", "stype_in": "continuous",
-            "schema": schema, "start": START, "end": END,
-            "encoding": "csv", "pretty_px": "true", "pretty_ts": "true",
-            "map_symbols": "true", "compression": "none"})
-        if r.status_code != 200:
-            print(f"  {tag}: HTTP {r.status_code} {r.text[:120]}", flush=True)
+        content = None
+        for attempt in range(5):  # long streams occasionally drop mid-body -> retry with backoff
+            try:
+                r = client.get(f"{BASE}/timeseries.get_range", params={
+                    "dataset": DATASET, "symbols": f"{root}.c.{rank}", "stype_in": "continuous",
+                    "schema": schema, "start": START, "end": END,
+                    "encoding": "csv", "pretty_px": "true", "pretty_ts": "true",
+                    "map_symbols": "true", "compression": "none"})
+                if r.status_code != 200:
+                    print(f"  {tag}: HTTP {r.status_code} {r.text[:120]}", flush=True)
+                    return None
+                content = r.content
+                break
+            except httpx.HTTPError as e:
+                print(f"  {tag}: attempt {attempt + 1}/5 failed ({type(e).__name__}) — retrying",
+                      flush=True)
+                import time
+                time.sleep(10 * (attempt + 1))
+        if content is None:
+            print(f"  {tag}: EXHAUSTED retries — skipped this run (rerun resumes)", flush=True)
             return None
         cache.parent.mkdir(parents=True, exist_ok=True)
-        cache.write_bytes(r.content)
-        print(f"  {tag}: {len(r.content) / 1e6:.2f} MB", flush=True)
+        cache.write_bytes(content)
+        print(f"  {tag}: {len(content) / 1e6:.2f} MB", flush=True)
     df = pd.read_csv(cache)
     if df.empty:
         return None
@@ -86,15 +99,21 @@ def main() -> None:
             print(f"TOTAL ${total:.2f} (debit if pulled; this dry-run spends nothing)")
             return
         if mode == "--pull":
-            bars, stats = [], []
+            bars, stats, failed = [], [], []
             for root in ROOTS:
                 for rank in range(DEPTH):
-                    b = pull_rank(client, root, rank, "ohlcv-1d")
-                    if b is not None:
-                        bars.append(b)
-                    s = pull_rank(client, root, rank, "statistics")
-                    if s is not None:
-                        stats.append(s)
+                    try:
+                        b = pull_rank(client, root, rank, "ohlcv-1d")
+                        if b is not None:
+                            bars.append(b)
+                        s = pull_rank(client, root, rank, "statistics")
+                        if s is not None:
+                            stats.append(s)
+                    except Exception as e:  # one bad symbol must not kill the run
+                        failed.append(f"{root}.c.{rank}: {type(e).__name__}")
+                        print(f"  {root}.c.{rank}: FAILED {e!r} — continuing", flush=True)
+            if failed:
+                print(f"INCOMPLETE ({len(failed)} failures — rerun to resume): {failed}", flush=True)
             bar = pd.concat(bars, ignore_index=True)
             scol = "symbol" if "symbol" in bar.columns else "raw_symbol"
             bar["date"] = pd.to_datetime(bar["ts_event"], utc=True, format="mixed").dt.date
