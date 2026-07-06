@@ -46,6 +46,59 @@ SPLIT_MIN = 1.5       # ...and the move must be large (real earnings gaps are ra
 MIN_OVERLAP = 300     # min common minutes to trust the perp/duka ratio-adjust
 GAP_MIN = 1.5         # > this many minutes between consecutive bars => a session/weekend gap
 
+# Known corrupted windows in the source feed: bars inside these windows are DROPPED before any
+# processing (never enter split-detection, ratio-adjust, or the stitched output). METADBN:
+# databento XNAS.ITCH mixed in erroneous sub-$100 prints for a large share (up to 96% on the
+# worst days) of 1-min bars from 2021-06-30 through 2022-02-02 -- verified 2026-07-06 by direct
+# inspection (median/mean/last all land in the erroneous cluster on many days; the erroneous
+# prints REVERT day-to-day rather than persisting, ruling out a real corporate action -- a
+# systematic per-symbol price-quality scan found this as the one severe case among 102 fetched
+# equities; see research/equity/DATA.md).
+KNOWN_BAD_WINDOWS: dict[str, list[tuple[str, str]]] = {
+    "METADBN": [("2021-06-30", "2022-02-02")],
+}
+
+# Real corporate actions verified externally (WebSearch, 2026-07-06) that the automated
+# day-boundary-ratio detector missed -- normal price drift around the effective date can push
+# the observed ratio outside SPLIT_TOL of the clean factor. Applied in ADDITION to auto-detection
+# (union, deduplicated by date).
+KNOWN_SPLITS: dict[str, list[tuple[str, int]]] = {
+    "KLACDBN": [("2026-06-12", 10)],   # KLA Corp 10-for-1, effective 2026-06-12 (verified)
+    "TSLADBN": [("2020-08-31", 5)],    # Tesla 5-for-1, effective 2020-08-31 (well known; the
+                                       # observed raw ratio was 4.44 vs the true 5.00, outside
+                                       # SPLIT_TOL due to same-day price movement -- same failure
+                                       # shape as KLAC, verified 2026-07-06)
+    "KORUDBN": [("2025-02-10", -10)],  # Direxion KORU 1-for-10 REVERSE split, split-adjusted
+                                       # trading began 2025-02-10 (verified); observed ratio
+                                       # 10.54 vs true 10.00, outside SPLIT_TOL for the same
+                                       # same-day-price-movement reason as KLAC/TSLA
+}
+
+# Explicit REJECTIONS: (symbol, date) pairs where the ratio+persistence check finds a clean-ish
+# factor that is NOT a real corporate action -- confirmed by direct verification. GME's only real
+# split was July 2022 (4:1, calmly detected/adjusted normally); this entry is a coincidental ~2x
+# day-over-day jump on 2021-02-24 during a SECOND wave of the 2021 meme-stock squeeze (price kept
+# climbing well past 2x over the following week -- genuine sustained momentum, not a one-time
+# mechanical reset). A general statistical guard (trailing volatility before the candidate day)
+# was tried and rejected: GME's trailing 10-day vol (4.94%) was statistically indistinguishable
+# from KLAC's real-split trailing vol (4.83%) -- not a safe basis for a global rule with the
+# available calibration data, so this confirmed case is excluded explicitly instead (verified
+# 2026-07-06 by tracing daily closes for two weeks either side of the date).
+KNOWN_FALSE_SPLITS: set[tuple[str, str]] = {
+    ("GMEDBN", "2021-02-24"),
+}
+
+
+def _mask_bad_windows(code: str, df: pd.DataFrame) -> pd.DataFrame:
+    windows = KNOWN_BAD_WINDOWS.get(code)
+    if not windows or df.empty:
+        return df
+    day = pd.to_datetime(df["open_time"], unit="ms", utc=True).dt.strftime("%Y-%m-%d")
+    keep = pd.Series(True, index=df.index)
+    for start, end in windows:
+        keep &= ~((day >= start) & (day <= end))
+    return df[keep].reset_index(drop=True)
+
 
 def universe() -> list[dict]:
     """Merged loader (committed block + the gitignored discovery overlay) so a commodity perp
@@ -79,33 +132,76 @@ def _load(folder: pathlib.Path) -> pd.DataFrame:
     return df
 
 
-def _detect_splits(df: pd.DataFrame) -> list[tuple[str, int]]:
-    """Day-boundary close ratios near a clean integer factor => a split on the later day."""
+def _detect_splits(df: pd.DataFrame, code: str | None = None) -> list[tuple[str, int]]:
+    """Day-boundary close ratios near a clean integer factor => a split on the later day.
+
+    Symmetric: a FORWARD split (price drops, share count up) gives prev/close ~ +factor; a
+    REVERSE split (price jumps, share count down -- routine for leveraged/inverse ETFs fighting
+    volatility decay: SQQQ/UVXY/SOXL/TQQQ) gives prev/close ~ 1/factor. Both are checked; the
+    returned factor is NEGATIVE for a reverse split (encodes the adjustment direction for
+    ``_split_adjust``). Missing this direction entirely (live-caught 2026-07-06) left several
+    leveraged-ETF names with 300-3700% unadjusted single-day "moves" in the raw series.
+
+    Requires PERSISTENCE: the day AFTER a candidate split must NOT revert toward the pre-split
+    level. This rejects single-day bad-tick artifacts that happen to land near a clean ratio by
+    chance -- a real split changes the share count permanently and never reverts (live-caught
+    case: three spurious ~20x ratios in METADBN's corrupted window each reverted the very next
+    day; excluded separately via KNOWN_BAD_WINDOWS, but this check is a general safety net for
+    any symbol/period not manually audited). When there's no next day to check (the candidate is
+    the last row in the series), the split is accepted -- e.g. CRWDUSDT's real 2026-07-02 split,
+    confirmed independently by whole-day price-level consistency.
+
+    Known externally-verified splits the ratio check itself misses (KNOWN_SPLITS -- KLAC's
+    2026-06-12 10:1 and TSLA's 2020-08-31 5:1: normal price drift around the effective date
+    pushed the raw ratio outside SPLIT_TOL) are unioned in, deduplicated by date.
+    """
     if df.empty:
-        return []
+        return sorted(set(KNOWN_SPLITS.get(code, [])))
     day = pd.to_datetime(df["open_time"], unit="ms", utc=True).dt.strftime("%Y-%m-%d")
     daily = df.assign(day=day).groupby("day")["close"].last()
+    days = daily.index.to_numpy()
+    closes = daily.to_numpy()
     splits = []
-    prev = None
-    for d, c in daily.items():
-        if prev is not None and c > 0:
-            r = prev / c            # forward split (price drops) => r ~ factor
+    for i in range(1, len(closes)):
+        prev, c = closes[i - 1], closes[i]
+        if c <= 0 or prev <= 0:
+            continue
+        candidates = [(prev / c, 1) for _ in [0]] + [(c / prev, -1)]  # (ratio, sign)
+        matched = None
+        for r, sign in candidates:
             for f in SPLIT_FACTORS:
                 if r >= SPLIT_MIN and abs(r - f) / f <= SPLIT_TOL:
-                    splits.append((d, f))
+                    matched = sign * f
                     break
-        prev = c
+            if matched is not None:
+                break
+        if matched is None:
+            continue
+        if i + 1 < len(closes):
+            nxt = closes[i + 1]
+            if abs(nxt - prev) < abs(nxt - c):   # closer to OLD level => reverted, reject
+                continue
+        if code is not None and (code, str(days[i])) in KNOWN_FALSE_SPLITS:
+            continue
+        splits.append((str(days[i]), matched))
+    splits = sorted(set(splits) | set(KNOWN_SPLITS.get(code, [])))
     return splits
 
 
 def _split_adjust(df: pd.DataFrame, splits: list[tuple[str, int]]) -> pd.DataFrame:
-    """Back-adjust: bars BEFORE a split are divided by the cumulative later-split factor."""
+    """Back-adjust: bars BEFORE a split are divided by the cumulative later-split factor.
+
+    A negative factor (reverse split) means the price JUMPED at the event -- pre-event bars are
+    on the OLD (higher-share-count, lower-price) basis and must be brought UP to the current
+    basis, i.e. multiplied rather than divided; encoded here as dividing by 1/|f|.
+    """
     if df.empty or not splits:
         return df
     day = pd.to_datetime(df["open_time"], unit="ms", utc=True).dt.strftime("%Y-%m-%d")
     divisor = pd.Series(1.0, index=df.index)
     for sdate, f in splits:
-        divisor[day.values < sdate] *= f
+        step = f if f > 0 else (1.0 / abs(f))
+        divisor[day.values < sdate] *= step
     df = df.copy()
     for c in ["open", "high", "low", "close"]:
         df[c] = df[c] / divisor
@@ -128,8 +224,9 @@ def stitch_one(inst: dict) -> dict:
 
     if code:  # (A) dukascopy underlying present
         duka = _load(DUKA / code)
+        duka = _mask_bad_windows(code, duka)
         if sleeve == "equities":
-            splits = _detect_splits(duka)
+            splits = _detect_splits(duka, code)
             duka = _split_adjust(duka, splits)
         if not perp.empty and not duka.empty:
             common = duka.merge(perp[["open_time", "close"]], on="open_time", suffixes=("_d", "_p"))
