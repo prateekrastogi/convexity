@@ -320,17 +320,152 @@
   commit: **654 passed, 1 skipped, 9 warnings in 36.85s** -- unchanged from the E1/E2 baseline.
   Frozen and committed at commit `96f7586` on branch `equity` (alongside
   `e3_pead_data_coverage.json`), pushed to origin.
-- **Next step: E3 Pipeline phase.** Implement `e3_pipeline.py` against the frozen grid above,
-  reusing `e2_pipeline.py`'s `metrics()`/`cpcv_paths()`/`dsr()`/`per_obs_sharpe()`/
-  `_weights_from_signal()` function bodies (parameterized by each sleeve's own derived
-  `periods_per_yr`, never a hardcoded literal), pointed at
-  `/home/speculation/convexity-equity/data/{stitched,earnings}` and
-  `src/convexity/panel/candidates.md` directly (NOT `swing_pipeline.py`'s hardcoded main-repo
-  paths, and NOT `convexity.panel.panel.build_panel()`/`load_bars()` for the core signal, per the
-  same reasoning E2 already documented -- `load_bars()` still does not read the `source` column).
-  Whoever picks up the Pipeline phase should re-verify (not assume) that `data/earnings/` remains
-  gitignored under the repo-wide `/data/` rule before writing any new cache files there, and should
-  read E3_PREREG.md's "AVOIDING E1'S AND E2'S FIVE NAMED BUG PATTERNS" section in full before
-  writing a single line of signal-construction code -- particularly the exposure-timing-alignment
-  guard (landmine 3), since that exact bug class survived E2's own first-pass independent
-  verification and was caught only by a dedicated third adversarial pass.
+- **E3 pipeline phase**: COMPLETE. `research/equity/e3_pipeline.py` implements the full frozen
+  grid exactly (S1: 1 ensemble + 3 per-lookback = 4 cells; S2: 3 beta-window variants = 3 cells;
+  S3: 1 ensemble + 3 holding-period variants = 4 cells; combined deployable: 1 cell; cost/funding
+  grid on the 4 headline cells x 3 cost x 3 funding = 36 cells; N_trials = 48 exactly, verified in
+  the artifact's own `n_trials_ledger_breakdown.matches_declared_48=True`). Reused
+  `e2_pipeline.py`'s `metrics()`/`dsr()`/`cpcv_paths()`/`pbo_cscv()`/`per_year_sharpe()` function
+  bodies verbatim, parameterized by each sleeve's own DERIVED `periods_per_yr` (S1/S2 both derive
+  to ~12.24/yr against monthly rebalancing, consistent with ~12; S3's own event-portfolio series
+  derives independently to ~222-251/yr depending on holding-period cell, since it is a
+  daily-marked overlapping-event book, not a monthly-native series -- this derived value, NOT an
+  assumed constant, is what's passed into every S3 metrics/dsr call). Outcome recorded in
+  `research/equity/results_e3.json` (runtime 19.5s on the VM; 88 of the 93 base-universe names
+  actually usable for S1/S2 -- BMNRUSDT/CRCLUSDT/CRWVUSDT/SNDKUSDT/USARUSDT excluded, each a
+  2025-2026-vintage IPO without enough real duka history to clear S1's 12-month formation window
+  plus its skip month plus the 12-month vol-sizing buffer at the data cut; stated here since the
+  prereg's 93-name figure is the base-universe declaration, not a claim every one of the 93
+  contributes an observation -- directly analogous to E2's 99-of-102 pattern).
+
+  **Verdict: pre-named combined deployable (equal-risk-contribution blend of S1 ensemble + S2
+  W_beta=52 primary + S3 ensemble, single 10% vol-target overlay, 13bp primary cost) FAILS the
+  adoption gate -- DO NOT DEPLOY.** Net Sharpe -0.2932 ann full-universe (88-name S1/S2 leg, 76-name
+  S3 leg, blended) / -0.0425 ann on_demo-and-real-history-and-not-leveraged subset (both negative);
+  DSR 0.0008 at N_trials=48 (fails); PBO over the full 12-cell aligned family = 0.4143 (fails the
+  <=0.25 gate); drop-top-5-periods Sharpe still negative (-0.7616 full-universe, fails); regime
+  signatures: S1 PASSES (visible 2020-04 momentum-crash-consistent episode, worst single month
+  -2.465% on 2020-04-30, max drawdown 12.833% in the Jan-Aug 2020 window), S2 PASSES (ex-post book
+  beta 0.07513 at the W_beta=52 primary window -- genuinely close to zero -- and resilience across
+  all four named stress windows, S2 cumulative return beating the broad 88-name equal-weight
+  comparator in every one of 2018Q4/2020-03/2022/2024-08), S3 FAILS (drift is NOT concentrated in
+  the less-liquid half -- high-liquidity-half Sharpe 0.1408 > low-liquidity-half Sharpe -0.046,
+  the OPPOSITE of the PEAD literature's documented pattern, disclosed plainly; no pure-decay-to-zero
+  per-year pattern found, per-year Sharpes bounce between -1.6 and +1.3 with no monotonic decay).
+  Gate 5 (`all_regime_signatures_hold`) is therefore False because S3's signature fails even though
+  S1 and S2's both independently hold.
+
+  **Sleeve-level headline numbers** (full-universe / on_demo subset, rt=13bp primary, both
+  reported per landmine 7): S1 ensemble +0.5256 ann / +0.8554 ann (88/16 names, DSR 0.1533 -- does
+  not clear DSR at N=48 alone either, but is the strongest individual sleeve and PASSES its own
+  regime-sanity signature); S2 W_beta=52 primary +0.2242 ann / -0.9410 ann (88/16 names -- notably
+  the on_demo-16 subset flips negative, a real and disclosed small-sample characteristic of
+  restricting the leverage-adjusted BAB book to only 16 names; W_beta=26 -0.0102 ann and W_beta=104
+  +0.3399 ann reported as robustness variants, ex-post beta -0.00668/+0.07513/+0.02485
+  respectively -- all three genuinely close to zero, confirming the true Frazzini-Pedersen
+  construction, not a disguised leveraged short-market bet); S3 ensemble -0.3823 ann / -0.2226 ann
+  (76/11 names; per-holding-period -0.2793/-0.2156/-0.5247 ann for 2/4/6-week holds; turn_mean
+  0.2193/period against the ~8-events/name/yr expectation -- no large deviation flagged; realized
+  average net exposure figures reported honestly per-cell, event book is not forced dollar-neutral).
+
+  **Two real construction bugs were found and fixed during this program's own mandatory pre-run
+  smoke-testing of the combined deployable** (caught BEFORE any headline number was trusted, in
+  direct response to the task's explicit instruction to re-derive rather than re-trust-by-analogy
+  every exposure/return timing and cost-scaling claim from scratch):
+    (a) **Combined-book date-misalignment bug.** S1's monthly rebalance dates are each month's LAST
+        REAL DUKA TRADING DAY (e.g. 2018-07-31), while S2's monthly-marked dates are the FRIDAY
+        at/before each month-end (e.g. 2018-07-27, from the weekly beta-estimation calendar) --
+        exact-Timestamp dictionary alignment between the two silently dropped ~55% of S2's monthly
+        observations as unmatched NaN when building the combined book's sleeve-return matrix. Fixed
+        by `align_series_by_year_month()`, which aligns on `(year, month)` KEY instead of exact
+        date equality. A second-order consequence of the same NaN-holes (compounded with a
+        sleeve's own WARMUP-period structural zeros, e.g. S2's first ~12 months of exactly 0.0
+        return before its W_beta=52 rolling window has enough history to size any position) was
+        that `equal_risk_contribution_blend`'s trailing-vol estimate read a near-zero vol from
+        mostly-placeholder-zero windows, spiking that sleeve's inverse-vol blend scale to its 5x
+        clip right as its first REAL (and in one case large, -8.07%) return landed -- fixed by
+        treating exact `0.0` entries as NaN for the trailing-vol estimate specifically (the raw
+        `net` array used for actual P&L is untouched). Before both fixes: combined deployable
+        showed an impossible maxDD of 97.67% and Sharpe -2.54 ann, an artifact of these two
+        interacting bugs, not any real sleeve's own risk.
+    (b) **Turnover-resampling bug (return-compounding formula applied to a turnover series).**
+        S3's native daily-marked turnover array was fed through the SAME `prod(1+x)-1`
+        return-resampling formula used to compound S3's own net-RETURN series onto the combined
+        monthly grid -- but turnover across sub-periods within a month must be SUMMED, never
+        compounded multiplicatively. This inflated S3's monthly turnover contribution to as high
+        as ~165 gross-weight-units in a single month, which at 13bp/unit produced a catastrophic,
+        entirely artificial cost drag (combined EV as low as -365bp/month) with zero relationship
+        to any real trading cost S3's own standalone per-holding-period cells correctly priced
+        (those cells were never affected -- only the combined book's RE-resampled turnover was
+        wrong). Fixed by adding `align_turnover_to_monthly_grid()` (sums, not compounds) and using
+        it for S3's turnover specifically.
+    (c) **S2 beta-leverage-adjustment defeated by its own normalization step (found and fixed
+        DURING this same smoke-testing pass, via the mandatory ex-post-beta adversarial check
+        itself).** The first S2 construction attempt computed each leg's beta-leverage factor
+        (`lev_long = 1/beta_long_leg`, `lev_short = 1/beta_short_leg`) correctly, but then
+        renormalized each leg's weights to a FIXED 0.5 gross via `0.5 * raw_long_w /
+        abs(raw_long_w).sum()` -- since `abs(raw_long_w).sum() == abs(lev_long)` when the
+        per-name inverse-vol weights already sum to 1, this division cancels `lev_long` down to
+        just its SIGN, silently discarding the entire leverage-adjustment magnitude computed one
+        step earlier. Verified empirically: this produced a realized ex-post book beta of -0.69 at
+        the W_beta=52 primary window (far from zero), which the mandatory adversarial check
+        correctly flagged as "PROMINENTLY a construction defect" per the frozen prereg's own
+        instruction, rather than being silently reported as genuine BAB alpha. FIXED by solving
+        for each leg's OWN total gross exposure algebraically
+        (`long_gross = beta_short_leg/(beta_long_leg+beta_short_leg)`,
+        `short_gross = beta_long_leg/(beta_long_leg+beta_short_leg)`, verified against a synthetic
+        numeric example to net to exactly zero beta) while preserving each leg's internal
+        inverse-vol relative sizing -- post-fix ex-post beta at W_beta=52 is +0.07513, genuinely
+        close to zero, and S2's own Sharpe improved from -0.9976 (broken) to +0.2242 (honest),
+        confirming the original -0.9976 number was itself an artifact of the same construction
+        defect the mandatory check is specifically designed to catch.
+    All three bugs were caught and fixed BEFORE the reported run via this program's own mandatory
+    pre-run smoke-testing discipline (not discovered post-hoc in a later adversarial-review pass),
+    directly informed by E1's and E2's own "bugs found late" lessons and by DATA_CONTRACT
+    landmines 3/4's explicit instruction to re-derive every exposure-timing and cost-scaling claim
+    from scratch rather than trust the pipeline's own comments.
+
+  **All three lookahead canaries behave correctly** (a real, load-bearing verification per the
+  mandatory convention): S1 canary +7.2155 ann vs honest ensemble +0.5256 ann (dominates); S2
+  canary +3.0306 ann vs honest W_beta=52 primary +0.2242 ann (dominates); S3 canary +4.148 ann vs
+  honest ensemble -0.3823 ann (dominates) -- all three clearly dominate their honest counterparts,
+  confirming none of the three honest pipelines is silently degenerate.
+
+  S1 sign-check assertion (the single easiest catastrophic error given the construction's
+  similarity to E2's dead reversal sleeve) PASSES explicitly at pipeline start: top-quintile
+  (highest sector-residual-momentum signal) names get positive (LONG) weight, bottom-quintile get
+  negative (SHORT) weight, book net-zero to machine precision.
+
+  Full test suite: **654 passed, 1 skipped, 9 warnings in 36.76s** -- unchanged from the E1/E2
+  baseline, confirming `e3_pipeline.py` (a new, self-contained file) did not touch or break any
+  existing `src/` behavior.
+
+  Survivorship (landmine 6) restated per the frozen prereg, per-sleeve, with the actually-realized
+  headline denominators: S1 (MOST SEVERE) 88-of-93-usable-base / 16 on_demo; S2 (MODERATE, not nil)
+  88-of-93-usable-base / 16 on_demo; S3 (MODERATE, doubly caveated -- base-roster survivorship PLUS
+  the announcement-date-history-collected-only-for-todays-roster layer) 76-of-93-base / 11 on_demo.
+
+  Committed and pushed to branch `equity`.
+- **Program status: E1, E2, and E3 are now ALL COMPLETE.** All three are clean, thoroughly-verified,
+  fully-diagnosed negatives -- no deployable edge was found in the perp-native suite (E1), the
+  stress-conditioned cross-sectional equity-residual-reversal suite (E2), or the three-sleeve
+  cross-sectional equity factor suite (E3: momentum + BAB + PEAD). Nothing from any of the three
+  programs is recommended for paper or live deployment. E3's own secondary, disclosed finding: S1
+  (momentum) and S2 (true Frazzini-Pedersen BAB, ex-post beta genuinely near zero after the
+  beta-leverage-adjustment bug fix) EACH independently clear their OWN regime-sanity signature and
+  show a standalone positive full-universe Sharpe (+0.53 and +0.22 ann respectively at primary
+  cost) -- reported here as a secondary finding per the frozen prereg's own convention, NOT a
+  redefinition of the deployable, since neither sleeve alone was ever the pre-named combined
+  deployable and the combined book (dragged down by S3's negative, non-liquidity-concentrated PEAD
+  leg) fails DSR/PBO/drop-top-5 regardless. A future follow-up could consider a two-sleeve
+  (S1+S2-only) combined deployable as a fresh, separately pre-registered study -- per house
+  discipline this is explicitly NOT retroactively substituted for E3's own frozen three-sleeve
+  deployable without a new frozen prereg.
+- **Next step**: E3 is closed. Outstanding technical debt carried forward for any future reuse of
+  `e3_pipeline.py`: none of E1's or E2's previously-documented outstanding bugs were touched by this
+  program (this is a new, self-contained file); E3's own three bugs (combined-book date
+  misalignment, turnover-resampling formula, S2 beta-leverage-adjustment normalization defeat) were
+  all found and fixed BEFORE the reported run, not left outstanding. A future S1+S2-only combined
+  deployable (see above) would need its own fresh prereg and its own fresh N_trials ledger --
+  E3's frozen combined deployable (three sleeves) remains the only deployable this document names
+  unless a new prereg is frozen.
