@@ -102,5 +102,105 @@
   deliberately NOT reused for E2's core daily-close construction; a fresh, source-filtering builder
   is written instead. Frozen and committed at commit `573edbb` on branch `equity`, pushed to
   origin.
-- **Next step: E2 Pipeline phase.** Implement `research/equity/e2_pipeline.py` against the frozen
-  grid above, run the validation battery, and record the outcome in `research/equity/E2_REPORT.md`.
+- **E2 pipeline phase**: COMPLETE. `research/equity/e2_pipeline.py` implements the full frozen
+  grid exactly (unconditional band-ensemble + 3 per-lookback = 4 cells; conditioned grid
+  W_rv{10,20,40} x W_z{252,504} x source{SPY,QQQ,MEAN} x mechanism{hard-gate x3 thresholds,
+  continuous} = 72 cells; universe-size sweep N in {20..102} = 10 cells; cost/funding grid
+  (deployable + unconditional comparator) x 3 RT x 3 funding = 18 cells; N_trials = 104 exactly,
+  verified in the artifact's own `n_trials_ledger_breakdown.matches_declared_104=True`). Lookahead
+  canary excluded from family/PBO/DSR per the mandatory convention. Outcome recorded in
+  `research/equity/results_e2.json` (runtime 18.6s on the VM; 99 of the 102 base-universe names
+  actually usable -- STXXUSDT/CBRSUSDT/DRAMUSDT excluded, each has too little real duka history
+  (11-33 calendar days) to clear even the L=3 lookback + 20-day vol window + 5-day buffer at the
+  data cut, stated here since the prereg's 102-name figure is the base universe declaration, not
+  a claim every one of the 102 contributes an observation).
+
+  **Verdict: pre-named deployable (continuous-scale-conditioned band-ensemble, full 99-usable-name
+  universe, W_rv=20/W_z=252/mean-SPY-QQQ-z, 13bp primary) FAILS the adoption gate -- DO NOT
+  DEPLOY.** Net Sharpe -0.9539 ann full-universe / -0.6441 ann on_demo-and-real-history (17-name)
+  subset (both negative); DSR 0.0 at N_trials=104; drop-top-5-weeks Sharpe still negative (-1.4534
+  full-universe); PBO over the full 104-cell family (86 cells actually poolable into one aligned
+  CSCV family) = 0.20, which DOES clear the <=0.25 gate on its own but does not save the verdict
+  since gates 1/2/4/5 all fail. turn_mean wired via metrics()'s `turn=` parameter this time (per
+  the task's explicit note about E1's oversight there): 1.80/week gross for the full-universe
+  deployable, sanity-checking against the declared ~2x/week cost assumption.
+
+  **Regime-sanity signature (the mechanism check) FAILS.** Above-trailing-median-stress weeks
+  contribute 47.91% of total P&L (needed >50%) while being 42.09% of calendar weeks; of the four
+  named stress windows only 2018Q4 (weekly Sharpe +0.399 > full-sample -0.954, n=13) and 2022
+  (-0.582 > -0.954, n=51) individually beat the full-sample Sharpe -- 2020-03 COVID (-2.148, n=4)
+  and 2024-08 (-3.432, n=5) do NOT, so `all_named_windows_exceed_full_sample_sharpe=False` and
+  `SIGNATURE_HOLDS=False`. This is reported plainly as a failed mechanism check, not papered over;
+  the 2020-03/2024-08 windows have very few observations (n=4, n=5) so this is also a genuinely
+  noisy small-sample read, stated as such.
+
+  **Lookahead canary behaves correctly** (a real, important verification, not just a formality):
+  net Sharpe +10.526 ann / gross +10.646 ann, clearly dominating the honest deployable's -0.954 --
+  confirms the honest pipeline is not silently degenerate the way one E1 sleeve's canary was.
+
+  **Universe-size sweep**: all 10 points N in {20,...,102} show negative point-estimate Sharpes
+  (-0.54 to -0.95); N=20's point estimate (-0.584) is less negative than N=102's (-0.954) but the
+  honest block-bootstrap 90% CI-overlap treatment finds NO N clears the "CI lower bound beats
+  baseline AND <50% overlap" bar (`any_honest_peak_found=False`) -- verdict:
+  "SUPPORTS (N=102 baseline is not honestly beaten by any sweep point)", i.e. the sweep does not
+  contradict the pre-registered full-102-name breadth decision (there is simply no deployable
+  edge at any breadth to have a peak in).
+
+  **Two real, previously-undocumented pipeline bugs were found and fixed during this program's own
+  mandatory pre-run smoke-testing** (caught BEFORE any headline number was trusted, per the task's
+  explicit instruction to design the source-aware/derived-ppy logic correctly the first time and
+  verify it -- these are a different class of bug from that mandate but were caught by the same
+  discipline of testing every component before trusting the full run):
+    (a) **Stress-signal ffill-past-end-of-history bug.** `build_stress_signal`'s SPY/QQQ daily-close
+        series used `reindex(cal).ffill()`, which forward-filled each name's LAST REAL `duka` close
+        indefinitely across the ~3 months after its own duka->perp splice date (SPY's real duka
+        history ends 2026-04-06, QQQ's 2026-04-02, but `cal` runs through 2026-07-01) -- a flat,
+        fabricated price series with zero daily variance, which made the rolling realized-vol
+        z-score decay smoothly toward a manufactured value (verified: SPY's z-score under the
+        buggy version decayed smoothly to -1.85 by 2026-07-01 instead of correctly going NaN) --
+        exactly the kind of fake, non-mechanism-driven smoothness the regime-sanity gate is
+        designed to catch, had it gone undetected. Fixed by explicitly NaN-ing any day past each
+        stress name's own real last `duka` day before computing log-returns, so the stress signal
+        (and hence `gate_continuous`'s exposure, which treats non-finite z as base 1.0x gross) goes
+        genuinely inert past the real data's end rather than manufacturing a fake reading.
+    (b) **Lookahead-canary sign/construction bug (caught by the mandatory canary-dominance check
+        itself working as designed).** The first canary construction shifted the daily trailing-sum
+        window forward by 1 day (a diluted, mostly-non-overlapping leak of only 1 of L trading
+        days into the NEXT week) and showed a canary Sharpe of -6.07 ann, WORSE than the honest
+        -1.44 -- immediately flagged as wrong by the mandatory "canary must clearly dominate"
+        check. Root-caused and rebuilt: the canary now ranks directly on the actual realized
+        forward return `wret[t]` itself (via a new `weekly_forward_name_returns` helper), but must
+        be NEGATED before feeding into the same "long-bottom-quintile/short-top-quintile" reversal
+        weight function (an un-negated first attempt at this also produced an impossible SHARPLY
+        NEGATIVE canary Sharpe of -18.88, since "long the most-negative-signal names" applied
+        directly to `+wret[t]` means "long the names about to have the WORST return" -- exactly
+        backwards for a canary). Post-fix the canary shows +10.53 net / +10.65 gross ann, clearly
+        dominating the honest pipeline, as required.
+    Both bugs were caught and fixed BEFORE the reported run (not discovered post-hoc in an
+    adversarial-review pass the way E1's two bugs were) -- a smoke-testing discipline directly
+    informed by having just read E1's own "two real bugs found late" lesson.
+
+  Full test suite: **654 passed, 1 skipped, 9 warnings in 36.88s** -- unchanged from the E1
+  baseline, confirming `e2_pipeline.py` (a new, self-contained file) did not touch or break any
+  existing `src/` behavior.
+
+  Survivorship (landmine 4) and demo-gate (landmine 5) caveats restated per the frozen prereg:
+  the 99-usable-of-102-declared name roster is today's Binance winners, not a point-in-time
+  universe (less fatal for this short-horizon cross-sectional reversal than for a momentum study,
+  per DATA.md, but not nil); on_demo-and-real-history restricts to 17 of the 19 raw on_demo names
+  (OPENAIUSDT/QNTXUSDT excluded, perp-only/no real history) -- both headline numbers reported
+  above (full-universe AND on_demo-17) per the mandatory dual-reporting convention.
+
+  Committed and pushed to branch `equity` (see commit hash in the commit this STATE.md update is
+  part of).
+- **Next step**: E2 is closed (a correctly-identified, fully-diagnosed negative is a complete
+  result -- the frozen prereg's discipline explicitly treats this as valuable, not a failure to
+  find one). A future follow-up (E3 or beyond) would need either (a) a fundamentally different
+  residualization/conditioning construction, (b) a genuinely different stress proxy less prone to
+  the "only 4-5 named-window observations" small-sample problem documented above (2020-03 and
+  2024-08 both had n<=5 weekly observations within this study's exact window definitions), or
+  (c) acceptance that short-horizon cross-sectional reversal on this ~100-name Binance-listed
+  TradFi-equity venue, at 13bp perp-reality cost and ~1.8x/week turnover, is simply not a
+  deployable edge at this breadth -- per the task's own framing, a clean negative here is a
+  complete, valuable result, not a failure to find one. Whoever picks up a follow-up should read
+  this section plus `results_e2.json` directly before re-deriving anything.
