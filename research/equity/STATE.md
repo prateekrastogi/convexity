@@ -6,8 +6,8 @@
 - **E1 prereg phase**: complete. `research/equity/E1_PREREG.md` frozen — perp-native suite
   (S1 funding-carry cross-section, S2 perp<->underlying basis mean reversion, S3 overnight/weekend
   structure), N_trials = 179, pre-named deployable = S1 weekly band-ensemble + S3(c)
-  overnight-execution overlay. Frozen and committed at commit `<FILLED IN AFTER COMMIT>` on
-  branch `equity`, pushed to origin.
+  overnight-execution overlay. Frozen and committed at commit `e2e586d` on branch `equity`,
+  pushed to origin.
 - **Next step**: Pipeline phase — write `e1_pipeline.py` implementing the frozen E1_PREREG.md grid
   exactly as declared (no new cells, no post-hoc changes to the pre-named deployable). Reuse
   `research/entry_exit/validation.py`'s `per_obs_sharpe` and
