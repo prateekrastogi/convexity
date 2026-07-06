@@ -277,3 +277,60 @@
   were verified robust to all three) -- none of these four outstanding bugs changes either
   program's adoption-gate verdict, but all four should be fixed before either `e1_pipeline.py` or
   `e2_pipeline.py` is reused as a base for a future program.
+- **E3 data acquisition phase**: COMPLETE. S3 (PEAD) earnings-announcement-date acquisition via
+  yfinance 1.5.1 (+ lxml 6.1.1 dependency, both installed into the shared venv) achieved
+  `coverage_fraction = 0.8172` (76/93 base-universe names with >=8 usable events in
+  [2018-01-01, 2026-07-04]), well above the declared 0.60 program-level floor -- **S3 PROCEEDS**.
+  Validated against an independent source (Nasdaq earnings-surprise API, 11 tickers/44 date-points,
+  zero mismatches) plus 3 manual spot-checks against well-known publicized events, zero
+  discrepancies. Recorded in `research/equity/e3_pead_data_coverage.json`.
+- **E3 prereg phase**: complete. `research/equity/E3_PREREG.md` frozen -- THREE-sleeve
+  cross-sectional equity factor suite: **S1** slow sector-residual momentum (formation L in
+  {3,6,12} months, mandatory >=1-month skip to avoid E2's own documented short-horizon residual
+  reversal contaminating the sign), **S2** betting-against-beta (true Frazzini-Pedersen
+  leverage-adjusted construction, beta vs an equal-weight-of-base-universe proxy, W_beta in
+  {26,52,104} weeks, W_beta=52 primary), **S3** price-based PEAD (announcement-window abnormal
+  return vs sector peers, holding-period band {2,4,6} weeks). Base universe = **93 names**
+  (102 with real `dukascopy` history -> 99 after 3 short-history exclusions -> 93 after the
+  mandatory leveraged/inverse/decay-ETF exclusion: UVXYUSDT, SQQQUSDT, TQQQUSDT, SOXLUSDT,
+  KORUUSDT, MVLLUSDT -- KORU/MVLL carry the generic `thematic` tag and were found only by
+  judgment/external verification, not a naive tag filter -- all verified fresh via a live
+  `load_universe()` call in this session, not assumed from E1/E2). on_demo-and-real-history-and-
+  not-leveraged subset = **16 names** for S1/S2 (E2's own on_demo-17 does NOT apply here since
+  this program's leveraged-ETF exclusion removes MVLL from that set) and **11 names** for S3.
+  **N_trials = 48** (S1: 4 = 1 ensemble + 3 lookback; S2: 3 beta-window variants; S3: 4 = 1
+  ensemble + 3 holding-period; combined deployable: 1; cost/funding grid on the 4 headline cells
+  x 3 cost x 3 funding = 36). Pre-named combined deployable = equal-risk-contribution blend of all
+  three sleeves + single 10% vol-target overlay on top (reusing `DURABLE_REPORT.md`'s S4 cluster-
+  risk-parity pattern), 13bp primary cost. Explicitly declares, as visible sections (not silently
+  done right): source-aware (`source=='duka'`-only) construction reused verbatim from E2; derived-
+  not-assumed `periods_per_yr` per sleeve, with S3 explicitly getting its OWN derivation (its
+  overlapping event-portfolio cadence is not assumed to be ~52 or ~12 in advance); start-of-period
+  exposure-timing alignment (S2's beta estimate and the combined book's vol-target overlay both
+  use only data strictly before the position's own start date, tracing the exact bug class that
+  survived E2's first-pass verification); and exposure-scaled cost components (both the fee AND
+  funding terms scale with the combined book's realized exposure, a direct fix of E2's documented
+  flat-funding-term bug). Each sleeve has its OWN regime-sanity signature (S1: 2020-04 momentum-
+  crash-consistent episode; S2: ex-post book beta near zero + resilience across the four named
+  stress windows; S3: drift concentrated in the less-liquid half + no undisclosed pure-decay
+  pattern) -- three genuinely different checks, not one generic signature reused three times.
+  Survivorship stated per-sleeve with its own headline number (S1 most severe -- 93/16; S2
+  moderate -- 93/16; S3 moderate with a second, independent announcement-history-survivorship
+  layer on top -- 76/11), not one blanket caveat. Full test suite run immediately before this
+  commit: **654 passed, 1 skipped, 9 warnings in 36.85s** -- unchanged from the E1/E2 baseline.
+  Frozen and committed at commit `96f7586` on branch `equity` (alongside
+  `e3_pead_data_coverage.json`), pushed to origin.
+- **Next step: E3 Pipeline phase.** Implement `e3_pipeline.py` against the frozen grid above,
+  reusing `e2_pipeline.py`'s `metrics()`/`cpcv_paths()`/`dsr()`/`per_obs_sharpe()`/
+  `_weights_from_signal()` function bodies (parameterized by each sleeve's own derived
+  `periods_per_yr`, never a hardcoded literal), pointed at
+  `/home/speculation/convexity-equity/data/{stitched,earnings}` and
+  `src/convexity/panel/candidates.md` directly (NOT `swing_pipeline.py`'s hardcoded main-repo
+  paths, and NOT `convexity.panel.panel.build_panel()`/`load_bars()` for the core signal, per the
+  same reasoning E2 already documented -- `load_bars()` still does not read the `source` column).
+  Whoever picks up the Pipeline phase should re-verify (not assume) that `data/earnings/` remains
+  gitignored under the repo-wide `/data/` rule before writing any new cache files there, and should
+  read E3_PREREG.md's "AVOIDING E1'S AND E2'S FIVE NAMED BUG PATTERNS" section in full before
+  writing a single line of signal-construction code -- particularly the exposure-timing-alignment
+  guard (landmine 3), since that exact bug class survived E2's own first-pass independent
+  verification and was caught only by a dedicated third adversarial pass.
