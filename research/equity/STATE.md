@@ -84,4 +84,23 @@
   adversarial review" section first -- the two documented pipeline bugs (splice-seam daily-return
   contamination; weekly-cadence annualization mismatch) are exactly the class of defect E2's own
   pipeline should be checked against from the start, not discovered post-hoc again.
-- **Final E1 commit**: `<FILLED IN AFTER COMMIT>`.
+- **Final E1 commit**: `8eb25d9` (research(equity): E1 final report -- pre-named deployable fails
+  adoption gate (clean negative), records independent-verification/adversarial-review findings) —
+  placeholder above was left unfilled in the copy previously on disk; confirmed via `git log` and
+  filled in now as part of the E2 prereg commit below.
+- **E2 prereg phase**: complete. `research/equity/E2_PREREG.md` frozen — stress-conditioned
+  residual reversal (weekly Friday cross-sectional reversal on the 102-name real-underlying-history
+  panel, sector-residualized per `candidates.md`, lookback band {3,5,10} trading days as a
+  band-ensemble, conditioned by a SPYUSDT/QQQUSDT realized-vol-z stress signal). N_trials = 104
+  (4 unconditional + 72 conditioned grid + 10 universe-size sweep + 18 cost/funding scenario
+  cells, canary excluded). Pre-named deployable = full 102-name universe, 3-lookback band-ensemble,
+  continuous-scale stress conditioning (W_rv=20d, W_z=252d, mean of SPYUSDT/QQQUSDT z), 13bp
+  primary cost. Explicitly declares source-aware (`source=='duka'`-only) daily-close construction
+  and derived-not-assumed `periods_per_yr` to avoid repeating E1's two documented bug patterns —
+  verified during drafting that `build_panel()`/`load_bars()` in `src/convexity/panel/{panel,
+  data}.py` are NOT source-aware (load_bars doesn't even read the `source` column) and so are
+  deliberately NOT reused for E2's core daily-close construction; a fresh, source-filtering builder
+  is written instead. Frozen and committed at commit `573edbb` on branch `equity`, pushed to
+  origin.
+- **Next step: E2 Pipeline phase.** Implement `research/equity/e2_pipeline.py` against the frozen
+  grid above, run the validation battery, and record the outcome in `research/equity/E2_REPORT.md`.
