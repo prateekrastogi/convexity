@@ -461,11 +461,131 @@
   (S1+S2-only) combined deployable as a fresh, separately pre-registered study -- per house
   discipline this is explicitly NOT retroactively substituted for E3's own frozen three-sleeve
   deployable without a new frozen prereg.
+- **E3 post-run independent-verification + adversarial-review phase**: COMPLETE, see
+  `E3_REPORT.md` sections 7-9 for full detail. First-pass independent verification confirmed all
+  five carried-forward bug patterns genuinely hold (splice-seam guard, derived annualization for
+  BOTH S1/S2's ~12.24/yr and S3's own separately-derived ~251.2/yr, exposure-timing alignment via
+  numeric injection, cost-scaling via a standalone synthetic test, and the leveraged-ETF exclusion
+  list), independently reproduced S1 L=12 and S2 W=52 from scratch (near-exact matches, including
+  S2's mandatory ex-post-beta check: hand 0.0754 vs pipeline 0.07513), and independently re-ran the
+  full test suite fresh (654 passed, 1 skipped, 36.94s). Three subsequent, dedicated adversarial
+  skeptic passes (lookahead / cost-realism / dependence) each found REAL, PREVIOUSLY-UNDISCLOSED
+  issues that the first-pass verification missed:
+    (a) **[lookahead] Two real S1 construction bugs, neither a data-availability lookahead but both
+        contrary to the frozen prereg's stated intent.** (i) S1's skip-month embargo has NO EFFECT
+        -- `s1_trailing_formation_signal`'s `shift(skip)` with `S1_SKIP_MONTHS=1` still reaches back
+        to `RESID_M[t-1]` as its most recent ingredient, identical to a `skip=0` signal; a true
+        1-month embargo needs `shift(skip+1)`. Per the prereg's own stated mechanism this most
+        likely UNDERSTATES S1's true momentum Sharpe (the un-purged short-horizon reversal
+        contamination works against momentum's sign), not inflates it. (ii) S1's monthly
+        eligibility filter uses `LISTED_M[t]` (end-of-scored-month status) instead of
+        `LISTED_M[t-1]` (status at the actual rebalance date) -- a genuine, if narrow,
+        survivorship-flavored lookahead concentrated almost entirely in the sample's final months
+        (81/8624 cells, 68/81 in Apr-Jun 2026, mean|excluded return|=10.8%). Neither bug changes the
+        combined deployable's failing verdict; both should be fixed
+        (`shift(skip+1)`; `LISTED_M[t-1]`) before S1's numbers are treated as a clean baseline.
+    (b) **[cost-realism] Funding-cadence unit bug + N_trials undercounting.** The combined book's
+        `FUND_SCEN_BP_PER_WK` constant is documented "per week" but charged directly as a monthly
+        `funding_bp_per_period` with no weeks-per-month conversion -- understates the funding-
+        stress scenario by ~4.3x (the reported fund+5bp/wk delta of 6.736bp should be ~29.2bp if
+        genuinely converted). Separately, the declared "4 headline cells x 3 cost x 3 funding = 36"
+        grid was only ever actually computed for 1 of the 4 headline cells (combined deployable) --
+        true computed N_trials = 21, not the declared/reported 48
+        (`n_trials_ledger_breakdown.matches_declared_48=true` re-adds the *declared* 36, not an
+        independent count). Both effects are CONSERVATIVE for the already-negative verdict (a
+        harsher DSR benchmark, an understated-not-overstated funding stress), but both are real,
+        unfixed defects disclosed in full rather than silently reconciled. Also confirmed: S3's
+        mandatory turnover-vs-8/yr-expectation comparison was never implemented in code (assigned
+        to the metrics dict but never diffed/flagged) -- hand-computed the honest value (~6.7
+        trades/name/yr) and it is reasonably close, so the check likely would have passed had it
+        actually run.
+    (c) **[dependence] Severe undisclosed single-name/single-sector concentration in BOTH of the
+        two sleeves that otherwise look like clean secondary positives.** S1 (momentum): GMEUSDT
+        (GameStop) alone = 40.1% of the ensemble's total gross P&L; dropping the top-3 names
+        (GME+PLTR+FLEX, 65% of gross P&L) collapses Sharpe from 0.5256 to 0.2384 (DSR 0.153->0.056).
+        S2 (BAB): far more severe -- healthcare sector is only 2 of 88 names (LLYUSDT, NVOUSDT);
+        zeroing just those 2 flips the ENTIRE remaining 86-name book from +0.2242 to -0.0792
+        (negative). Neither finding changes the combined deployable's already-failing verdict, but
+        both mean S1 and S2 should NOT be described as clean, diffuse cross-sectional secondary
+        positives without this disclosure -- confirmed the leveraged/inverse-ETF exclusion itself
+        (landmine 5) is genuinely clean (none of the 6 excluded names appear in any sleeve's top-15
+        contributors); this is a DIFFERENT, new concentration in ordinary (correctly non-excluded)
+        operating companies, the same general failure mode recurring in a new form.
+  None of the three findings reverses the adoption-gate verdict (all 5 gates already failed
+  independently of these) -- they are disclosed in full in `E3_REPORT.md` sections 7-9 per the
+  "never paper over a lens finding" convention, and materially qualify (without reversing) the
+  "S1 and S2 each independently clear their own gates" secondary finding.
 - **Next step**: E3 is closed. Outstanding technical debt carried forward for any future reuse of
-  `e3_pipeline.py`: none of E1's or E2's previously-documented outstanding bugs were touched by this
-  program (this is a new, self-contained file); E3's own three bugs (combined-book date
-  misalignment, turnover-resampling formula, S2 beta-leverage-adjustment normalization defeat) were
-  all found and fixed BEFORE the reported run, not left outstanding. A future S1+S2-only combined
-  deployable (see above) would need its own fresh prereg and its own fresh N_trials ledger --
+  `e3_pipeline.py`: E3's own three SMOKE-TESTING-CAUGHT bugs (combined-book date misalignment,
+  turnover-resampling formula, S2 beta-leverage-adjustment normalization defeat) were found and
+  fixed BEFORE the reported run, not left outstanding. E3's own three POST-RUN ADVERSARIAL-REVIEW
+  findings (S1 skip-month embargo has no effect; S1 month-end eligibility lookahead; funding-cadence
+  unit bug + N_trials undercounting in the cost/funding grid; GME/LLY-NVO single-name-sector
+  concentration in S1/S2) are NOT fixed/re-run -- flagged as required fixes for any future reuse of
+  `e3_pipeline.py` or any follow-up building on S1/S2 as components. A future S1+S2-only combined
+  deployable would need its own fresh prereg, its own fresh N_trials ledger, AND must first address
+  all four of these disclosed defects (two S1 construction bugs, the cost-grid cadence/coverage gap,
+  and the single-name/sector dependence) before either sleeve is treated as a clean building block --
   E3's frozen combined deployable (three sleeves) remains the only deployable this document names
   unless a new prereg is frozen.
+- **Program status: E1, E2, and E3 are now ALL COMPLETE AND CLOSED.** All three are clean,
+  thoroughly-verified, fully-diagnosed negatives -- no deployable edge survived adoption-gate
+  scrutiny in any of the three programs. **Consolidated outstanding non-blocking issues across all
+  three programs, for any future reuse of this codebase** (none of these changes any program's own
+  adoption-gate verdict; all are disclosed-but-unfixed defects in the respective pipeline files):
+  - `e1_pipeline.py`: (i) `daily_returns_from_close()` has no `source`-aware guard alongside its
+    `gap_days>5` check, contaminating trailing-20-day RVOL at 55/110 splice-seam names for roughly a
+    month per name; (ii) every weekly-rebalance cell (S1, S3(b)) is annualized with a hardcoded
+    `WK_PER_YR=52.0` against a daily-marked P&L series that should derive to `DAY_PER_YR=252.0`,
+    understating/overstating magnitude by ~2.2x (DSR/PBO/gate signs independently verified
+    unaffected).
+  - `e2_pipeline.py`: (i) the conditioning-layer exposure scale is shifted one Friday AHEAD of the
+    return it's applied to (`expo_at_fri[1:]` should be `expo_at_fri[:-1]`) -- affects all 72
+    conditioned cells, the deployable, the universe sweep, and the regime-sanity check itself,
+    very likely immaterial to sign (stress z is highly autocorrelated) but unfixed; (ii) the funding
+    cost term is a flat per-period constant not scaled by the stress-exposure multiplier `es`, while
+    the fee term correctly does; (iii) UVXYUSDT/SQQQUSDT alone = 20.2%/>50%(top-4) of total gross
+    P&L, undisclosed reliance on structurally-decaying leveraged/inverse ETF products rather than
+    genuine cross-sectional reversal.
+  - `e3_pipeline.py`: (i) S1's skip-month embargo (`shift(skip)` should be `shift(skip+1)`) has no
+    effect, most likely understating S1's true momentum Sharpe; (ii) S1's monthly eligibility filter
+    uses end-of-period (`LISTED_M[t]`) instead of start-of-period (`LISTED_M[t-1]`) listing status, a
+    narrow survivorship-flavored lookahead concentrated in the sample's final months; (iii) the
+    funding-scenario constant is applied at the wrong cadence (documented "per week", charged as
+    "per month" with no conversion, ~4.3x understated) and the declared 36-cell cost/funding grid
+    was only actually computed for 1 of 4 headline cells (true N_trials computed = 21, not 48 --
+    conservative for the negative verdict, but disclosed as a real scoping/reporting gap); (iv)
+    severe undisclosed single-name concentration in S1 (GMEUSDT = 40.1% of gross P&L) and
+    single-sector concentration in S2 (2-of-88 healthcare names, LLYUSDT/NVOUSDT, carry S2's ENTIRE
+    edge -- removing them flips the 86-remaining-name book negative).
+  **Does E1+E2+E3 collectively suggest anything general about whether swing-horizon equity edges are
+  viable on this venue at all?** Yes, plainly: **the honest cross-program conclusion is a
+  comprehensive negative.** Across three independent, rigorously pre-registered, independently
+  verified, and adversarially reviewed programs, covering seven distinct economically-motivated
+  mechanisms -- funding carry (E1 S1), perp/underlying basis mean-reversion (E1 S2), overnight/
+  weekend structure (E1 S3), stress-conditioned sector-residual reversal (E2), slow sector-residual
+  momentum (E3 S1), true Frazzini-Pedersen betting-against-beta (E3 S2), and price-based
+  post-earnings-announcement drift (E3 S3) -- **not one construction has cleared its own
+  pre-registered adoption gate.** Where an individual sleeve or cell has shown a standalone positive
+  point-estimate Sharpe (E1's S3(a) overnight-vs-intraday fact-check; E3's S1 and S2), independent
+  adversarial review has in EVERY such case found the apparent edge either (a) too small/noisy to
+  clear DSR at the program's own honestly-enumerated N_trials, or (b) concentrated in a handful of
+  idiosyncratic names or structurally-decaying leveraged/inverse products rather than a genuine,
+  diffuse cross-sectional effect (E2's UVXY/SQQQ; E3's GME, LLY/NVO). This is not evidence that
+  cross-sectional equity factor investing is false in general -- these are extremely well-documented
+  premia (momentum, BAB, PEAD) with genuine academic support elsewhere -- it is evidence that THIS
+  VENUE's specific combination of a ~90-110-name Binance-listed TradFi-equity-perp universe (today's-
+  roster survivorship-biased, thin relative to the true equity cross-section, dominated by a handful
+  of thematic/meme/mega-cap names once you look inside any sleeve's contribution) and perp-reality
+  cost structure (13bp round-trip + funding) is not currently hospitable to any swing-horizon
+  (weekly-to-monthly) cross-sectional or structural-carry construction tested here. A genuinely new
+  program would need either (a) a fundamentally wider/deeper universe than this venue can offer, (b)
+  a materially different holding horizon (intraday, per the separately-tracked convexity crypto
+  cross-sectional-momentum program which IS a live deployable edge on a different, crypto-native
+  universe -- see `convexity-repo-vm-setup` -- suggesting the venue/cost structure is not
+  universally hostile, just to this asset class's swing-horizon equity factors specifically), or (c)
+  explicit acceptance that this specific research direction (swing-horizon equity factors on Binance
+  TradFi-equity perps) is exhausted absent new data or a new venue.
+- **This equity-worktree research program (E1/E2/E3) is now CLOSED.** No further sleeves are
+  planned against this universe/cost-structure combination absent a new frozen prereg addressing one
+  of the three paths in the paragraph above.
