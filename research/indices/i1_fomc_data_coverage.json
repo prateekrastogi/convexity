@@ -1,0 +1,88 @@
+{
+  "acquisition_status": "success",
+  "sources": [
+    {
+      "url": "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+      "coverage": "2021-2027 (current + forward-published calendar page)",
+      "used_for_years": [2021, 2022, 2023, 2024, 2025, 2026]
+    },
+    {
+      "url": "https://www.federalreserve.gov/monetarypolicy/fomchistorical2018.htm",
+      "coverage": "2018 full-year historical materials page",
+      "used_for_years": [2018]
+    },
+    {
+      "url": "https://www.federalreserve.gov/monetarypolicy/fomchistorical2019.htm",
+      "coverage": "2019 full-year historical materials page",
+      "used_for_years": [2019]
+    },
+    {
+      "url": "https://www.federalreserve.gov/monetarypolicy/fomchistorical2020.htm",
+      "coverage": "2020 full-year historical materials page (includes unscheduled/emergency action records)",
+      "used_for_years": [2020]
+    }
+  ],
+  "output_file": "data/fomc/fomc_dates.csv (untracked, VM path /home/speculation/convexity-indices/data/fomc/fomc_dates.csv)",
+  "csv_schema": "meeting_start_date,announcement_date,scheduled -- announcement_date (final day of the meeting, when the post-meeting statement is released) is the date used for the S3(b) pre-FOMC 24h tilt window; only rows with scheduled=TRUE are present (no scheduled=FALSE rows are included -- unscheduled/emergency meetings were excluded at compilation time rather than included-then-filtered, since the source pages label them distinctly)",
+  "date_range_requested": "2018-01 through 2026-07-04",
+  "total_meetings_found": 67,
+  "meetings_per_year": {
+    "2018": 8,
+    "2019": 8,
+    "2020": 7,
+    "2021": 8,
+    "2022": 8,
+    "2023": 8,
+    "2024": 8,
+    "2025": 8,
+    "2026": 4
+  },
+  "notes_on_counts": [
+    "2020 has 7 regularly-scheduled meetings instead of the usual 8: the regularly-scheduled March 17-18, 2020 meeting was CANCELLED per the Fed's own 2020 historical page and superseded by two unscheduled emergency actions on 2020-03-02 and 2020-03-15. Both emergency actions are excluded from this dataset.",
+    "2019 had one additional unscheduled intermeeting conference call on 2019-10-04 (repo-market related), separate from the 8 regular meetings; it is excluded from this dataset (not counted in the 8).",
+    "2025 has a 'notation vote' entry on 2025-08-22 shown on the Fed's calendar page (Jackson Hole timing / longer-run-goals statement context); this is NOT a standard 2-day policy meeting with a rate decision and was excluded as out-of-cadence, consistent with how the 2020 notation votes (March 19/23/31, August 27) were also excluded.",
+    "2026 shows only 4 meetings because the requested window truncates at 2026-07-04: Jan 27-28, Mar 17-18, Apr 28-29, and Jun 16-17 all fall on/before the cutoff; the next scheduled meeting (Jul 28-29, 2026) falls after 2026-07-04 and is correctly excluded."
+  ],
+  "validation_spot_checks": [
+    {
+      "date_checked": "2020-03-15",
+      "claim": "2020-03-15 (Sunday emergency 100bp cut to zero lower bound) must be EXCLUDED as an unscheduled emergency action, not a regular meeting",
+      "result": "PASS -- confirmed excluded. Fed's own 2020 historical page labels 2020-03-02 and 2020-03-15 explicitly as '(unscheduled) Meeting', distinct from the regularly-scheduled calendar. Neither appears in fomc_dates.csv."
+    },
+    {
+      "date_checked": "2020-03-17/18",
+      "claim": "The regularly-scheduled March 2020 meeting was cancelled and should NOT appear as a held meeting",
+      "result": "PASS -- Fed's own page lists March 17-18, 2020 as '(cancelled)'. Not present in fomc_dates.csv; 2020 correctly has only 7 rows instead of 8."
+    },
+    {
+      "date_checked": "2018-12-18/19",
+      "claim": "Well-known 'Powell hike into a selloff' meeting, widely publicized regularly-scheduled December 2018 meeting",
+      "result": "PASS -- present in fomc_dates.csv as meeting_start_date=2018-12-18, announcement_date=2018-12-19."
+    },
+    {
+      "date_checked": "2022-03-15/16",
+      "claim": "First hike of the 2022 tightening cycle (well-known regularly-scheduled meeting)",
+      "result": "PASS -- present as meeting_start_date=2022-03-15, announcement_date=2022-03-16."
+    },
+    {
+      "date_checked": "2023-03-21/22",
+      "claim": "Regularly-scheduled meeting held immediately after the March 2023 SVB collapse (widely publicized)",
+      "result": "PASS -- present as meeting_start_date=2023-03-21, announcement_date=2023-03-22."
+    },
+    {
+      "date_checked": "2024-09-17/18",
+      "claim": "First cut (50bp) of the 2024 easing cycle, widely publicized regularly-scheduled meeting",
+      "result": "PASS -- present as meeting_start_date=2024-09-17, announcement_date=2024-09-18."
+    },
+    {
+      "date_checked": "2019-10-04",
+      "claim": "Unscheduled intermeeting conference call (repo-market stress response) should be EXCLUDED",
+      "result": "PASS -- confirmed excluded. Fed's 2019 historical page labels this as an 'unscheduled conference call', distinct from the 8 regular meetings. Not present in fomc_dates.csv; 2019 correctly has 8 rows (the 8 regular meetings only)."
+    }
+  ],
+  "emergency_meeting_exclusion_confirmed": true,
+  "emergency_meeting_exclusion_detail": "Only regularly-scheduled FOMC meetings (identified as such on the Federal Reserve's own official calendar/historical pages) are included in data/fomc/fomc_dates.csv. All unscheduled/emergency/intermeeting actions identified during acquisition (2020-03-02 unscheduled meeting, 2020-03-15 unscheduled meeting, 2019-10-04 unscheduled conference call) were excluded by construction, not merely flagged. The cancelled 2020-03-17/18 regularly-scheduled meeting is also correctly absent since it was never held.",
+  "fabrication_or_approximation_used": false,
+  "contingency_triggered": false,
+  "contingency_note": "Acquisition succeeded and was reliably parsed from federalreserve.gov's own calendar and historical pages; no fabrication or approximation was required. S3(b) pre-FOMC tilt proceeds using this dataset."
+}
