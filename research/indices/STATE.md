@@ -142,7 +142,7 @@
   of the closed E1/E2/E3 equity cross-sectional program -- it validates a fundamentally different
   construction class (timed-beta overlay on n=2 instruments vs. cross-sectional edge certification
   on ~93-110 names) and used a benchmark-relative, not DSR-based, adoption gate throughout, per its
-  own PROGRAM CLASS declaration. Final commit: `<FINAL_COMMIT_HASH>` on branch `indices`, pushed to
+  own PROGRAM CLASS declaration. Final commit: `60c9174` on branch `indices`, pushed to
   origin. No merge to `main`, no PR, no systemd changes, no live capital -- consistent with the
   program's frozen scope throughout.
 
