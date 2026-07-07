@@ -126,7 +126,7 @@ No PAPER-FIRST recommendation. See `research/cta/CTA_REPORT.md` for the full, fi
   verdict per its own instruction, restated benchmark comparison with the honest "did NOT achieve
   even the anticipated budget-relative pass" characterization, full test suite result, and final
   recommendation). Full test suite reconfirmed at 654 passed/1 skipped immediately before this
-  commit. Committed and pushed to `equity-cta` at commit `<FINAL_COMMIT_HASH>` (see git log).
+  commit. Committed and pushed to `equity-cta` at commit `c6baa2a` (see git log).
 
 - **Program conclusion**: C1 (Stage A + Stage B) is a complete, honest NEGATIVE result -- the frozen
   construction fails all three numeric adoption-gate criteria (CAGR@41%DD, CAGR@30%DD, net Sharpe)
