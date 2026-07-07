@@ -100,10 +100,62 @@
   exactly the kind the prereg flagged as expected going in. Full numbers in
   `research/indices/results_i1.json`.
 
-  Committed at commit `<see next commit>` on branch `indices`, pushed to origin.
+  Committed at commit `ca34133` on branch `indices`, pushed to origin.
 
-  **Next step**: none required by the frozen program -- a negative is a complete, valuable result
-  per this program's own stated discipline (identical to E1/E2/E3). Any eventual deployment
-  decision is explicitly NOT triggered by this program's gate outcome; the repo owner may choose
-  to review the full grid family and results separately. No merge to `main`, no PR, no systemd
-  changes were made or are proposed by this program.
+- **Independent Verify phase**: complete. Independent from-scratch re-implementation (no imports
+  from `i1_pipeline.py`) plus a three-lens adversarial skeptic pass (lookahead, cost realism,
+  benchmark fairness) were both run. All 4 carried-forward bug patterns re-checked fresh:
+  (1) source-aware returns genuinely fixed (independently confirmed a real duka->perp splice seam
+  for both symbols, notably SPY's is stamped `gap_before=False` despite a real price discontinuity
+  -- retroactively validating the source-column-filter design choice over a gap_before-based one);
+  (2) derived annualization genuinely fixed (independent n_obs/span_years arithmetic matches, no
+  hardcoded 252); (3) exposure-timing genuinely fixed (synthetic-outlier-injection test
+  independently rebuilt with an honest-vs-naive negative control, both confirming real
+  discriminating power and a clean pass for the honest pipeline; separately, 5 boundary conditions
+  hand-traced/numerically simulated directly against the pipeline source, all held); (4) cost
+  scaling: trading-fee proportionality-to-|delta-exposure| genuinely fixed and verified both in a
+  toy example and on real SPY data, BUT one real (non-gating) bug found -- funding's bp/week-to-
+  bp/day proration is declared as calendar-day accrual (`/7`) but applied once per TRADING ROW
+  rather than scaled by actual elapsed calendar days, understating funding magnitude by ~31% in
+  the informational +-5bp/week scenarios only. Does NOT affect the primary 13bp/funding=0 gate
+  table (funding=0 there), confirmed via the single shared `apply_costs()` code path feeding both
+  deployable and benchmark identically. Flagged for fix if this pipeline is ever reused for a
+  program needing correct nonzero-funding magnitudes.
+
+  The benchmark-fairness lens (the most important lens for this program class) SURVIVES: identical
+  date range (symmetric difference=0), identical daily-rebalance weighting convention, benchmark
+  cost/funding machinery confirmed genuinely live (not dead code) via funding-scenario
+  sensitivity, and an adversarial jackknife of the top 1/3/5/10 biggest exposure-change days showed
+  the deployable's Sharpe DECREASES as those days are removed (0.6882->0.6344 at N=10) --the
+  opposite of the failure mode the lens looks for, confirming the negative result is not propped up
+  by a few lucky days. Hand-derived Sharpes matched the pipeline's own to within ~0.0005 for both
+  deployable and benchmark. Test suite independently reconfirmed: 654 passed, 1 skipped.
+
+  **RESULT: DO NOT DEPLOY, confirmed independently.** All adversarial checks corroborate the
+  pipeline's numbers; the negative is a genuine property of this overlay construction in this
+  sample, not a pipeline artifact. Full detail in `research/indices/I1_REPORT.md`.
+
+- **I1 program: CLOSED.** Final report `research/indices/I1_REPORT.md` committed. Adoption gate:
+  2 of 6 sub-checks PASS (drawdown, regime sanity), 4 FAIL (Sharpe, robustness, drop-top-5,
+  turnover) -> **DO NOT DEPLOY**. DSR=0.3199/PBO=0.0143 reported informationally per PROGRAM CLASS,
+  not gating and not the cause of the failure. This program is a **standalone follow-up**, not part
+  of the closed E1/E2/E3 equity cross-sectional program -- it validates a fundamentally different
+  construction class (timed-beta overlay on n=2 instruments vs. cross-sectional edge certification
+  on ~93-110 names) and used a benchmark-relative, not DSR-based, adoption gate throughout, per its
+  own PROGRAM CLASS declaration. Final commit: `<FINAL_COMMIT_HASH>` on branch `indices`, pushed to
+  origin. No merge to `main`, no PR, no systemd changes, no live capital -- consistent with the
+  program's frozen scope throughout.
+
+  **Natural follow-up, if the repo owner wants to pursue this line further**: the 8-cell robustness
+  family shows the W_vol=20/cap=1.0 corner (faster vol-target reaction, de-risk-only) beating the
+  benchmark in BOTH the with- and without-tilts variants (0.7991 and 0.8161 vs. 0.7691) -- this
+  was NOT the pre-named deployable and per this program's own pre-naming discipline is not
+  promoted post-hoc, but a genuinely new, separately pre-registered program testing W_vol=20/
+  cap=1.0 as its OWN frozen deployable (with a fresh, independent adoption-gate run, not a re-use
+  of this program's results) would be a legitimate, honestly-scoped next step. A second candidate
+  follow-up: broadening the instrument set beyond SPY/QQQ (e.g. adding IWM/DIA or a small basket of
+  major sector ETFs) would increase breadth enough to make DSR a more informative (though still not
+  necessarily gating) number, and would test whether the trend/vol-target/calendar overlay
+  construction generalizes beyond two large, correlated, tech-tilted US equity indices. Neither
+  follow-up is started by this program; both are left as explicit, separate, later decisions for
+  the repo owner.
