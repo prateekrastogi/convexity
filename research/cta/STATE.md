@@ -1,5 +1,8 @@
 # CTA (C1) research state
 
+**PROGRAM STATUS: CLOSED. Both stages (A and B) complete. Comprehensive negative. DO NOT DEPLOY.
+No PAPER-FIRST recommendation. See `research/cta/CTA_REPORT.md` for the full, final record.**
+
 - **Stage A phase**: complete. Six frozen axis modules (A signal extraction, B entry/exit control,
   C regime HMM, D vol forecasting, E leverage policy, F portfolio construction) implemented,
   causality-tested, and documented in `research/cta/CTA_MATH_NOTES.md`. Original frozen exploratory
@@ -84,15 +87,102 @@
   record (per-year, per-regime GROSS+NET, full CPCV fold detail, exposure time series through both
   named windows, melt-up decomposition for both constructions).
 
-- **Program conclusion**: C1 Stage B is a complete, honest NEGATIVE result -- the frozen
+- **Independent verification + adversarial-skeptic phase**: complete. Independent from-scratch
+  numerical reproduction (axis-module functions only, no pipeline glue reused) matched the
+  pipeline's CAGR/maxDD/Sharpe/gate verdicts exactly, but surfaced two genuine, previously-
+  undisclosed-as-such defects: (i) a NEW integration-level lookahead bug (not one of the five
+  documented bug patterns) in `build_name_exposure()`'s per-name `target_daily_vol` calibration --
+  it is the harmonic mean of the FULL (past+future) vol-forecast series, proven via injection
+  testing to leak information ~750 days before an injected shock, into every date including the
+  very first tradable day; (ii) the confirmed-buggy AAPLUSDT unadjusted-4:1-split name (excluded
+  from Stage A's own `STAGE_A_22` pilot for exactly this reason) is present in Stage B's full-93
+  universe, contributing a quantified but immaterial -1.22pp one-day contamination. Three
+  adversarial-skeptic passes (lookahead, cost-realism, overfitting/multiplicity) were run; **all
+  three returned `verdict: concern`**. Lookahead lens: Axis E's CDaR leverage constant is fit ONCE
+  on the full 2018-2026 realized path (hindsight; a late-sample shock moves it ~19%), contaminating
+  the CPCV/walk-forward CAGR/maxDD figures and the very DD-budget-qualifying status used for
+  selection (Sharpe unaffected, by Established Fact 1's scale-invariance). Cost-realism lens: the
+  pipeline's `n_trades_total_all_names` metric reintroduces an already-fixed raw-day-count bug from
+  this codebase's own I1 program; true round-trip turnover is ~4-9x the module's own "sane"
+  baseline, though the cost math itself is verified linear with no gate-flip at 26bp.
+  **Overfitting/multiplicity lens (the single most consequential check for this program's
+  two-stage optimize-then-confirm shape): the winner's Stage-A Sharpe sits at the 99.96th
+  percentile of the full 29,760-cell grid (independently reconfirmed), is statistically
+  indistinguishable from the grid maximum, and DSR = 0.127 (N=29,760) / 0.188 (N=9,920) -- both far
+  below any threshold for "distinguishable from search luck." The entire Stage-A "robustness
+  funnel" never actually filtered anything before selection (zero-survivors meant no
+  cross-validation of any kind was applied); the DD<=30%-qualifying candidate pool is drawn
+  exclusively from 2 of 6 leverage policies, one of which (`cdar`) is itself hindsight-calibrated;
+  and the runner-up "robustness comparator" differs from the winner only in the near-inert Axis F.
+  This construction is not well-established as a real, distinguishable edge, independent of
+  whether it beats the benchmark.** None of this reverses the qualitative gate verdict (gates 1-3
+  fail by margins far too large for these artifacts to close), but it means the FAIL verdict should
+  be read as decisive, not as a near-miss softened by "informational only" DSR framing.
+
+- **Final report phase**: complete. `research/cta/CTA_REPORT.md` written -- the complete, final,
+  honest research record for Program C1 (mandate, Stage A math and selection funnel, Stage B
+  full-93 confirmatory run, six-part adoption gate applied explicitly, independent-verification and
+  adversarial-skeptic findings with the overfitting lens's conclusion carried into the headline
+  verdict per its own instruction, restated benchmark comparison with the honest "did NOT achieve
+  even the anticipated budget-relative pass" characterization, full test suite result, and final
+  recommendation). Full test suite reconfirmed at 654 passed/1 skipped immediately before this
+  commit. Committed and pushed to `equity-cta` at commit `<FINAL_COMMIT_HASH>` (see git log).
+
+- **Program conclusion**: C1 (Stage A + Stage B) is a complete, honest NEGATIVE result -- the frozen
   construction fails all three numeric adoption-gate criteria (CAGR@41%DD, CAGR@30%DD, net Sharpe)
   at the full 93-name confirmatory scale, despite passing the three robustness checks and the
-  drawdown-control/no-ruin checks. This is reported plainly per the program's own pre-declared
-  discipline (the prereg's own Honest Prior section explicitly anticipated and pre-authorized this
-  exact "fails even the budget-relative gates" outcome). No further tuning, no swap to the runner-
-  up as a replacement pick, no re-optimization -- per the prereg's own "What this program will NOT
-  do" section. No PAPER-FIRST recommendation. No merge to `main`, no PR (program ends by reporting
-  in chat, per the task's standing instruction).
+  drawdown-control/no-ruin checks. The prereg's own Honest Prior anticipated the most likely outcome
+  as a pass on the budget-relative gates (2)/(3) with a fail only on the unconstrained gate (1);
+  **that did not happen** -- gate (2) also fails, by 15.7 percentage points, a more decisively
+  negative outcome than the prereg's own central expectation, reported here without softening or
+  reframing as a partial win. The one genuine, unambiguous advantage over the benchmark is a tighter
+  realized maxDD (29.5% vs 41.0%, ~28% relative reduction) -- but per the prereg's own framing, a
+  lower drawdown standing alone, not paired with a CAGR that clears even a return-scaled version of
+  the same comparator, is not itself evidence of a superior risk-adjusted construction. Compounding
+  this, the overfitting-lens finding above means the winning construction is not even well-
+  established as a real signal distinct from the best of a large, correlated, never-cross-validated
+  search. No further tuning, no swap to the runner-up or any diagnostic-only cell as a replacement
+  pick, no re-optimization -- per the prereg's own "What this program will NOT do" section. No
+  PAPER-FIRST recommendation. No merge to `main`, no PR, no systemd changes, no live capital
+  (program ends by reporting in chat, per the task's standing instruction).
+
+  **The six-program arc and what it collectively suggests.** Counting E1, E2, E3 (equity
+  swing-research: carry/basis/overnight/reversal/momentum/BAB/PEAD, comprehensive negative,
+  apparent edges traced to 2-4 idiosyncratic names), I1 (SPY/QQQ timed-beta overlay: trend +
+  vol-target + calendar tilts, clean negative -- CAGR gate failed at every N tested, though its own
+  drawdown-reduction gate genuinely PASSED, 14.07% vs a 31.58% benchmark maxDD), the four
+  exploratory CTA-style scans (established the CAGR-at-DD-budget objective, the 93-name benchmark,
+  the shorting-is-negative and reactive-vol-is-not-predictive facts this program built on), and now
+  C1 (a maximally-general six-axis CTA construction -- causal multi-horizon signal extraction,
+  optimal-control entry/exit, regime-switching, vol forecasting, growth-optimal leverage,
+  correlation-aware portfolio construction -- Stage A exploratory + Stage B confirmatory), this is
+  **six research programs, spanning single-name swing signals, cross-sectional equity factors,
+  index-level timed-beta overlays, and now a full state-of-the-art CTA stack, applied to
+  essentially the same 93-110-name US equity/ETF universe over the same 2018-2026 sample.** Every
+  one of them has failed to beat simply holding that universe, passively, unlevered, equal-weight.
+  The one specific, identifiable, non-trivial thing that recurs across the arc -- not a fluke of
+  one program -- is that **modern drawdown-control mathematics genuinely works mechanically**: both
+  I1's vol-target/trend overlay and C1's HMM-regime-gated, CDaR-leverage-sized construction produce
+  materially and measurably shallower realized drawdowns than the passive benchmark (I1: 14.07% vs
+  31.58%; C1: 29.5% vs 41.0%). But in NEITHER program has that drawdown reduction been accompanied
+  by a CAGR that survives even a proportionally-discounted comparison against the benchmark's own
+  return -- the growth-optimal leverage math that is supposed to convert a lower-vol path into a
+  competitive or superior CAGR has not, in any construction tested across this entire arc, actually
+  delivered on that conversion. C1 adds a further, sharper qualification specific to this program's
+  scale: its own overfitting-lens finding (DSR ~0.13-0.19, effectively grid-maximum Sharpe, a never-
+  cross-validated selection funnel) shows that even the modest apparent edge surfaced by a
+  large-scale grid search should not be over-interpreted as a durable discovery in the first place.
+  **Honest carried-forward conclusion**: on this specific 93-110-name universe over this specific
+  2018-2026 secular-bull sample, systematic timing/sizing/regime-detection edge-seeking is dead --
+  five programs and dozens of construction variants deep -- for beating raw CAGR; the ONE
+  specific, identifiable, worth-carrying-forward finding is that drawdown-control mathematics
+  (vol-targeting, regime-gating, CDaR/Kelly-family leverage sizing) demonstrably and repeatably
+  shrinks realized drawdown relative to a passive benchmark, even though it has not yet, in any
+  construction tried, been paired with a leverage/growth policy that recovers competitive CAGR from
+  that lower-risk path. Whether a genuinely causal (not hindsight-fit) leverage policy, or genuine
+  diversification across return streams that do NOT share this universe's single common crash
+  factor (Established Fact 3), could close that gap remains an OPEN question for a future program,
+  not one this arc has foreclosed.
 
 - **Next step**: none scheduled -- C1 concludes with this Stage B result unless the repo owner
   directs a new program.
