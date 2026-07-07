@@ -179,6 +179,7 @@ def partial_adjustment_control(
     band_floor: float = 0.0,
     band_cap: float = 0.5,
     kappa_cap: float = 1.0,
+    external_vol: "pd.Series | None" = None,
 ) -> pd.DataFrame:
     """
     Turn a frictionless aim-portfolio trend-strength signal `target` (in [-1,1]) into an actual,
@@ -204,6 +205,20 @@ def partial_adjustment_control(
     vol_window, min_periods : int   rolling window for both realized-vol estimators.
     band_floor, band_cap : float   clip the derived band width to a sane range.
     kappa_cap : float    cap on the daily partial-adjustment fraction (default 1.0).
+    external_vol : pd.Series | None   OPTIONAL, backward-compatible (default None preserves prior
+                         behavior exactly). CTA_MATH_NOTES.md Section 8.4 "Required fix #3" --
+                         when provided, this ALREADY-CAUSAL per-name volatility forecast (Axis D's
+                         `ewma_vol_forecast`/whichever Axis-D grid point is active for a given
+                         sweep cell, same series also passed to Axis F's `rv_lagged`) is substituted
+                         for this module's own internal `realized_return_vol(price, vol_window)`
+                         estimator when computing sigma_r / k_curvature -- Axis D's own QLIKE/MSE
+                         study (Section D.8/D.10) found the plain trailing-20d estimator this module
+                         computed internally to be one of the WORST-performing vol estimators, so a
+                         later Integration/Sweep phase is directed to wire in the validated winner
+                         instead. `external_vol` must already be aligned to `target`'s index and
+                         already causal (forecast[t] uses info through t-1 only, exactly like
+                         `realized_return_vol`'s own output) -- this function performs no additional
+                         lagging on it, mirroring the treatment of `target` itself.
 
     Returns
     -------
@@ -217,7 +232,10 @@ def partial_adjustment_control(
     """
     theta = (cost_sensitivity * cost_bps) / 1e4
 
-    sigma_r = realized_return_vol(price, window=vol_window, min_periods=min_periods)
+    if external_vol is None:
+        sigma_r = realized_return_vol(price, window=vol_window, min_periods=min_periods)
+    else:
+        sigma_r = external_vol.reindex(target.index)
     sigma_z = realized_vol(target, window=vol_window, min_periods=min_periods)
     k_curv = gamma * np.square(sigma_r)
 

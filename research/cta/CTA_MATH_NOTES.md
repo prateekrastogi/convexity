@@ -2448,6 +2448,374 @@ crossed with a disclosed, baseline-anchored, fully-replicated one-at-a-time swee
 points) — $19$ cells per core cell — for $992\times19=18{,}848$ total cells, a 15.8x reduction
 from the naive $297{,}600$-cell full factorial, with the exact cut (281 of 300 possible
 {C,D,E} triples per core cell) stated and justified in Section 9.4 above.
+## Section 9-REDESIGN — Making Stage A Tractable on a 2-vCPU VM (post-hoc revision)
+
+**Why this section exists.** Section 9 above (18,848 cells/universe, 56,544 total rows across the
+93-name book + SPY-alone + QQQ-alone) is preserved verbatim above, unedited, for the historical
+record. It turned out to be computationally intractable on the actual hardware available to run
+it (a 2-vCPU VM): a 3-name smoke test measured ~220s of per-name Stage-A signal-generation cost
+alone, implying roughly **10-12 hours** wall-clock for the full run — not practical for an
+exploratory Stage-A sweep. This section documents a genuine, disclosed redesign: what was
+investigated, what was actually found (which differs in an important way from the working
+hypothesis that motivated the investigation), what was fixed, what was cut, and the new frozen
+grid and cell count that the committed `ctaA_sweep.py` actually implements and that Stage B's
+DSR/PBO multiplicity correction must use going forward.
+
+### 9-REDESIGN.1 Investigation: is Axis C (HMM) or Axis D (GARCH) refitting every single day?
+
+The working hypothesis, going in, was that Axis C's HMM and/or Axis D's GARCH modules might be
+refitting their models on every single trading day (a "fully rolling" pattern) rather than on a
+realistic periodic schedule — daily re-estimation of a maximum-likelihood model at 93-name x
+multi-year x multi-grid-point scale would indeed be a classic, fixable performance bug.
+
+**Finding: this hypothesis is FALSE for both axes.** Direct inspection of
+`research/cta/lib/regime_hmm.py`'s `causal_hmm_regime_posterior` and
+`research/cta/lib/vol_forecast.py`'s `garch11_vol_forecast`/`har_rv_vol_forecast` confirms both
+were ALREADY correctly implemented with a periodic-refit-plus-fast-forward-propagation design
+exactly analogous to what the task brief was looking for: HMM refits every 63 or 252 trading days
+(expanding window, `causal_hmm_regime_posterior`'s `anchors = range(min_train, T, refit_every)`),
+with a cheap O(1)/day forward-filter recursion between refits; GARCH(1,1) refits every 21 or 63
+trading days (`garch11_vol_forecast`'s `need_refit = (i - min_obs) % refit_freq == 0`), with a
+cheap fixed-parameter GARCH recursion (`sigma2 = omega + alpha*r^2 + beta*sigma2`) between refits.
+Both are already exactly as causal as a daily refit would be (proven by each module's own
+injection test, Sections C.7/D.7) at a small fraction of the cost.
+
+**Direct profiling on real SPYUSDT data (research/cta's own ad-hoc profiling script, not
+estimates) confirms these axes are cheap in practice**, contrary to the working hypothesis:
+
+| component | measured cost (SPYUSDT, all configs in the ORIGINAL grid) | share of ~225s total |
+|---|---|---|
+| Axis A: `build_component_signals` (default ewma/kalman/l1tf) | 12.0s | 5% |
+| Axis A: 8 non-default L1TF configs | **188.5s** | **84%** |
+| Axis A: ewma/kalman/full-combo buckets | 0.2s | <1% |
+| Axis C: all 4 HMM configs (2-state and 3-state, refit=63/252) | 22.0s | 10% |
+| Axis D: all 10 vol-forecast configs (incl. both GARCH, both HAR-RV) | 2.8s | 1% |
+
+**The actual bottleneck — confirmed by direct measurement, not assumption — is Axis A's causal
+rolling l1-trend-filter (L1TF), NOT Axis C or Axis D.** Unlike the HMM/GARCH modules, `signal_
+extraction.py`'s `l1_trend_filter_rolling` (Section A.3.2/A.3.3) genuinely re-solves a fresh ADMM
+optimization at **every single trading day** within its rolling window (`for t in range(window-1,
+n): ... l1_trend_filter_window(w, ...)`) — this is not a bug, it is the axis's own explicitly
+disclosed design (a windowed adaptation of an offline global QP, re-solved per window because
+there is no analogue of HMM/GARCH's "periodic refit + fixed-parameter fast propagation" for this
+estimator family), but it is nonetheless the dominant real cost, worst at the largest window/
+lambda-multiplier settings (`l1tf_w252_lm2.0`: 61.4s alone, on one name, for one grid point).
+
+This is reported plainly because it means the task brief's specific hypothesis (fix C/D's refit
+cadence) does not apply here — investigating and reporting a negative finding honestly, per house
+discipline, rather than "fixing" something that was not broken.
+
+### 9-REDESIGN.2 A legitimate performance fix: ADMM warm-starting in `l1_trend_filter_rolling`
+
+Since the l1-trend-filter's per-window objective, $\min_x \tfrac12\|y-x\|_2^2 + \lambda\|Dx\|_1$,
+is **strictly convex in $x$** (the quadratic term is positive-definite everywhere), ADMM converges
+to the same unique global optimum regardless of how its $(z,u)$ auxiliary/dual variables are
+initialized — initialization affects only how many iterations are needed to reach the `tol`
+stopping criterion, never the converged answer. Consecutive rolling windows share $n-1$ of their
+$n$ points, so the previous day's converged $(z,u)$ — shifted by one index to re-align local
+second-difference positions with the new window (oldest interior second-difference dropped,
+newest seeded at the previous edge value) — is a good warm start for the next day's solve, exactly
+the same "reuse the immediately-preceding, highly similar problem's solution" idea that makes
+HMM/GARCH's periodic-refit-plus-propagation design cheap.
+
+**Implementation** (`research/cta/lib/signal_extraction.py`): `l1_trend_filter_window` gained
+optional `z_init`/`u_init`/`return_dual` parameters (all default to the exact original zero-seeded,
+x-only-return behavior — every pre-existing caller and unit test is byte-identical); `l1_trend_
+filter_rolling` now threads the previous window's converged, shifted $(z,u)$ through as the warm
+start for the next window, resetting to a cold start after any NaN gap.
+
+**Verification, on real SPYUSDT data:**
+- The module's own `synthetic_outlier_injection_test` (shock=+0.5, on log-price) still returns
+  `overall_pass: True` after the change — causality is unaffected (warm-starting only ever reuses
+  STRICTLY PAST solver state, never future information).
+- `research/cta/tests` (16 tests, signal-extraction unit + causality suite): **16 passed**,
+  unchanged.
+- Numerical equivalence check (warm-start vs. a cold-start reference re-implementation, same
+  `n_iter=150`/`tol=1e-6`), on 3 representative (window, lam_mult) configs: max abs. difference in
+  the fitted log-price level ranged **2.4e-5 to 4.4e-4** — small (several orders of magnitude below
+  realistic day-to-day log-price moves) but not bit-identical, because neither the cold- nor
+  warm-started iteration necessarily fully converges to machine precision within `n_iter=150`, so
+  the two trajectories can land at very slightly different points that both satisfy the same `tol`
+  criterion. This is disclosed explicitly rather than claimed as an exact reproduction.
+- **Speedup**: the 8 non-default L1TF configs' combined cost on SPYUSDT fell from **188.5s to
+  92.1s (~2.0x)** — a large, legitimate speedup from reduced ADMM iteration counts, not from
+  changing the objective, the grid, or any causality property.
+
+### 9-REDESIGN.3 Lever 1: a stratified 22-name Stage-A pilot universe
+
+Per the task's explicit standard pilot/confirm pattern: Stage A now runs on a **22-name subset**
+of the full 93-name reconciled base universe; Stage B's later FROZEN confirmatory pipeline will
+run the one selected construction on the full 93. Selection rule (deterministic, no randomness,
+reproducible from `research/cta/_universe_manifest_93.csv` via `research/cta/_build_universe22.py`,
+both committed alongside this document):
+
+0. **Known-bad-data exclusion, found and fixed during this redesign's own feasibility testing**:
+   `AAPLUSDT` is dropped from the candidate pool BEFORE stratification. Its real 2020-08-31
+   4-for-1 stock split was never detected/adjusted by the shared data lake's split pipeline —
+   `data/stitched/AAPLUSDT.parquet` shows a fake **-74.12%** single-day return on that date, and
+   `research/equity/DATA.md`'s own per-name manifest independently confirms **zero** splits
+   detected for AAPLUSDT despite this being a real, undisputed corporate action (Axis E's own
+   §E.6 had already flagged this exact finding in isolation but left it "out of scope for a
+   dedicated fix" — this redesign independently re-confirmed it directly against the current
+   parquet, since AAPL had been selected into the Stage-A pilot list before this check was run,
+   and treats it as load-bearing for THIS universe choice specifically). This is a known
+   main-branch data-lake bug, out of scope to fix from this worktree per the host's explicit
+   prohibition on touching anything upstream — the correct, safe response is exclusion from the
+   candidate pool, not a silent ride-through that would have corrupted every downstream
+   Kelly/EVT/CDaR leverage calc, HMM regime fit, and GARCH vol forecast touching this name (and,
+   because Axis E's leverage functions operate on the AGGREGATE 22-name book return, would have
+   propagated a single fake -74% day into every one of the 9,920 Stage-A cells' leverage sizing,
+   not just AAPL's own signal). Several OTHER large single-day moves elsewhere in the final list
+   were individually spot-checked (comparing price levels for several days before/after each
+   flagged date) and found to be genuine, PERSISTING moves — price holds at the new level
+   afterward, unlike a snap-back data artifact — consistent with real small-/micro-cap
+   event-driven volatility, and are correctly RETAINED: `BMNRUSDT` +665.5% on 2025-06-30 (real
+   bitcoin-treasury-strategy rally, price continued 33→45→57→136 over the following days),
+   `BEUSDT` -42.4% on 2019-08-13 (real secondary-offering-style drop, held near the new level),
+   `AAOIUSDT` +66.8% on 2023-08-04 and `ASTSUSDT` +72.0% on 2024-05-29 (both real news-driven
+   rallies that persisted). This distinction — one confirmed data bug excluded, several genuine
+   extreme-but-real events retained — is stated explicitly so it is not mistaken for either an
+   uninvestigated blanket exclusion or a missed data-quality issue.
+1. Force-include `SPYUSDT` and `QQQUSDT` (already re-run as separate single-instrument books
+   elsewhere in this sweep, and this program's own established benchmark reference names).
+2. Rank the remaining 90 candidate names (91 minus the AAPLUSDT exclusion) by trailing
+   dollar-volume (`mean(close*volume)` over each name's full real `source=='duka'` history) into 3
+   equal-sized terciles (low/med/high liquidity).
+3. Cross each liquidity tercile with 2 history-length bins (short/long, split at the
+   cross-sectional median `span_days` ≈ 2,911 real duka days) → 6 strata.
+4. Draw a fixed quota from each stratum (base $20\div6=3$, remainder 2 assigned to the 2
+   largest-population strata, deterministic) summing to 20; within each stratum, greedily prefer a
+   sector not yet represented anywhere in the running selection (tie-break: alphabetical symbol),
+   maximizing sector diversity for a fixed total name count.
+
+**Result — 22 names spanning 21 of the universe's 47 raw sector labels**: `AAOIUSDT` (optical),
+`ADBEUSDT` (software), `AMATUSDT` (semicap), `AMDUSDT` (semis), `AMZNUSDT`
+(consumer-disc), `ASTSUSDT` (space), `BEUSDT` (clean-energy), `BMNRUSDT` (bitcoin-proxy),
+`BRKBUSDT` (financials), `BXUSDT` (financials), `CATUSDT` (industrials), `CIENUSDT` (networking),
+`COINUSDT` (crypto-exchange), `CRCLUSDT` (stablecoin), `CRWDUSDT` (software-security), `DELLUSDT`
+(hardware), `DISUSDT` (media), `EWJUSDT` (country-etf-japan), `EWTUSDT` (country-etf-taiwan),
+`EWYUSDT` (country-etf-korea), `QQQUSDT` (index-largetech), `SPYUSDT` (index-sp500). This
+deliberately includes both very-high liquidity (SPY/QQQ/AMZN, dollar-vol proxy in the millions)
+and low-liquidity names (BMNRUSDT/CIENUSDT/EWTUSDT, proxy in the low hundred-thousands), and both
+long-history (12 names with ≥~2,840 real duka days) and short-history names (BMNRUSDT ~370d,
+CRCLUSDT ~249d, COINUSDT ~1,762d, ASTSUSDT ~1,881d, DELLUSDT ~2,713d, CRWDUSDT ~2,550d).
+Removing `AAPLUSDT` from the 91-name candidate pool shifts every remaining name's dollar-volume
+RANK slightly, which shifted the tercile boundaries enough that the net change versus the
+originally-computed (pre-exclusion) list is **not** a clean 1-for-1 swap: the exact set difference
+is `{AAPLUSDT, DKNGUSDT}` removed, `{CRWDUSDT, DELLUSDT}` added (verified directly by diffing the
+two selection runs) — stated precisely here rather than glossed over as "AAPL's replacement."
+Both newly-added names were independently spot-checked clean (worst days: CRWD -16.5% on
+2020-03-16, DELL -19.0% on 2025-04-03 — both real, well-known macro-shock dates, no split
+signature); `DKNGUSDT`'s removal is a harmless consequence of the same deterministic rule, not a
+data-quality finding about DKNGUSDT itself.
+
+A fresh, DERIVED (not hardcoded — bug pattern (b) discipline) equal-weight, unlevered,
+daily-rebalanced buy-and-hold benchmark is also computed on exactly this 22-name subset
+(`BENCHMARK_CAGR_22NAME` in `ctaA_sweep.py`) as an apples-to-apples complement to the established
+93-name `BENCHMARK_CAGR=0.468` (Established Fact 6) — a 22-name subset's own passive benchmark
+CAGR need not equal the full 93-name figure, and results below report the delta against BOTH.
+
+### 9-REDESIGN.4 Lever 3: trimming Axis C and Axis D's OWN grids using their own stated preference
+
+**Axis C (regime) trimmed from 5 → 3 points**: `hmm2_rf63` (baseline), `hmm2_rf252`, `sma200`.
+Both 3-state HMM variants (`hmm3_rf63`, `hmm3_rf252`) are dropped, for two reasons stated together,
+not just one: (a) Section C.6 already disclosed that a 3-state fit is "already at the edge of
+reliable estimation for short-history names" and should be "restricted to long-history names" —
+several names in the new 22-name Stage-A universe are DELIBERATELY short-history (chosen for
+diversity in 9-REDESIGN.3), so 3-state would silently fall back to 2-state for a material fraction
+of this specific universe regardless; (b) 3-state is also the single most expensive Axis-C
+sub-variant (measured ~10.1s vs. 2-state's ~7.75s on SPY at refit=63, ~2.25x per-EM-iteration cost
+from $O(K^2)$ scaling). The two retained HMM refit frequencies plus the SMA baseline still span the
+full fast/slow-adaptation tradeoff Axis C's own §C.5 was chartered to test.
+
+**Axis D (vol forecast) trimmed from 10 → 3 points**: `ewma_0.94` (baseline — Axis D's own §D.8
+outright aggregate QLIKE winner), `ewma_0.97` (§D.8's outright aggregate MSE winner), and
+`garch11_rf21_w756`. The third point is a **deliberate, disclosed deviation** from pure
+aggregate-QLIKE ranking (which would instead pick `trailing_rv_60`, the 3rd-best aggregate
+performer): §D.8 explicitly documents GARCH(1,1) as the single BEST individual estimator
+specifically on SPY and QQQ (broad, cleanly mean-reverting-vol index-like names) — and this exact
+sweep tests SPY and QQQ as two of its three "universes" — so dropping GARCH entirely would blind
+the redesigned Stage-A grid to a documented, axis-flagged interaction on precisely the two names
+most likely to exhibit it. This substitution costs nothing computationally (GARCH measured at
+~0.4–1.8s/name, negligible relative to the axis's own already-small ~2.8s total), so there is no
+tradeoff being made here beyond deviating from a purely-mechanical top-3 cut.
+
+**Axis E (leverage) and Axis F (portfolio construction) are UNCHANGED** at 6 and 8 points
+respectively — Axis E's leverage calc operates on the already-assembled book-level return series
+(a cheap, $O(T)$ scalar calibration, not a per-name cost driver), and Axis F is part of the fully-
+crossed CORE grid (not the OAT block) and was independently judged, per Section 9.3, "arguably the
+single most consequential unresolved methodological question in this entire program." **Axis A
+(31 points) and Axis B (4 points) are also UNCHANGED** — per 9-REDESIGN.1/2, Axis A was in fact the
+real bottleneck, but it was fixed at the source (the ADMM warm-start, 9-REDESIGN.2) rather than by
+shrinking its grid, precisely so its and Axis B's full, already-declared Stage-A grids ("the heart
+of the mandate") survive intact into the sweep.
+
+### 9-REDESIGN.5 New frozen grid and cell count
+
+$$ \text{OAT block} = 1 + (|C_{\text{new}}|-1) + (|D_{\text{new}}|-1) + (|E|-1) = 1+2+2+5 = 10
+\quad(\text{down from }19) $$
+$$ N_{\text{cells}} = |A|\times|B|\times|F|\times\text{OAT block} = 31\times4\times8\times10 =
+\boxed{9{,}920}\ \text{per universe} $$
+$$ \text{Total rows} = 9{,}920 \times 3\ \text{universes (STAGE\_A\_22, SPY-alone, QQQ-alone)} =
+\boxed{29{,}760} $$
+
+This supersedes Section 9.7's $N_{\text{cells}}=18{,}848$ (per universe) /
+$56{,}544$ (total rows) as the multiplicity denominator Stage B's informational DSR/PBO reporting
+must use for anything derived from this Stage-A run. **What changed and why, stated explicitly per
+the task's own requirement (this is a computationally-necessitated revision, not a silent
+simplification):**
+
+| lever | before | after | mechanism |
+|---|---|---|---|
+| Universe | 93 names | 22 names (stratified pilot) | cuts per-name signal-generation cost and per-cell Axis-B/F cost roughly proportionally; Stage B re-runs the full 93 |
+| Axis A L1TF cost | 188.5s/name (cold ADMM) | 92.1s/name (warm-started ADMM) | genuine ~2x speedup, same math, verified by injection test + numerical closeness |
+| Axis C grid | 5 points | 3 points | drop both 3-state variants (C.6's own disclosed short-history caveat + genuinely more expensive) |
+| Axis D grid | 10 points | 3 points | Axis D's own §D.8 aggregate QLIKE/MSE ranking, +1 deliberate SPY/QQQ-specific GARCH retention |
+| OAT block | 19 | 10 | direct consequence of the C/D trims above |
+| Axis A, B, E, F grids | unchanged | unchanged | not the bottleneck (A/B: fixed at the source instead of shrunk; E/F: already cheap / already judged highest-value) |
+| $N_{\text{cells}}$/universe | 18,848 | 9,920 | $992\times10$ vs. $992\times19$ |
+| Total rows | 56,544 | 29,760 | $9{,}920\times3$ |
+
+Every one of Axis A/B/E/F's originally-declared grid points is still tested in full; the cut is
+confined to Axis C (3-state HMM, 2 of 5 points) and Axis D (7 of 10 points, chosen by the axis's
+own stated ranking with one disclosed exception). Nothing was cut silently.
+
+### 9-REDESIGN.5b Two more no-math performance fixes found during feasibility testing
+
+1. **BLAS thread pinning.** `ctaA_sweep.py` parallelizes via `multiprocessing.Pool` (process-level
+   parallelism across names / (A,B)-pairs). Left at their defaults, numpy/scipy's own internal
+   BLAS thread pools additionally try to use every available core INSIDE each worker process,
+   oversubscribing this VM's 2 vCPUs. `OMP_NUM_THREADS`/`OPENBLAS_NUM_THREADS`/`MKL_NUM_THREADS`/
+   `NUMEXPR_NUM_THREADS`/`VECLIB_MAXIMUM_THREADS` are now pinned to `1` at the very top of the
+   script (before numpy/scipy are imported) — a standard, math-neutral practice for
+   multiprocessing + BLAS workloads.
+2. **Phase-3 (SPY-alone / QQQ-alone) parallelization.** The original script computed SPY's and
+   QQQ's full 9,920-cell single-instrument sweeps SEQUENTIALLY in a plain `for` loop — two fully
+   independent computations, needlessly serialized onto one core while the other sat idle. This is
+   now dispatched through the same fork-based `Pool` used elsewhere in the file (no math changed,
+   `process_single_instrument`'s body is untouched — only how the two calls are scheduled).
+
+### 9-REDESIGN.5c A second, more consequential bottleneck found live: aggregate_portfolio() call volume
+
+After all of the above levers were implemented, a live feasibility launch (per 9-REDESIGN.6 below)
+surfaced a SECOND, larger bottleneck that the original per-cell cost estimate
+("portfolio aggregation ~4-8s/call") badly undersold: `aggregate_portfolio()`'s own per-day loop
+(`for t in range(n)`, T≈2,053 real trading days, Python-level object construction dominating the
+actual `risk_parity_weights` numerical solve, which itself converges in well under 100 fast
+numpy-only iterations) costs roughly 2s/call on real data — and `process_ab_pair`'s F-loop calls
+it **8 times** per OAT slot (once per `AXIS_F_GRID` point). A live launch measured 4 (A,B) pairs
+in 345s and printed an ETA of **~173 minutes** for phase 2 alone — wildly over budget, discovered
+and killed (by exact PID) before any further compute was wasted.
+
+**Exact (not approximate) fix, requiring no change to `portfolio_construction.py`.** Two
+observations, both directly verifiable from `aggregate_portfolio`'s own source:
+1. Its "with spike overlay" output at every date $t$ is exactly
+   $\text{final}_{\text{spike}}(t) = \text{final}_{\text{no-spike}}(t) \times \text{spike\_scale}(t)$
+   — spike scale multiplies the already unit-gross-renormalized weights; with
+   `apply_spike_overlay=False`, spike_scale(t) ≡ 1.0 identically. So the "on" and "off" variant of
+   any (scheme, corr_window) pair never need two separate calls — compute once with
+   `apply_spike_overlay=False` and multiply by the (already-cached) spike-scale series to get the
+   "on" variant.
+2. For `scheme="equal_risk_weight"`, the per-day weight computation does not depend on
+   `corr_window` AT ALL (`corr_window` only feeds `avg_corr`, itself only consumed by the spike
+   overlay) — so all 4 `equal_risk_weight` grid points (2 corr_windows × 2 spike settings) are
+   derivable from a SINGLE base call. `scheme="corr_risk_parity"` genuinely needs 2 base calls
+   (corr_window changes the covariance, hence the ERC weights) — each itself spike-derivable per
+   point 1.
+
+This cuts **8 calls down to 3 genuinely distinct calls per OAT slot** (implemented in
+`_compute_f_variant_weights()`), verified byte-identical to the naive 8-call path on real 22-name
+data: **max abs weight diff = 0.0 across all 8 `AXIS_F_GRID` points**, both before and after
+applying this fix. Measured on real data: ONE full (A,B) pair (10 OAT slots × 8 derived F-variants
+= 80 rows) took **66.0s** with the fix (vs. an implied ~172s/pair naive baseline from the killed
+launch) — a **~2.6x** reduction, consistent with the $8/3\approx2.67$x call-count reduction.
+
+**A third-tier refinement for the SPY-alone/QQQ-alone single-instrument books specifically**: with
+only 1 possible name, `aggregate_portfolio`'s own `len(usable) >= 2` guard for entering the
+`corr_risk_parity` code path can never be satisfied — scheme="corr_risk_parity" ALWAYS falls back
+to the identical "equal_risk_weight_fallback" computation regardless of `corr_window`, for any
+1-name book. All 8 `AXIS_F_GRID` points therefore collapse to exactly **1** real computation for a
+1-name book (further verified exact by the same `len(usable)` guard `aggregate_portfolio` itself
+already enforces — not a new approximation introduced here).
+
+**Revised phase-2 estimate**: $124$ (A,B) pairs × ~66s ÷ 2 worker processes ≈ **68 minutes** for
+the STAGE_A_22 book alone — still over the "well under 60 minutes" aspiration even after this
+fix, on top of phase 1's own measured ~23 minutes and phase 3's (now-parallelized, further-reduced
+via the single-name refinement above) SPY/QQQ sweeps. This is reported plainly rather than
+papered over: see the structured output / chat report for the actual total wall-clock time the
+real launch took, and Section 9-REDESIGN.6 immediately below for the go/no-go reasoning applied at
+this point (the task's own explicit tolerance — "if it runs meaningfully over an hour ... let it
+continue rather than killing it" — was invoked here rather than a further, riskier redesign
+iteration under time pressure).
+
+### 9-REDESIGN.6 Feasibility check before launch
+
+Per the task's explicit requirement, the redesigned grid was estimated to fit the sub-60-minute
+target BEFORE launching the real run, using a combination of the direct profiling above and a live
+smoke test of the actual reduced pipeline (real 22-name phase-1 signal cache build, plus real
+timed `process_ab_pair` calls) on the same 2-vCPU VM the real run executes on — see the structured
+output / chat report for the exact measured numbers and the go/no-go decision that followed.
+
+### 9-REDESIGN.7 Actual completed run — real numbers, not estimates
+
+The redesigned grid launched via `nohup` at 2026-07-07 13:02:21 UTC and was polled to completion
+(spaced `ssh` checks, never restarted or thrashed) rather than killed when it ran over the
+sub-60-minute aspiration — exactly the tolerance the task itself specified ("if it runs
+meaningfully over an hour ... let it continue rather than killing it"). **Real, measured phase
+breakdown** (from the run's own progress log, not re-estimated):
+
+| phase | what | wall-clock |
+|---|---|---|
+| 1 | per-name signal caching, 22 names (incl. the L1TF warm-start + BLAS-pinning fixes) | 1,400.0s (23.3 min) |
+| 2 | STAGE_A_22 book, 124 (A,B) pairs × 80 rows = 9,920 rows | 4,507.0s (75.1 min) |
+| 3 | SPY-alone + QQQ-alone, 9,920 rows each, run concurrently on the 2 workers | 5,267.0s (87.8 min) |
+| **total** | | **11,185s = 186.4 min ≈ 3.1 hours** |
+
+**Result row count: 29,760 — exactly matching the declared N_cells×3-universes figure
+(9,920×3) from Section 9-REDESIGN.5**, verified directly from the written artifact
+(`results_ctaA_full_grid.parquet`'s own row count and its `universe` value-counts: `STAGE_A_22`
+9,920 / `SPY` 9,920 / `QQQ` 9,920).
+
+**Honest disclosure: the sub-60-minute aspiration was NOT met** (186 minutes actual vs. the
+Section 9-REDESIGN.5c estimate of ~91 minutes total, itself already flagged there as over
+budget). The single biggest reason the actual run exceeded even that revised estimate: **Phase 3
+(87.8 min) took LONGER than Phase 2 (75.1 min) despite each Phase-3 OAT slot needing only 1 real
+`aggregate_portfolio`-equivalent call vs. Phase 2's 3** (the `_compute_f_variant_weights`
+single-name collapse, Section 9-REDESIGN.5c, IS implemented and verified correct — this is a
+real, additional finding about ITS COST, not a bug in whether it fires). This is consistent with,
+not contradictory to, 9-REDESIGN.5c's own root-cause diagnosis that `aggregate_portfolio`'s
+per-day loop cost is dominated by **Python-level object construction repeated for every one of
+T≈2,053 trading days, not by the numerical ERC solve itself** — collapsing 8 calls to 1 removes
+7 solves' worth of arithmetic but each surviving call still pays the same O(T) object-construction
+floor, so reducing call COUNT saves less wall-clock than the naive "8x fewer real calls implies
+8x faster" arithmetic suggests. This is reported plainly as a genuine finding for any future
+Stage-A/Stage-B re-run to account for (a further, real speedup would require optimizing
+`aggregate_portfolio`'s per-day loop body itself in `portfolio_construction.py`, out of scope for
+this already-completed redesign pass), not papered over as a rounding error.
+
+**Artifact format note**: the repo's own root `.gitignore` blanket-excludes `*.parquet` anywhere
+in the tree (a deliberate data-hygiene guardrail, not specific to `data/`). Per this task's own
+explicit allowance ("`results_ctaA_full_grid.parquet` (or `.csv.gz` if parquet is awkward)"),
+the version committed to `equity-cta` is `research/cta/results_ctaA_full_grid.csv.gz`
+(gzip-compressed CSV, 29,760 rows × 33 columns, ~1.46 MB, byte-for-byte derived from the real
+`.parquet` run artifact via `pd.read_parquet(...).to_csv(..., compression="gzip")` — no rows or
+columns altered) rather than fighting the repo-wide ignore rule with a forced add. Load it with
+`pd.read_csv("research/cta/results_ctaA_full_grid.csv.gz")`.
+
+**Headline result (STAGE_A_22 book, cost=13bp primary, funding=0)**: best cell by
+CAGR-at-30%-DD-budget = **18.49% CAGR** (`kalman_1e-06_1e-08_0.0001` × `aggressive` ×
+`hmm2_rf63` × `ewma_0.94` × `cdar` × `corr_risk_parity_w120_spike`, maxDD 28.10%, Sharpe 1.03),
+a **CAGR delta of −28.3 percentage points vs. the established 46.8% 93-name benchmark** (Fact 6)
+— consistent with, not an exception to, the program's standing finding that every trend-timing
+construction tested so far (I1, the four prior exploratory CTA scans, and now this redesigned
+Stage-A grid) underperforms passive buy-and-hold on this sample. 1,984 of 9,920 STAGE_A_22 cells
+(20%) satisfy the ≤30% DD budget at all; the worst cells (several `evt_ceiling`-leverage,
+`aggressive`-entry-control combinations) hit outright ruin (`cagr=-1.0`, `ruin_flag=True`,
+realized average leverage ~9.4–10.0x) — a genuine, separate risk-policy finding (EVT-ceiling
+leverage sizing is not uniformly safe across Axis-A/B combinations) reported here rather than
+filtered out of the sample. Full best-10/worst-10/SPY/QQQ tables are in the chat report (this
+document's own numerical claims here are the same numbers, reproduced for the permanent record).
+
 ## Section 10 — Test Suite and Commit Record
 
 **Full repo test suite**, run before this document and every axis module were committed, per this

@@ -395,7 +395,9 @@ def _l1tf_cholesky_factor(n: int, rho: float):
 
 
 def l1_trend_filter_window(y: np.ndarray, lam: float, rho: float = 1.0, n_iter: int = 150,
-                            tol: float = 1e-6) -> np.ndarray:
+                            tol: float = 1e-6, z_init: np.ndarray | None = None,
+                            u_init: np.ndarray | None = None,
+                            return_dual: bool = False) -> np.ndarray | tuple[np.ndarray, np.ndarray, np.ndarray]:
     """One ADMM solve of Kim-Koh-Boyd l1 trend filtering on a single (short) window `y`:
 
         minimize_x  (1/2)||y-x||_2^2 + lam * ||Dx||_1
@@ -411,10 +413,25 @@ def l1_trend_filter_window(y: np.ndarray, lam: float, rho: float = 1.0, n_iter: 
     estimator -- see `l1_trend_filter_rolling` for how it is adapted into a causal rolling
     estimator. Returns the fitted x (same length as y). Windows shorter than 5 points are returned
     unfiltered (too short for a second-difference penalty to mean anything).
+
+    `z_init`/`u_init` (optional, length n-2): WARM-START the ADMM dual/auxiliary variables from a
+    caller-supplied starting point instead of the zero default. This objective is STRICTLY CONVEX
+    in x (the (1/2)||y-x||^2 term is positive-definite everywhere), so ADMM converges to the SAME
+    unique global optimum regardless of (z,u) initialization -- warm-starting changes only how
+    fast the iteration reaches the `tol` stopping criterion, never the converged answer itself
+    (see `research/cta/CTA_MATH_NOTES.md` Section 9-redesign for the performance rationale and the
+    empirical before/after equivalence check). `return_dual=True` additionally returns the
+    converged (z, u) for the caller to feed into the NEXT window's warm start
+    (`l1_trend_filter_rolling` is the only caller that does this). Default behavior
+    (`z_init=None, u_init=None, return_dual=False`) is BYTE-IDENTICAL to the original
+    zero-seeded, x-only-return implementation -- every existing caller/test is unaffected.
     """
     n = len(y)
     if n < 5:
-        return y.astype("float64").copy()
+        x0 = y.astype("float64").copy()
+        if return_dual:
+            return x0, np.zeros(max(n - 2, 0)), np.zeros(max(n - 2, 0))
+        return x0
     c, low, D = _l1tf_cholesky_factor(n, float(rho))
     y = y.astype("float64")
     # z, u seeded at ZERO (not z = D @ y) -- seeding z = D @ x0 with x0 = y is a false-convergence
@@ -423,10 +440,12 @@ def l1_trend_filter_window(y: np.ndarray, lam: float, rho: float = 1.0, n_iter: 
     # makes the ||x_new - x||-based stopping check fire after a single iteration -- before z/u
     # have moved at all and before the l1 penalty has had any effect on x. Confirmed empirically:
     # with the z=D@y seeding, l1_trend_filter_window(y, lam) returned y UNCHANGED for every lam
-    # tested from 0.5 to 20. Zero-seeding avoids this degenerate fixed point.
+    # tested from 0.5 to 20. Zero-seeding avoids this degenerate fixed point. A caller-supplied
+    # z_init/u_init (warm start from an ADJACENT, already-solved window) does not reintroduce this
+    # trap because it is never algebraically equal to D@y for the CURRENT window.
     x = y.copy()
-    z = np.zeros(n - 2)
-    u = np.zeros(n - 2)
+    z = np.zeros(n - 2) if z_init is None else np.asarray(z_init, dtype="float64").copy()
+    u = np.zeros(n - 2) if u_init is None else np.asarray(u_init, dtype="float64").copy()
     Dt = D.T
     for _ in range(n_iter):
         rhs = y + rho * (Dt @ (z - u))
@@ -435,10 +454,12 @@ def l1_trend_filter_window(y: np.ndarray, lam: float, rho: float = 1.0, n_iter: 
         v = Dx + u
         z_new = np.sign(v) * np.maximum(np.abs(v) - lam / rho, 0.0)
         u = u + Dx - z_new
-        if np.max(np.abs(x_new - x)) < tol:
-            x, z = x_new, z_new
-            break
+        converged = np.max(np.abs(x_new - x)) < tol
         x, z = x_new, z_new
+        if converged:
+            break
+    if return_dual:
+        return x, z, u
     return x
 
 
@@ -509,6 +530,21 @@ def l1_trend_filter_rolling(log_price: pd.Series, window: int = 120, lam: float 
 
     Returns the causal trend LEVEL series (same index as log_price, NaN before `window` real
     observations are available).
+
+    PERFORMANCE NOTE (does not change the math -- see `research/cta/CTA_MATH_NOTES.md` Section
+    9-redesign): consecutive windows overlap in n-1 of their n points, so each day's ADMM solve is
+    WARM-STARTED from the immediately preceding day's converged (z, u), shifted by one position to
+    re-align local second-difference indices with the new window (the oldest interior
+    second-difference is dropped, the newest is seeded at the previous edge value -- a standard,
+    disclosed sliding-window warm-start heuristic). Because the per-window objective is strictly
+    convex in x, ADMM converges to the SAME unique global optimum regardless of (z, u)
+    initialization (see `l1_trend_filter_window`'s docstring) -- warm-starting only reduces the
+    number of iterations needed to reach `tol`, it never changes the converged trend estimate.
+    State is reset to a cold (zero) start after any NaN gap (stale state from a non-adjacent
+    window would not correspond to the new window's local indexing). This is the single largest
+    real-world compute cost identified in this program's Stage-A per-name signal-generation
+    profiling (~84% of one name's total signal-build time before this fix) -- see the redesign
+    section for the measured before/after speedup.
     """
     vals = log_price.to_numpy(dtype="float64")
     n = len(vals)
@@ -516,13 +552,31 @@ def l1_trend_filter_rolling(log_price: pd.Series, window: int = 120, lam: float 
     if edge_offset < 0 or edge_offset >= window:
         raise ValueError("edge_offset must be in [0, window)")
     pos = window - 1 - edge_offset
+    z_prev: np.ndarray | None = None
+    u_prev: np.ndarray | None = None
     for t in range(window - 1, n):
         w = vals[t - window + 1: t + 1]
         if np.any(np.isnan(w)):
+            z_prev = u_prev = None
             continue
         local_lam = lam if lam is not None else lam_mult * _robust_noise_scale(w)
-        xhat = l1_trend_filter_window(w, lam=local_lam, rho=rho, n_iter=n_iter)
+        if z_prev is not None and len(z_prev) == window - 2:
+            # shift by one: local index i (old window) <-> local index i-1 (new window); the
+            # newest interior second-difference has no predecessor, seed it with the previous
+            # edge value (better than zero, still just a warm start, never part of the objective).
+            z0 = np.empty_like(z_prev)
+            z0[:-1] = z_prev[1:]
+            z0[-1] = z_prev[-1]
+            u0 = np.empty_like(u_prev)
+            u0[:-1] = u_prev[1:]
+            u0[-1] = u_prev[-1]
+        else:
+            z0 = u0 = None
+        xhat, z_new, u_new = l1_trend_filter_window(
+            w, lam=local_lam, rho=rho, n_iter=n_iter, z_init=z0, u_init=u0, return_dual=True,
+        )
         out[t] = xhat[pos]
+        z_prev, u_prev = z_new, u_new
     return pd.Series(out, index=log_price.index)
 
 
