@@ -172,18 +172,26 @@ def _book_equity(j: Journal, spec: BookSpec, fallback: float | None = None) -> f
 
 
 def _venue_book_state(domain: frozenset[str]):
-    """(positions, unrealized_sum, account_equity, assets, unowned) — positions scoped to the
-    book's domain; ``unowned`` = venue positions outside EVERY book's domain (nobody's sweep can
-    ever close those, so the caller surfaces them loudly)."""
+    """(positions, unrealized_sum, account_equity, assets, unowned, manual_notes) — positions
+    scoped to the book's domain AND net of the operator's manual reserve (PAPER.md §12.5): the
+    book sizes/sweeps/closes ONLY its own share of any symbol the operator also holds by hand.
+    ``unowned`` = venue positions outside EVERY book's domain that are NOT operator-reserved
+    (nobody's sweep can ever close those, so the caller surfaces them loudly)."""
     from convexity.paper.gateway import account_assets, account_snapshot
+    from convexity.paper.manual import load_reserve, net_book_positions
 
     assets = account_assets()
     snap = account_snapshot()
-    pos = {s: q for s, q in snap.positions.items() if s in domain}
-    upnl = sum(v for s, v in snap.unrealized.items() if s in domain)
+    reserve = load_reserve()
+    pos, upnl_map, notes = net_book_positions(
+        {s: q for s, q in snap.positions.items() if s in domain},
+        {s: v for s, v in snap.unrealized.items() if s in domain},
+        {s: q for s, q in reserve.items() if s in domain})
+    upnl = sum(upnl_map.values())
     all_domains: frozenset[str] = frozenset().union(*(book_domain(b) for b in BOOKS.values()))
-    unowned = {s for s, q in snap.positions.items() if abs(q) > 1e-12 and s not in all_domains}
-    return pos, float(upnl), float(snap.equity), assets, unowned
+    unowned = {s for s, q in snap.positions.items()
+               if abs(q) > 1e-12 and s not in all_domains and s not in reserve}
+    return pos, float(upnl), float(snap.equity), assets, unowned, notes
 
 
 def _settle_prior_week(j: Journal, spec: BookSpec, panel: Panel, d_now: int, live: bool) -> None:
@@ -376,7 +384,9 @@ def _flatten_book_live(spec: BookSpec, j: Journal, reason: str) -> None:
     from convexity.paper.topup import fetch_live_filters
 
     domain = book_domain(spec)
-    positions, _upnl, _eq, _assets, _unowned = _venue_book_state(domain)
+    positions, _upnl, _eq, _assets, _unowned, manual_notes = _venue_book_state(domain)
+    for note in manual_notes:
+        print(f"[kill:{spec.name}] manual carve-out (reserve NOT flattened): {note}")
     for sym in sorted(positions):
         try:
             cancel_open_orders(sym)
@@ -537,7 +547,12 @@ def cmd_rebalance(args: argparse.Namespace) -> None:
             return
         if args.live:
             if alloc_mode:
-                positions, upnl, acct_eq, assets, unowned = _venue_book_state(domain)
+                positions, upnl, acct_eq, assets, unowned, manual_notes = \
+                    _venue_book_state(domain)
+                if manual_notes:
+                    j.append("manual_reserve", d_iso, notes=manual_notes)
+                    for note in manual_notes:
+                        print(f"[live:{spec.name}] manual carve-out: {note}")
                 if unowned:
                     j.append("unowned_positions", d_iso, symbols=sorted(unowned))
                     print(f"[live:{spec.name}] WARNING: positions outside every book's domain "
@@ -558,7 +573,14 @@ def cmd_rebalance(args: argparse.Namespace) -> None:
                 from convexity.paper.gateway import account_assets, account_snapshot
                 assets = account_assets()
                 snap = account_snapshot()
-                positions = {s: q for s, q in snap.positions.items() if s in domain}
+                from convexity.paper.manual import load_reserve, net_book_positions
+                _res = {s: q for s, q in load_reserve().items() if s in domain}
+                positions, _um, manual_notes = net_book_positions(
+                    {s: q for s, q in snap.positions.items() if s in domain}, None, _res)
+                if manual_notes:
+                    j.append("manual_reserve", d_iso, notes=manual_notes)
+                    for note in manual_notes:
+                        print(f"[live:{spec.name}] manual carve-out: {note}")
                 est_margin = g_t * sum(assets.get(a, 0.0) for a in ("USDT",)) / 10.0
                 nav_dec = sizing_nav(assets, est_initial_margin=est_margin)
                 nav = nav_dec.nav
@@ -767,9 +789,13 @@ def cmd_finalize(args: argparse.Namespace) -> None:
         crossed = 0
         live_f = fetch_live_filters()
         failed = 0
+        from convexity.paper.manual import book_share_qty, load_reserve
+        _reserve = load_reserve()
         for it in orders["intents"]:
             want = float(it["qty"])
-            have = snap.positions.get(it["symbol"], 0.0)  # net vs intended delta: v1 heuristic
+            # net vs intended delta: v1 heuristic — on the BOOK's share only: an operator's
+            # manual position must never make an unfilled maker order look filled (§12.5)
+            have = book_share_qty(it["symbol"], snap.positions.get(it["symbol"], 0.0), _reserve)
             remainder = want if abs(have) < 1e-12 else 0.0
             if remainder != 0.0:
                 lf = live_f.get(it["symbol"])
@@ -812,7 +838,11 @@ def cmd_recon(args: argparse.Namespace) -> None:
     with account_lock(spec.name):
         if _check_kill(spec, j, live=True):
             return
-        positions, upnl, acct_eq, assets, unowned = _venue_book_state(domain)
+        positions, upnl, acct_eq, assets, unowned, manual_notes = _venue_book_state(domain)
+        if manual_notes:
+            j.append("manual_reserve", "recon", notes=manual_notes)
+            for note in manual_notes:
+                print(f"[recon:{spec.name}] manual carve-out: {note}")
         if unowned:
             # hygiene backstop: a position OUTSIDE EVERY book's domain belongs to nobody — the
             # domain-scoped sweeps will never close it, so it must at least be visible
@@ -957,6 +987,41 @@ def cmd_status(args: argparse.Namespace) -> None:
         print(f"[{kind}] {json.dumps(brief)[:160]}")
 
 
+def cmd_manual(args: argparse.Namespace) -> None:
+    """Operator's manual-position ledger (PAPER.md §12.5): reserve quantities the books must
+    never touch. Edits run under the account lock so no live session reads a half-written
+    ledger; --list is read-only."""
+    from convexity.paper.manual import MANUAL_RESERVE_PATH, load_reserve, save_reserve
+
+    if not args.reserve and not args.release:
+        res = load_reserve()
+        if not res:
+            print(f"[manual] no reserves ({MANUAL_RESERVE_PATH})")
+        for sym, qty in sorted(res.items()):
+            print(f"[manual] {sym:>14} reserved {qty:+g}")
+        return
+    with account_lock("manual"):
+        res = load_reserve()
+        if args.reserve:
+            sym = args.reserve[0].upper()
+            qty = float(args.reserve[1])
+            if abs(qty) <= 1e-12:
+                res.pop(sym, None)
+                print(f"[manual] {sym} reserve cleared (zero qty)")
+            else:
+                res[sym] = qty
+                print(f"[manual] {sym} reserved {qty:+g} — every book now nets this out of "
+                      f"sizing, sweeps, kills and recon")
+        if args.release:
+            sym = args.release.upper()
+            if res.pop(sym, None) is None:
+                print(f"[manual] {sym} had no reserve")
+            else:
+                print(f"[manual] {sym} reserve released — the owning book manages the full "
+                      f"venue quantity again")
+        save_reserve(res)
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(prog="convexity.paper")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -1001,6 +1066,11 @@ def main() -> None:
                    help="flatten immediately (live) instead of at the next session")
     k.add_argument("--reason", default=None)
     k.set_defaults(fn=cmd_kill)
+    mn = sub.add_parser("manual")
+    mn.add_argument("--reserve", nargs=2, metavar=("SYMBOL", "QTY"),
+                    help="mark QTY of SYMBOL as operator-owned (signed; overwrites)")
+    mn.add_argument("--release", metavar="SYMBOL", help="remove SYMBOL's reserve")
+    mn.set_defaults(fn=cmd_manual)
     s = sub.add_parser("status")
     add_book(s)
     s.set_defaults(fn=cmd_status)

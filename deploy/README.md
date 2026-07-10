@@ -88,3 +88,17 @@ Kill switch (any book, any time): `python -m convexity.paper kill --book equity 
 resume with `--resume`. Monitor: `status --book equity`; `journalctl -u
 convexity-equity-rebalance -n 100`; journal at `data/paper/equity/journal.jsonl`; split-watch
 flags at `data/universe/equity_flags.json` (clear a flag by setting `"cleared": true`).
+
+## Manual positions (operator carve-out, PAPER.md §12.5)
+
+Trading the account by hand? Reserve the quantity so the books never touch it:
+
+```bash
+python -m convexity.paper manual --reserve NVDAUSDT 4      # 4 NVDA are mine
+python -m convexity.paper manual                            # list reserves
+python -m convexity.paper manual --release NVDAUSDT         # after you close it
+```
+
+Reserve before the next timer fire (daily recons ~00:25/00:45/01:05 UTC only observe; Saturday
+rebalances trade). Books net reserves out of sizing, orphan sweeps, kills and finalize; a reserve
+larger than the venue position clamps the book share to 0 and journals the discrepancy.

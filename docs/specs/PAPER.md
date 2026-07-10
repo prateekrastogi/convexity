@@ -294,3 +294,31 @@ margin fields) is untested until the supervised session below — the §8 doctri
    later): watch the 3× dial get set, maker fills, the margin/liq-distance journal records, and
    confirm the orphan sweep touches ONLY equity-domain symbols.
 5. Only then enable `convexity-equity-{rebalance,finalize,recon,datamaint}.timer`.
+
+### 12.5 Manual-position carve-out (all books)
+
+The operator trades the same venue account by hand. Domain scoping protects each book from the
+OTHERS, but not from the operator: a discretionary position in an in-domain symbol would be
+absorbed into that book's carried state, traded toward its target, orphan-swept, or
+kill-flattened. The carve-out:
+
+- **Ledger**: `data/paper/manual_reserve.json` — symbol → signed operator-owned qty. Maintained
+  ONLY via `python -m convexity.paper manual --reserve SYM QTY | --release SYM | (no args =
+  list)`; edits run under the account lock. Never auto-populated — explicit ownership beats
+  silent adoption.
+- **Netting**: every venue-position read a book performs (carried book, orphan sweep, kill/DERISK
+  flatten, finalize remainder check, recon counts, book-share unrealized) first subtracts the
+  reserve: `book_qty = venue_qty − reserved_qty`. The book manages only its share; carve-outs are
+  journaled as `manual_reserve` records.
+- **Safety clamp**: a book share never flips sign against the venue position — if the reserve
+  exceeds what exists (operator closed part without releasing), the share clamps to 0 and the
+  discrepancy is journaled loudly.
+- **Unowned hygiene**: reserved symbols outside every domain are silenced from the
+  `unowned_positions` warning (they're yours); unreserved ones stay loud.
+- **Margin**: cross mode means manual positions share collateral. Guardrails deliberately read
+  WHOLE-ACCOUNT margin (a large manual position tightens the books' budget — conservative), but
+  DERISK/kill only ever close book shares, never the reserve.
+- **Operator contract**: reserve BEFORE or promptly after opening a manual position in an
+  in-domain symbol (worst case before the next timer fire: recon daily ~01:05 UTC, rebalance Sat);
+  release when you close it. Out-of-domain symbols are safe even unreserved (unowned warning
+  only). `manual` with no args lists the ledger.

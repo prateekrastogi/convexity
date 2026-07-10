@@ -295,3 +295,50 @@ def test_effective_filters_precision_clamp():
     tick, lot = effective_filters(0.5, 0.1, price_prec=None, qty_prec=None)
     assert (tick, lot) == (0.5, 0.1)
 
+# ---------------------------------------------------------------- manual-position carve-out
+
+
+def test_manual_netting_math():
+    """PAPER.md §12.5: book share = venue − reserve; proportional uPnL; clamp never inverts."""
+    from convexity.paper.manual import book_share_qty, net_book_positions
+
+    pos = {"NVDAUSDT": 10.0, "BTCUSDT": 2.0, "SPYUSDT": 3.0}
+    upnl = {"NVDAUSDT": 5.0, "BTCUSDT": 1.0, "SPYUSDT": 0.9}
+    res = {"NVDAUSDT": 4.0, "SPYUSDT": 3.0}
+    out, u, notes = net_book_positions(pos, upnl, res)
+    assert out["NVDAUSDT"] == 6.0           # partial reserve -> book share
+    assert abs(u["NVDAUSDT"] - 3.0) < 1e-12  # 5.0 * 6/10
+    assert out["BTCUSDT"] == 2.0 and u["BTCUSDT"] == 1.0  # no reserve -> passthrough
+    assert "SPYUSDT" not in out             # fully reserved -> book sees nothing
+    assert any("SPYUSDT" in n for n in notes)
+
+    # clamp: reserve exceeds venue (operator closed some without releasing) -> 0, never invert
+    out, _, notes = net_book_positions({"HOODUSDT": 3.0}, None, {"HOODUSDT": 8.0})
+    assert "HOODUSDT" not in out
+    assert any("clamped" in n for n in notes)
+
+    # opposite-sign reserve is plain arithmetic: venue +5 with operator short 2 -> book +7
+    out, _, _ = net_book_positions({"CLUSDT": 5.0}, None, {"CLUSDT": -2.0})
+    assert out["CLUSDT"] == 7.0
+
+    # stale reserve (no venue position) -> loud note, no phantom position
+    out, _, notes = net_book_positions({}, None, {"GONEUSDT": 2.0})
+    assert out == {} and any("stale" in n for n in notes)
+
+    assert book_share_qty("NVDAUSDT", 10.0, {"NVDAUSDT": 4.0}) == 6.0
+    assert book_share_qty("NVDAUSDT", 10.0, {}) == 10.0
+
+
+def test_manual_ledger_roundtrip(tmp_path):
+    from convexity.paper.manual import load_reserve, save_reserve
+
+    p = tmp_path / "manual_reserve.json"
+    assert load_reserve(p) == {}            # absent file -> empty, never an error
+    save_reserve({"NVDAUSDT": 4.0, "ZEROUSDT": 0.0}, p)
+    assert load_reserve(p) == {"NVDAUSDT": 4.0}  # zero-qty entries pruned on save
+    # corrupt ledger must FAIL LOUDLY (fail-safe for the operator, not the book)
+    p.write_text("{not json")
+    import pytest
+    with pytest.raises(RuntimeError, match="unreadable"):
+        load_reserve(p)
+
