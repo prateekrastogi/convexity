@@ -19,13 +19,19 @@ import pandas as pd
 
 from convexity.panel.panel import MS_PER_DAY, Panel
 
+# DATA venue — ALWAYS prod (PAPER.md §12.6): daily klines/funding tails feed the research
+# panel and demo market history is thin/laggy. EXECUTION surfaces below resolve through
+# convexity.paper.venue instead.
 FAPI = "https://fapi.binance.com"
 
 
 def fetch_ticker_prices() -> dict[str, float]:
-    """Current last price for ALL symbols in one public call (order-peg input, PAPER.md §4)."""
+    """Current last price for ALL symbols in one public call — EXECUTION venue (these prices
+    mark the book we actually trade: pegs, drift metric; PAPER.md §12.6)."""
+    from convexity.paper.venue import execution_base
+
     with httpx.Client(timeout=15.0) as client:
-        r = client.get(f"{FAPI}/fapi/v1/ticker/price")
+        r = client.get(f"{execution_base()}/fapi/v1/ticker/price")
         r.raise_for_status()
         return {row["symbol"]: float(row["price"]) for row in r.json()}
 
@@ -35,9 +41,12 @@ def fetch_book_tickers() -> dict[str, tuple[float, float]]:
 
     The maker peg (PAPER.md §4): a BUY joins the BEST BID and a SELL the BEST ASK — pegging to the
     last trade can sit on the crossing side and draws Binance -5022 post-only rejections (learned
-    in the first supervised session, 2026-07-03)."""
+    in the first supervised session, 2026-07-03). EXECUTION venue: the peg must come from the
+    order book the order actually rests in (audit P0-1/P1-7)."""
+    from convexity.paper.venue import execution_base
+
     with httpx.Client(timeout=15.0) as client:
-        r = client.get(f"{FAPI}/fapi/v1/ticker/bookTicker")
+        r = client.get(f"{execution_base()}/fapi/v1/ticker/bookTicker")
         r.raise_for_status()
         return {row["symbol"]: (float(row["bidPrice"]), float(row["askPrice"]))
                 for row in r.json()}
@@ -49,10 +58,12 @@ def fetch_execution_venue_tradeable() -> frozenset[str]:
     The research surfaces (filters, pegs, klines) read PROD fapi — near-identical for crypto,
     but the demo's TradFi listings LAG prod (2026-07-06: metals live, CL/NATGAS absent). Live
     sessions gate strategy universes on this set so the journaled book only holds what the
-    venue can hold; one public unauthenticated call.
+    venue can hold; one public unauthenticated call. Venue via the ONE switch (PAPER.md §12.6).
     """
+    from convexity.paper.venue import execution_base
+
     with httpx.Client(timeout=30.0) as client:
-        r = client.get("https://demo-fapi.binance.com/fapi/v1/exchangeInfo")
+        r = client.get(f"{execution_base()}/fapi/v1/exchangeInfo")
         r.raise_for_status()
         return frozenset(s["symbol"] for s in r.json()["symbols"]
                          if s.get("status") == "TRADING")
@@ -81,11 +92,14 @@ def fetch_live_filters() -> dict[str, tuple[float, float, float, float]]:
     The candidates.md filters are a committed SNAPSHOT (EXECUTION.md §16's documented limitation);
     Binance revises tick/lot occasionally, and a stale tick draws -4014 at submission (learned in
     the first supervised session). Live sessions quantize against THESE; research keeps the
-    snapshot. Reads the DEMO venue (the venue the gateway actually trades — prod filters drift
-    from demo on TradFi listings, the SPCX -1111 lesson) and clamps tick/step by the venue's own
-    pricePrecision/quantityPrecision via ``effective_filters``."""
+    snapshot. Reads the EXECUTION venue (the venue the gateway actually trades — prod filters
+    drift from demo on TradFi listings, the SPCX -1111 lesson; venue via the ONE switch,
+    PAPER.md §12.6) and clamps tick/step by the venue's own pricePrecision/quantityPrecision
+    via ``effective_filters``."""
+    from convexity.paper.venue import execution_base
+
     with httpx.Client(timeout=30.0) as client:
-        r = client.get("https://demo-fapi.binance.com/fapi/v1/exchangeInfo")
+        r = client.get(f"{execution_base()}/fapi/v1/exchangeInfo")
         r.raise_for_status()
         out: dict[str, tuple[float, float, float, float]] = {}
         for s in r.json()["symbols"]:

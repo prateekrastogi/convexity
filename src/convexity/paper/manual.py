@@ -36,6 +36,7 @@ kill-flattened. This module carves it out, AUTOMATICALLY:
 from __future__ import annotations
 
 import json
+import os
 import pathlib
 
 MANUAL_RESERVE_PATH = "data/paper/manual_reserve.json"
@@ -68,8 +69,11 @@ def save_reserve(reserve: dict[str, float],
     p = pathlib.Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
     tmp = p.with_suffix(".json.tmp")
-    tmp.write_text(json.dumps(
-        {s: q for s, q in sorted(reserve.items()) if abs(q) > _EPS}, indent=1))
+    with tmp.open("w") as f:
+        f.write(json.dumps({s: q for s, q in sorted(reserve.items()) if abs(q) > _EPS},
+                           indent=1))
+        f.flush()
+        os.fsync(f.fileno())  # durable-before-rename (PAPER.md §12.6)
     tmp.rename(p)
 
 
@@ -174,7 +178,10 @@ def _save_sync_state(state: dict, path: str | pathlib.Path = SYNC_STATE_PATH) ->
     p = pathlib.Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
     tmp = p.with_suffix(".json.tmp")
-    tmp.write_text(json.dumps(state))
+    with tmp.open("w") as f:
+        f.write(json.dumps(state))
+        f.flush()
+        os.fsync(f.fileno())  # durable-before-rename (PAPER.md §12.6)
     tmp.rename(p)
 
 

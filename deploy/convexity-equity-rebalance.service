@@ -7,6 +7,9 @@
 Description=convexity equity paper weekly rebalance (trend ensemble)
 Wants=network-online.target
 After=network-online.target
+OnFailure=convexity-alert@%n.service convexity-retry@%n.service
+StartLimitIntervalSec=14400
+StartLimitBurst=3
 [Service]
 Type=oneshot
 User=ubuntu

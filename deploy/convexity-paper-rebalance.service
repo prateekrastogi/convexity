@@ -6,6 +6,9 @@
 Description=convexity paper weekly rebalance
 Wants=network-online.target
 After=network-online.target
+OnFailure=convexity-alert@%n.service convexity-retry@%n.service
+StartLimitIntervalSec=14400
+StartLimitBurst=3
 
 [Service]
 Type=oneshot

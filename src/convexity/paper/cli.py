@@ -171,6 +171,57 @@ def _book_equity(j: Journal, spec: BookSpec, fallback: float | None = None) -> f
     return spec.default_nav
 
 
+def _journal_venue(j: Journal, label: str) -> None:
+    """Journal + assert the session's venue resolution (PAPER.md §12.6): every live session
+    records which venue it executed on, and aborts if the adapter and the HTTP surfaces would
+    resolve differently."""
+    from convexity.paper.venue import assert_consistent, describe
+
+    assert_consistent()
+    info = describe()
+    j.append("venue", label, **info)
+    print(f"[venue] {info['venue']} exec={info['execution_base']}")
+
+
+def _already_settled(j: Journal, week_end: str) -> bool:
+    """Settle idempotency (audit P0-2): a crash between the settle append and the targets
+    append must not double-fold the same week's return into the equity chain on rerun."""
+    s = j.last("settle")
+    return s is not None and s.get("asof") == week_end
+
+
+def _carry_in_targets(recs: list[dict]) -> dict | None:
+    """The week-before targets record for settle turnover, SKIPPING same-asof duplicates
+    (audit P0-2): a crash-rerun appends a second targets record for the same Friday; naive
+    recs[-2] would then be this week again and the settle's turnover cost would read zero."""
+    prev = recs[-1]
+    for r in reversed(recs[:-1]):
+        if r.get("asof") != prev.get("asof"):
+            return r
+    return None
+
+
+def _position_drift(targets_rec: dict, positions: dict[str, float],
+                    prices: dict[str, float]) -> tuple[float, list[list]]:
+    """Per-symbol venue-vs-target notional drift in quote units (audit P2-14 observability).
+
+    Target notional = w_unit x g_t x nav — the venue holds SCALED weights in every book's
+    semantics. Only symbols with a usable price are compared; sub-1-USDT diffs are noise."""
+    tw = dict(zip(targets_rec.get("symbols", ()), targets_rec.get("weights", ())))
+    g = float(targets_rec.get("g_t", 1.0))
+    nav = float(targets_rec.get("nav", 0.0))
+    drift: list[list] = []
+    for sym in sorted(set(positions) | {s for s, w in tw.items() if abs(float(w)) > 1e-9}):
+        px = prices.get(sym)
+        if not px or px <= 0:
+            continue
+        d = positions.get(sym, 0.0) * px - float(tw.get(sym, 0.0)) * g * nav
+        if abs(d) > 1.0:
+            drift.append([sym, round(d, 2)])
+    drift.sort(key=lambda x: -abs(x[1]))
+    return round(sum(abs(d) for _, d in drift), 2), drift
+
+
 def _manual_autosync(j: Journal, spec: BookSpec, label: str) -> None:
     """Adopt the operator's app/manual fills into the reserve ledger (PAPER.md §12.5) BEFORE
     any venue-position read — inside the account lock at every venue-facing entry point.
@@ -239,6 +290,11 @@ def _settle_prior_week(j: Journal, spec: BookSpec, panel: Panel, d_now: int, liv
         print(f"[settle:{spec.name}] prior week (targets {prev['asof']}) not complete in the "
               f"panel yet — settle deferred, equity mark unchanged")
         return
+    week_end = str(panel.dates[d1].date())
+    if _already_settled(j, week_end):
+        print(f"[settle:{spec.name}] week->{week_end} already settled (crash-rerun?) — "
+              f"skipping; the equity chain folds each week exactly once (PAPER.md §12.6)")
+        return
     w_prev = _aligned_weights(prev, panel)
     scale_rec = float(prev.get("g_t", 1.0)) if spec.name in ("commodity", "equity") else 1.0
     # the commodity book's recorded deployable IS the vol-targeted book (RV_REPORT.md), and the
@@ -254,8 +310,8 @@ def _settle_prior_week(j: Journal, spec: BookSpec, panel: Panel, d_now: int, liv
     # (Legacy crypto keeps w_prev=w_target: its live equity comes from the venue, where the
     # cost is already real — changing it would rewrite the recorded track's semantics.)
     w_carry_in = w_prev
-    if (alloc_mode or spec.name in ("commodity", "equity")) and len(recs) >= 2:
-        p2 = recs[-2]
+    p2 = _carry_in_targets(recs) if len(recs) >= 2 else None
+    if (alloc_mode or spec.name in ("commodity", "equity")) and p2 is not None:
         w_carry_in = _aligned_weights(p2, panel)
         if spec.name in ("commodity", "equity"):
             w_carry_in = w_carry_in * float(p2.get("g_t", 1.0))
@@ -275,7 +331,6 @@ def _settle_prior_week(j: Journal, spec: BookSpec, panel: Panel, d_now: int, liv
     else:
         eq_end = eq_start * (1.0 + res.net) + sum(f.amount for f in flows)
     r_twr = twr_weekly_return(eq_start, eq_end, flows)
-    week_end = str(panel.dates[d1].date())
     j.append("settle", week_end, r_twr=r_twr, r_model=res.net, equity_start=eq_start,
              equity_end=eq_end, n_flows=len(flows),
              mode=("live" if live else "dry") + ("" if not alloc_mode else "/alloc"))
@@ -460,9 +515,12 @@ def _check_kill(spec: BookSpec, j: Journal, live: bool) -> bool:
 
 
 def _margin_guardrails(spec: BookSpec, j: Journal, d_iso: str, nav: float, g_t: float,
-                       live: bool) -> float:
+                       live: bool, fail_closed: bool = False) -> float:
     """Cross-margin software guardrails (PAPER.md §12.2). Returns the possibly
-    scaled-down g_t. Dry-run: budget check only (no venue reads)."""
+    scaled-down g_t. Dry-run: budget check only (no venue reads). ``fail_closed`` (audit P1-6):
+    a SIZING session must abort when the monitor is unreadable — trading blind on margin during
+    exactly the stress that makes margin matter is the failure mode; the daily recon stays
+    fail-open (observability beats a dead monitor there)."""
     from convexity.paper.fleetconfig import (
         LEVERAGE_DIAL,
         LIQ_DISTANCE_MIN_MULTIPLE,
@@ -489,6 +547,8 @@ def _margin_guardrails(spec: BookSpec, j: Journal, d_iso: str, nav: float, g_t: 
         snap = account_snapshot()
     except GatewayError as e:
         j.append("margin_monitor_error", d_iso, error=str(e)[:200])
+        if fail_closed:
+            raise
         return g_t
     ratio = (snap.maint_margin / snap.equity) if snap.equity > 0 else 0.0
     j.append("margin_ratio", d_iso, maint_margin=round(snap.maint_margin, 4),
@@ -572,6 +632,7 @@ def cmd_rebalance(args: argparse.Namespace) -> None:
         if _check_kill(spec, j, live=args.live):
             return
         if args.live:
+            _journal_venue(j, d_iso)
             _manual_autosync(j, spec, d_iso)
             if alloc_mode:
                 positions, upnl, acct_eq, assets, unowned, manual_notes = \
@@ -620,7 +681,8 @@ def cmd_rebalance(args: argparse.Namespace) -> None:
             used_assets = ("DRY",)
         # Cross-margin guardrails (PAPER.md §12.2): budget check both modes; monitor + liq-distance
         # live only. May scale g_t down (or flatten equity on DERISK, returning g_t=0).
-        g_t = _margin_guardrails(spec, j, d_iso, nav, g_t, live=args.live)
+        g_t = _margin_guardrails(spec, j, d_iso, nav, g_t, live=args.live,
+                                 fail_closed=args.live)
         print(f"[size:{spec.name}] G_t={g_t:.4f} binding={binding} | NAV={nav:.2f} "
               f"({'+'.join(used_assets)}) | {nav_note}")
 
@@ -694,14 +756,17 @@ def _submit_live(j: Journal, spec: BookSpec, d_iso: str, intents: list[OrderInte
     book = fetch_book_tickers()
     live_f = fetch_live_filters()
     ok = failed = 0
+    submitted: list[dict] = []
     import httpx as _httpx
+
+    from convexity.paper.venue import execution_base
 
     for it in intents:
         live_it = it
         # refresh THIS symbol's quote at submission time — the batch snapshot goes stale
         # over a ~60s sequential loop and stale pegs draw -5022 (learned 2026-07-03).
         try:
-            _bt = _httpx.get("https://fapi.binance.com/fapi/v1/ticker/bookTicker",
+            _bt = _httpx.get(f"{execution_base()}/fapi/v1/ticker/bookTicker",
                              params={"symbol": it.symbol}, timeout=5).json()
             bidask = (float(_bt["bidPrice"]), float(_bt["askPrice"]))
         except Exception:
@@ -738,6 +803,9 @@ def _submit_live(j: Journal, spec: BookSpec, d_iso: str, intents: list[OrderInte
         try:
             resp = submit_intent(live_it)
             ok += 1
+            submitted.append({"symbol": live_it.symbol, "orderId": resp.get("orderId"),
+                              "clientOrderId": resp.get("clientOrderId"),
+                              "qty": live_it.qty})
             print(f"[live:{spec.name}] {live_it.symbol} {live_it.qty:+} {live_it.tactic} "
                   f"@ {live_it.price_str} -> {resp['status']}")
         except GatewayError as e:
@@ -745,6 +813,8 @@ def _submit_live(j: Journal, spec: BookSpec, d_iso: str, intents: list[OrderInte
             print(f"[live:{spec.name}] {live_it.symbol} FAILED (isolated, book continues): {e}")
             j.append("order_error", d_iso, symbol=live_it.symbol, error=str(e)[:300])
     j.append("submitted", d_iso, n_ok=ok, n_failed=failed)
+    # finalize v2 surface (PAPER.md §12.6): our own orderIds -> exact fill accounting
+    j.append("submission_ids", d_iso, orders=submitted)
     print(f"[live:{spec.name}] submitted {ok}/{len(intents)} (failed {failed}, journaled)")
     # ORPHAN SWEEP (PAPER.md §4.1 + §11): close every venue position IN THIS BOOK'S DOMAIN that
     # no intent covers and no target wants — names rotated OUT of the panel between weeks or
@@ -809,6 +879,7 @@ def cmd_finalize(args: argparse.Namespace) -> None:
     with account_lock(spec.name):
         if _check_kill(spec, j, live=True):
             return
+        _journal_venue(j, orders["asof"])
         _manual_autosync(j, spec, orders["asof"])
         syms = {it["symbol"] for it in orders["intents"]}
         for s in sorted(syms):
@@ -817,14 +888,46 @@ def cmd_finalize(args: argparse.Namespace) -> None:
         crossed = 0
         live_f = fetch_live_filters()
         failed = 0
+        skipped_blind = 0
+        # v2 remainder accounting (audit P1-4, PAPER.md §12.6): exact fills via our own
+        # journaled orderIds — an unfilled RESIZE maker is crossed too, not only the
+        # opens-from-flat the v1 zero-share heuristic could see. v1 remains the fallback for
+        # journals predating submission_ids.
+        from convexity.paper.gateway import fetch_order
         from convexity.paper.manual import book_share_qty, load_reserve
         _reserve = load_reserve()
+        sub_rec = j.last("submission_ids")
+        use_ids = sub_rec is not None and sub_rec.get("asof") == orders["asof"]
+        by_sym: dict[str, list[dict]] = {}
+        if use_ids:
+            for o in sub_rec["orders"]:
+                if o.get("orderId") is not None:
+                    by_sym.setdefault(o["symbol"], []).append(o)
         for it in orders["intents"]:
             want = float(it["qty"])
-            # net vs intended delta: v1 heuristic — on the BOOK's share only: an operator's
-            # manual position must never make an unfilled maker order look filled (§12.5)
-            have = book_share_qty(it["symbol"], snap.positions.get(it["symbol"], 0.0), _reserve)
-            remainder = want if abs(have) < 1e-12 else 0.0
+            if use_ids:
+                try:
+                    executed = 0.0
+                    for o in by_sym.get(it["symbol"], ()):
+                        od = fetch_order(it["symbol"], int(o["orderId"]))
+                        ex = float(od.get("executedQty", 0.0) or 0.0)
+                        executed += ex if float(o["qty"]) > 0 else -ex
+                    remainder = want - executed
+                except GatewayError as e:
+                    # NEVER cross blind (audit P1-4): unreadable fill state could double-trade;
+                    # skip loudly — the next rebalance recomputes from venue truth anyway
+                    skipped_blind += 1
+                    j.append("order_error", orders["asof"], symbol=it["symbol"],
+                             error=f"finalize fill-state unreadable, skipped: {str(e)[:200]}")
+                    print(f"[finalize:{spec.name}] {it['symbol']} SKIPPED "
+                          f"(fill state unreadable): {e}")
+                    continue
+            else:
+                # v1 heuristic on the BOOK's share only (§12.5): an operator's manual position
+                # must never make an unfilled maker order look filled
+                have = book_share_qty(it["symbol"],
+                                      snap.positions.get(it["symbol"], 0.0), _reserve)
+                remainder = want if abs(have) < 1e-12 else 0.0
             if remainder != 0.0:
                 lf = live_f.get(it["symbol"])
                 if lf:
@@ -844,8 +947,10 @@ def cmd_finalize(args: argparse.Namespace) -> None:
                     j.append("order_error", orders["asof"], symbol=it["symbol"],
                              error=f"finalize: {str(e)[:280]}")
                     print(f"[finalize:{spec.name}] {it['symbol']} FAILED (isolated): {e}")
-        j.append("finalized", orders["asof"], crossed=crossed, failed=failed)
-        print(f"[finalize:{spec.name}] crossed {crossed} remainders ({failed} failed, journaled)")
+        j.append("finalized", orders["asof"], crossed=crossed, failed=failed,
+                 skipped_blind=skipped_blind, mode="ids" if use_ids else "v1")
+        print(f"[finalize:{spec.name}] crossed {crossed} remainders ({failed} failed, "
+              f"{skipped_blind} skipped-blind; mode={'ids' if use_ids else 'v1'})")
 
 
 def cmd_recon(args: argparse.Namespace) -> None:
@@ -866,6 +971,7 @@ def cmd_recon(args: argparse.Namespace) -> None:
     with account_lock(spec.name):
         if _check_kill(spec, j, live=True):
             return
+        _journal_venue(j, "recon")
         _manual_autosync(j, spec, "recon")
         positions, upnl, acct_eq, assets, unowned, manual_notes = _venue_book_state(domain)
         if manual_notes:
@@ -886,6 +992,17 @@ def cmd_recon(args: argparse.Namespace) -> None:
             j.append("book_recon", "recon", book_equity=round(eq, 2),
                      account_equity=round(acct_eq, 2), unrealized_book=round(upnl, 4),
                      n_positions=len(positions))
+            t_live = j.last("targets")
+            if t_live is not None and t_live.get("mode") == "live":
+                from convexity.paper.topup import fetch_ticker_prices
+                try:
+                    tot, top = _position_drift(t_live, positions, fetch_ticker_prices())
+                    j.append("position_drift", "recon", total_abs_usdt=tot, top=top[:10],
+                             n_offtarget=len(top))
+                    print(f"[recon:{spec.name}] drift vs {t_live['asof']} targets: "
+                          f"{tot:.2f} USDT abs across {len(top)} names")
+                except Exception as e:  # observability only — never blocks the recon
+                    print(f"[recon:{spec.name}] drift metric skipped: {e}")
         else:
             eq = float(assets.get("USDT", 0.0)) + float(assets.get("USDC", 0.0))
             j.append("equity_mark", "recon", equity=eq)

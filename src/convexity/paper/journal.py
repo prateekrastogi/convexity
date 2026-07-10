@@ -11,6 +11,7 @@ a correction is a NEW record, never an edit (OPS provenance discipline).
 from __future__ import annotations
 
 import json
+import os
 import pathlib
 import time
 from typing import Any
@@ -27,6 +28,10 @@ class Journal:
         rec = {"kind": kind, "ts": int(time.time() * 1000), "asof": asof, **payload}
         with self.path.open("a") as f:
             f.write(json.dumps(rec, separators=(",", ":")) + "\n")
+            f.flush()
+            # durability (PAPER.md §12.6): an acknowledged record must survive a host crash —
+            # the equity chain and TWR history have no other source of truth
+            os.fsync(f.fileno())
         return rec
 
     def read(self, kind: str | None = None) -> list[dict]:

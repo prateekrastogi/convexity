@@ -27,13 +27,15 @@ class GatewayError(RuntimeError):
 
 
 def _require_keys() -> tuple[str, str]:
-    key = os.environ.get("BINANCE_FUTURES_DEMO_API_KEY", "")
-    sec = os.environ.get("BINANCE_FUTURES_DEMO_API_SECRET", "")
+    from convexity.paper.venue import key_env_names, venue
+
+    k_env, s_env = key_env_names()
+    key = os.environ.get(k_env, "")
+    sec = os.environ.get(s_env, "")
     if not key or not sec:
         raise GatewayError(
-            "BINANCE_FUTURES_DEMO_API_KEY/_SECRET not set — --live needs the demo keys "
-            "(.env, see .env.example); dry-run needs no keys"
-        )
+            f"{k_env}/_SECRET not set — --live on venue={venue()!r} needs these keys "
+            f"(.env); dry-run needs no keys")
     return key, sec
 
 
@@ -52,10 +54,13 @@ def _build_api():
     except Exception as e:  # pragma: no cover - environment-dependent
         raise GatewayError(f"nautilus_trader Binance adapter import failed: {e!r}") from e
 
+    from convexity.paper.venue import nautilus_environment
+
     key, sec = _require_keys()
     clock = LiveClock()
+    # venue selection through the ONE switch (PAPER.md §12.6) — never a hardcoded environment
     base = get_http_base_url(
-        BinanceAccountType.USDT_FUTURES, BinanceEnvironment.DEMO, False)
+        BinanceAccountType.USDT_FUTURES, nautilus_environment(), False)
     client = BinanceHttpClient(clock=clock, api_key=key, api_secret=sec, base_url=base)
     api = BinanceFuturesAccountHttpAPI(
         client=client, clock=clock, account_type=BinanceAccountType.USDT_FUTURES)
@@ -188,9 +193,10 @@ def cancel_open_orders(symbol: str) -> None:
 
 def fetch_recent_orders(symbol: str, start_ms: int) -> list[dict]:
     """All of ``symbol``'s orders placed after ``start_ms`` (SIGNED ``/fapi/v1/allOrders``) —
-    the manual-fill attribution surface (PAPER.md §12.5). limit=1000 dwarfs any realistic
-    inter-sync order count; auto_sync's 14-day lookback covers orders that rested before
-    going terminal (allOrders filters by placement time)."""
+    the manual-fill attribution surface (PAPER.md §12.5). PAGINATED by orderId cursor
+    (audit P2-8): >1000 orders in one sync gap no longer truncates adoption; auto_sync's
+    14-day lookback covers orders that rested before going terminal (allOrders filters by
+    placement time)."""
     import json as _json
 
     from nautilus_trader.core.nautilus_pyo3 import HttpMethod
@@ -198,10 +204,43 @@ def fetch_recent_orders(symbol: str, start_ms: int) -> list[dict]:
     client, _api, clock = _build_api()
 
     async def go() -> list[dict]:
+        out: list[dict] = []
+        cursor: int | None = None
+        for _page in range(10):  # 10k orders/symbol/sync — far beyond any real gap
+            payload = {"symbol": symbol, "limit": "1000",
+                       "timestamp": str(clock.timestamp_ms()), "recvWindow": "5000"}
+            if cursor is None:
+                payload["startTime"] = str(int(start_ms))
+            else:
+                payload["orderId"] = str(cursor)  # venue: orders with orderId >= this
+            resp = await client.sign_request(
+                http_method=HttpMethod.GET, url_path="/fapi/v1/allOrders", payload=payload)
+            body = resp.body if hasattr(resp, "body") else resp
+            batch = _json.loads(body)
+            out.extend(batch)
+            if len(batch) < 1000:
+                break
+            cursor = int(batch[-1]["orderId"]) + 1
+        return out
+
+    return _run(go())
+
+
+def fetch_order(symbol: str, order_id: int) -> dict:
+    """One order's venue state incl. ``executedQty`` (SIGNED ``/fapi/v1/order``) — the finalize
+    v2 exact-remainder surface (PAPER.md §12.6): remainders are computed from OUR journaled
+    orderIds' actual fills, never inferred from position snapshots."""
+    import json as _json
+
+    from nautilus_trader.core.nautilus_pyo3 import HttpMethod
+
+    client, _api, clock = _build_api()
+
+    async def go() -> dict:
         resp = await client.sign_request(
             http_method=HttpMethod.GET,
-            url_path="/fapi/v1/allOrders",
-            payload={"symbol": symbol, "startTime": str(int(start_ms)), "limit": "1000",
+            url_path="/fapi/v1/order",
+            payload={"symbol": symbol, "orderId": str(int(order_id)),
                      "timestamp": str(clock.timestamp_ms()), "recvWindow": "5000"},
         )
         body = resp.body if hasattr(resp, "body") else resp

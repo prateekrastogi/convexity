@@ -5,6 +5,7 @@
 Description=convexity equity data maintenance (dukascopy backfill + split watch)
 Wants=network-online.target
 After=network-online.target
+OnFailure=convexity-alert@%n.service
 [Service]
 Type=oneshot
 User=ubuntu

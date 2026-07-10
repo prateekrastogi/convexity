@@ -1,0 +1,9 @@
+# Delayed one-shot retry (PAPER.md §12.6): sessions are idempotent (settle guard, venue-truth
+# carried book, resting-order cancel), so a re-run after a transient failure is safe. The
+# TARGET unit's StartLimitBurst=3/4h bounds retry loops.
+[Unit]
+Description=convexity delayed retry of %i
+[Service]
+Type=oneshot
+ExecStartPre=/bin/sleep 900
+ExecStart=/bin/systemctl start %i

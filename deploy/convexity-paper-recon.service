@@ -4,6 +4,7 @@
 Description=convexity paper daily reconciliation
 Wants=network-online.target
 After=network-online.target
+OnFailure=convexity-alert@%n.service
 [Service]
 Type=oneshot
 User=ubuntu

@@ -105,3 +105,13 @@ python -m convexity.paper manual --bootstrap   # PROD CUTOVER, once, BEFORE enab
 
 Wrong adoption? Hand-edit the ledger JSON. A reserve exceeding the venue position clamps the
 book share to 0 and journals the discrepancy (never inverts).
+
+## Production hardening (PAPER.md §12.6)
+
+- `CONVEXITY_VENUE=demo|prod` in `.env` is the ONLY venue switch (prod also needs
+  `BINANCE_FUTURES_API_KEY/_SECRET`). Every live session journals its venue resolution.
+- Alerts: unit failures append to `data/paper/ALERTS.jsonl` and push via `NTFY_TOPIC` or
+  `TELEGRAM_BOT_TOKEN`+`TELEGRAM_CHAT_ID` if set in `.env`. Rebalance/finalize auto-retry once
+  after 15 min. Watchdog Sun 12:00 UTC verifies the Saturday cycle completed.
+- Backups: nightly 06:10 UTC to `/home/speculation/backups` + the repo's `journal-backups`
+  branch. Restore = untar over `data/paper/`.

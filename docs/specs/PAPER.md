@@ -337,3 +337,46 @@ kill-flattened. The carve-out:
   finalize re-syncs before crossing, and the clamp contains the worst case. Manual LIMIT orders
   resting >14 days before filling escape the lookback (app orders are effectively immediate);
   the discrepancy notes surface any residue.
+
+### 12.6 Production hardening (2026-07-10 adversarial audit)
+
+Findings and fixes from the pre-prod adversarial audit; all shipped together.
+
+- **One venue switch** (P0-1): `CONVEXITY_VENUE=demo|prod` (.env; default demo) is the ONLY
+  venue selection point — `paper/venue.py` resolves the gateway environment, API key env names
+  (`BINANCE_FUTURES_DEMO_API_KEY/_SECRET` vs `BINANCE_FUTURES_API_KEY/_SECRET`), exchangeInfo
+  filters, the tradeable gate, maker pegs and live prices. DATA tails (klines/funding) stay on
+  prod always (demo history is thin). Every live session journals a `venue` record and asserts
+  the Nautilus adapter resolved the same base URL, aborting on drift before any order.
+- **Settle idempotency** (P0-2): a settle is folded into the equity chain exactly once
+  (`_already_settled` guard keyed on week_end); the settle's carry-in targets skip same-asof
+  duplicates from crash-reruns (`_carry_in_targets`), so turnover cost can't silently read zero.
+- **Alerting / retry / watchdog** (P0-3): every fleet unit carries `OnFailure=` →
+  `convexity-alert@` (durable `data/paper/ALERTS.jsonl` + optional push via `NTFY_TOPIC` or
+  `TELEGRAM_BOT_TOKEN`+`TELEGRAM_CHAT_ID` in .env). Rebalance/finalize additionally arm
+  `convexity-retry@` (one delayed re-run 15 min later — sessions are idempotent by
+  construction; `StartLimitBurst=3`/4h on the target bounds loops). `convexity-watchdog.timer`
+  (Sun 12:00 UTC) asserts every book journaled live targets + a finalized record for the most
+  recent Friday.
+- **Finalize v2** (P1-4): `_submit_live` journals every submitted orderId
+  (`submission_ids`); finalize computes each remainder as `want − executedQty` from OUR order
+  fills (`fetch_order`) — unfilled RESIZE makers are crossed too, not only opens-from-flat. If
+  a fill state is unreadable it SKIPS loudly rather than crossing blind. v1 zero-share
+  heuristic remains only as the fallback for pre-v2 journals.
+- **Durability + backup** (P1-5): journal appends and ledger writes fsync;
+  `convexity-backup.timer` (daily 06:10 UTC) tars journals/ledgers/flags to
+  `/home/speculation/backups` (rotation 30) and force-pushes the set to the private repo's
+  `journal-backups` branch (off-VM copy, bounded size).
+- **Margin monitor fail-closed in sizing** (P1-6): a live REBALANCE aborts if the margin
+  monitor is unreadable; the daily recon stays fail-open (observability).
+- **Attribution pagination** (P2-8): `fetch_recent_orders` pages by orderId cursor (10 pages
+  x 1000), removing the >1000-orders truncation.
+- **Drift observability** (P2-14): daily recon journals `position_drift` — per-symbol
+  venue-vs-target notional and the absolute total, priced off the execution venue.
+
+**Prod cutover runbook** (supersedes the §12.4 venue notes): (1) set `CONVEXITY_VENUE=prod` +
+`BINANCE_FUTURES_API_KEY/_SECRET` in .env; (2) `manual --bootstrap` once (virgin account);
+(3) verify margin modes (cross + single-asset), sign the TradFi agreement, `allocate-split`;
+(4) one SUPERVISED rebalance+finalize cycle watching the `venue` journal records and finalize
+mode=ids; (5) enable timers; (6) keep the demo fleet running 2-4 weeks as a shadow book and
+compare journals weekly. The first two prod cycles stay supervised.

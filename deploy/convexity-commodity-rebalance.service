@@ -8,6 +8,9 @@
 Description=convexity commodity paper weekly rebalance (RV pairs)
 Wants=network-online.target
 After=network-online.target
+OnFailure=convexity-alert@%n.service convexity-retry@%n.service
+StartLimitIntervalSec=14400
+StartLimitBurst=3
 [Service]
 Type=oneshot
 User=ubuntu

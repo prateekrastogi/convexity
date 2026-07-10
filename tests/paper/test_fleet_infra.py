@@ -427,3 +427,68 @@ def test_manual_bootstrap_rule():
     with pytest.raises(RuntimeError, match="one-time"):
         bootstrap_reserve({"AAPLUSDT": 3.5}, {"NVDAUSDT": 1.0}, [])
 
+
+# ---------------------------------------------------------------- production hardening (§12.6)
+
+
+def test_venue_switch(monkeypatch):
+    """Audit P0-1: ONE env var selects every execution surface; invalid values refuse."""
+    import pytest
+
+    from convexity.paper import venue as V
+
+    monkeypatch.delenv("CONVEXITY_VENUE", raising=False)
+    assert V.venue() == "demo"
+    assert V.execution_base() == "https://demo-fapi.binance.com"
+    assert V.key_env_names()[0] == "BINANCE_FUTURES_DEMO_API_KEY"
+    monkeypatch.setenv("CONVEXITY_VENUE", "prod")
+    assert V.execution_base() == "https://fapi.binance.com"
+    assert V.key_env_names() == ("BINANCE_FUTURES_API_KEY", "BINANCE_FUTURES_API_SECRET")
+    monkeypatch.setenv("CONVEXITY_VENUE", "staging")
+    with pytest.raises(RuntimeError, match="CONVEXITY_VENUE"):
+        V.venue()
+
+
+def test_settle_idempotency_helpers(tmp_path):
+    """Audit P0-2: a crash-rerun must neither double-settle a week nor zero the settle's
+    turnover through a same-asof duplicate targets record."""
+    from convexity.paper.cli import _already_settled, _carry_in_targets
+    from convexity.paper.journal import Journal
+
+    j = Journal(tmp_path / "j.jsonl")
+    assert not _already_settled(j, "2026-07-10")
+    j.append("settle", "2026-07-10", r_model=0.01)
+    assert _already_settled(j, "2026-07-10")
+    assert not _already_settled(j, "2026-07-17")
+
+    recs = [{"asof": "2026-07-03", "g_t": 1.0}, {"asof": "2026-07-10", "g_t": 1.2},
+            {"asof": "2026-07-10", "g_t": 1.3}]  # crash-rerun duplicate
+    assert _carry_in_targets(recs)["asof"] == "2026-07-03"
+    assert _carry_in_targets([{"asof": "a"}, {"asof": "a"}]) is None
+    assert _carry_in_targets([{"asof": "a"}]) is None
+
+
+def test_position_drift_metric():
+    """Audit P2-14: venue-vs-target notional drift, scaled-weight semantics."""
+    from convexity.paper.cli import _position_drift
+
+    t = {"symbols": ["AUSDT", "BUSDT"], "weights": [0.5, 0.0], "g_t": 2.0, "nav": 100.0}
+    tot, top = _position_drift(t, {"AUSDT": 9.0, "CUSDT": 3.0},
+                               {"AUSDT": 10.0, "CUSDT": 5.0})
+    # AUSDT: venue 90 vs target 0.5*2*100=100 -> -10; CUSDT: venue 15 vs target 0 -> +15
+    assert tot == 25.0
+    assert top[0] == ["CUSDT", 15.0]
+    assert ["AUSDT", -10.0] in top
+
+
+def test_watchdog_last_friday():
+    import datetime as dt
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("fw", "scripts/fleet_watchdog.py")
+    fw = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(fw)
+    assert fw.last_friday_iso(dt.date(2026, 7, 12)) == "2026-07-10"  # Sunday
+    assert fw.last_friday_iso(dt.date(2026, 7, 10)) == "2026-07-10"  # Friday itself
+    assert fw.last_friday_iso(dt.date(2026, 7, 9)) == "2026-07-03"   # Thursday
+
