@@ -28,7 +28,7 @@ import pathlib
 import time
 from contextlib import contextmanager
 
-from convexity.paper.fleetconfig import ACCOUNT_LOCK_PATH, ACCOUNT_LOCK_TIMEOUT_S
+from convexity.paper.fleetconfig import ACCOUNT_LOCK_TIMEOUT_S
 
 _POLL_S = 0.5
 
@@ -40,7 +40,12 @@ class AccountLockTimeout(RuntimeError):
 
 @contextmanager
 def account_lock(book: str, timeout: float = ACCOUNT_LOCK_TIMEOUT_S,
-                 path: str | os.PathLike = ACCOUNT_LOCK_PATH):
+                 path: str | os.PathLike | None = None):
+    if path is None:
+        # per-venue lock (PAPER.md §12.6): demo and prod are DIFFERENT exchange accounts —
+        # serializing them against each other would be pure false contention
+        from convexity.paper.venue import state_root
+        path = state_root() / "account.lock"
     p = pathlib.Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
     f = open(p, "a+")

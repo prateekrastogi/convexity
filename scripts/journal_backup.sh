@@ -16,6 +16,11 @@ tar czf "$BK/paperstate-$TS.tar.gz" --ignore-failed-read \
   data/paper/equity/journal.jsonl \
   data/paper/manual_reserve.json \
   data/paper/manual_sync.json \
+  data/prod/crypto/journal.jsonl \
+  data/prod/commodity/journal.jsonl \
+  data/prod/equity/journal.jsonl \
+  data/prod/manual_reserve.json \
+  data/prod/manual_sync.json \
   data/paper/ALERTS.jsonl \
   data/universe/equity_flags.json 2>/dev/null || true
 ls -1t "$BK"/paperstate-*.tar.gz 2>/dev/null | tail -n +31 | xargs -r rm

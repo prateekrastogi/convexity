@@ -64,6 +64,16 @@ def assert_consistent() -> None:
             f"(CONVEXITY_VENUE={venue()}) — aborting before any order")
 
 
+def state_root():
+    """Venue-namespaced paper-state root (PAPER.md §12.6): demo keeps the original data/paper
+    (journals, lock, ledgers — history byte-untouched); prod isolates under data/prod so BOTH
+    fleets run from ONE checkout without ever blending accounting. Lake/universe stay shared
+    (venue-agnostic data)."""
+    import pathlib
+
+    return pathlib.Path("data/paper" if venue() == "demo" else "data/prod")
+
+
 def describe() -> dict:
     return {"venue": venue(), "execution_base": execution_base(),
             "key_env": key_env_names()[0]}

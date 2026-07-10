@@ -35,6 +35,7 @@ from convexity.paper.books import (
     assert_disjoint_domains,
     book_domain,
     book_filters,
+    book_journal_path,
 )
 from convexity.paper.capital import sizing_nav
 from convexity.paper.journal import Journal
@@ -71,7 +72,7 @@ def _book(args: argparse.Namespace) -> BookSpec:
 
 
 def _journal(spec: BookSpec) -> Journal:
-    return Journal(spec.journal_path)
+    return Journal(book_journal_path(spec))
 
 
 def _overlay_native_funding(panel: Panel) -> Panel:
@@ -446,7 +447,9 @@ TARGETS_BY_BOOK = {"crypto": _crypto_targets, "commodity": _commodity_targets,
 
 
 def _kill_path(spec: BookSpec) -> pathlib.Path:
-    return pathlib.Path(f"data/paper/{spec.name}/KILL")
+    from convexity.paper.venue import state_root
+
+    return state_root() / spec.name / "KILL"
 
 
 def _flatten_book_live(spec: BookSpec, j: Journal, reason: str) -> None:
@@ -1052,7 +1055,7 @@ def _allocate_one(spec: BookSpec, amount: float) -> None:
     j.append("allocate", asof, amount=float(amount), book=spec.name)
     j.append("equity_mark", asof, equity=float(amount))
     other = [b for b in BOOKS.values() if b.name != spec.name]
-    others = {b.name: Journal(b.journal_path).last("allocate") for b in other}
+    others = {b.name: Journal(book_journal_path(b)).last("allocate") for b in other}
     total = float(amount) + sum(float(a["amount"]) for a in others.values() if a)
     print(f"[allocate:{spec.name}] {amount:.2f} journaled; all-book allocations sum to "
           f"{total:.2f} — verify this stays within the account's USDT+USDC (runbook)")
@@ -1123,7 +1126,8 @@ def cmd_kill(args: argparse.Namespace) -> None:
 def cmd_status(args: argparse.Namespace) -> None:
     spec = _book(args)
     j = _journal(spec)
-    print(f"[status] book={spec.name} journal={spec.journal_path}")
+    from convexity.paper.venue import venue
+    print(f"[status] book={spec.name} venue={venue()} journal={book_journal_path(spec)}")
     for kind in ("allocate", "targets", "orders", "settle", "equity_mark", "book_recon",
                  "flow", "directive", "recon"):
         rec = j.last(kind)
@@ -1140,11 +1144,7 @@ def cmd_manual(args: argparse.Namespace) -> None:
     (books read it fresh each session)."""
     import time as _time
 
-    from convexity.paper.manual import (
-        MANUAL_RESERVE_PATH,
-        load_reserve,
-        load_sync_state,
-    )
+    from convexity.paper.manual import load_reserve, load_sync_state, reserve_path
 
     now_ms = int(_time.time() * 1000)
     if getattr(args, "bootstrap", False):
@@ -1172,7 +1172,7 @@ def cmd_manual(args: argparse.Namespace) -> None:
         return
     res = load_reserve()
     if not res:
-        print(f"[manual] no operator reserves ({MANUAL_RESERVE_PATH}) — auto-adopted from "
+        print(f"[manual] no operator reserves ({reserve_path()}) — auto-adopted from "
               f"non-cvx fills at every sync")
     for sym, qty in sorted(res.items()):
         print(f"[manual] {sym:>14} reserved {qty:+g}")

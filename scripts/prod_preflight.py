@@ -55,10 +55,14 @@ def main() -> None:  # noqa: C901 — a checklist is linear by nature
         p = pathlib.Path("data") / sub
         rec("PASS" if p.exists() else "FAIL", f"lake:{sub}",
             "reachable" if p.exists() else "missing symlink — rerun setup_prod_checkout.sh")
-    pp = pathlib.Path("data/paper")
-    rec("PASS" if pp.is_dir() and not pp.is_symlink() else "FAIL", "paper-state",
-        "own real dir (journals isolated from demo)" if pp.is_dir() and not pp.is_symlink()
-        else "data/paper must be a REAL dir, not shared with demo")
+    from convexity.paper.venue import state_root
+    pp = state_root()
+    pp.mkdir(parents=True, exist_ok=True)
+    ok_state = pp.is_dir() and not pp.is_symlink() and pp.name != "paper"
+    rec("PASS" if ok_state else "FAIL", "paper-state",
+        f"venue state root {pp} (prod journals isolated from demo's data/paper)" if ok_state
+        else f"state root resolves to {pp} — prod must namespace under data/prod "
+             f"(is CONVEXITY_VENUE=prod set?)")
 
     if not have_keys:
         rec("WARN", "venue-checks", "skipped (no keys yet): auth, margin modes, balance, "
@@ -119,11 +123,11 @@ def main() -> None:  # noqa: C901 — a checklist is linear by nature
         f"USDT+USDC = {usdt:.2f} (BTC excluded by mandate)")
 
     # 9) allocations vs collateral
-    from convexity.paper.books import BOOKS
+    from convexity.paper.books import BOOKS, book_journal_path
     from convexity.paper.journal import Journal
     allocs = {}
     for name, spec in BOOKS.items():
-        a = Journal(spec.journal_path).last("allocate")
+        a = Journal(book_journal_path(spec)).last("allocate")
         allocs[name] = float(a["amount"]) if a else None
     if any(a is None for a in allocs.values()):
         rec("FAIL", "allocations",
@@ -140,7 +144,7 @@ def main() -> None:  # noqa: C901 — a checklist is linear by nature
     from convexity.paper.manual import load_reserve
     reserve = load_reserve()
     live_targets = any(
-        any(r.get("mode") == "live" for r in Journal(s.journal_path).read("targets"))
+        any(r.get("mode") == "live" for r in Journal(book_journal_path(s)).read("targets"))
         for s in BOOKS.values())
     if snap.positions and not reserve and not live_targets:
         rec("FAIL", "bootstrap",

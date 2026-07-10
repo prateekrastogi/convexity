@@ -57,6 +57,17 @@ EQUITY = BookSpec(
 BOOKS: dict[str, BookSpec] = {b.name: b for b in (CRYPTO, COMMODITY, EQUITY)}
 
 
+def book_journal_path(spec: BookSpec) -> str:
+    """Venue-resolved journal path (PAPER.md §12.6). Demo keeps the committed legacy paths
+    (crypto's original data/paper/journal.jsonl included); prod gets the uniform
+    data/prod/<book>/journal.jsonl — a fresh accounting chain per venue by construction."""
+    from convexity.paper.venue import state_root, venue
+
+    if venue() == "demo":
+        return spec.journal_path
+    return str(state_root() / spec.name / "journal.jsonl")
+
+
 def book_domain(spec: BookSpec) -> frozenset[str]:
     """Every symbol the book may ever touch (incl. discovered-overlay names for the commodity
     book, so a discovered-then-manually-traded-then-dropped name can still be swept)."""

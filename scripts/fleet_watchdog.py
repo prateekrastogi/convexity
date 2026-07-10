@@ -12,7 +12,7 @@ import sys
 
 sys.path.insert(0, "src")
 
-from convexity.paper.books import BOOKS  # noqa: E402
+from convexity.paper.books import BOOKS, book_journal_path  # noqa: E402
 from convexity.paper.journal import Journal  # noqa: E402
 
 
@@ -25,7 +25,7 @@ def check(today: dt.date | None = None) -> list[str]:
     friday = last_friday_iso(today)
     problems: list[str] = []
     for spec in BOOKS.values():
-        j = Journal(spec.journal_path)
+        j = Journal(book_journal_path(spec))
         t = j.last("targets")
         if t is None or t.get("asof") != friday or t.get("mode") != "live":
             problems.append(f"{spec.name}: no LIVE targets for {friday} "

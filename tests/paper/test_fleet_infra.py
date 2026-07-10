@@ -492,3 +492,40 @@ def test_watchdog_last_friday():
     assert fw.last_friday_iso(dt.date(2026, 7, 10)) == "2026-07-10"  # Friday itself
     assert fw.last_friday_iso(dt.date(2026, 7, 9)) == "2026-07-03"   # Thursday
 
+
+def test_venue_state_namespacing(monkeypatch):
+    """PAPER.md §12.6: ONE checkout, both venues — demo state paths byte-identical to the
+    legacy layout; prod isolates every stateful path under data/prod."""
+    from convexity.paper import venue as V
+    from convexity.paper.books import BOOKS, book_journal_path
+    from convexity.paper.manual import reserve_path, sync_state_path
+
+    monkeypatch.delenv("CONVEXITY_VENUE", raising=False)
+    assert str(V.state_root()) == "data/paper"
+    assert book_journal_path(BOOKS["crypto"]) == "data/paper/journal.jsonl"  # legacy preserved
+    assert book_journal_path(BOOKS["equity"]) == "data/paper/equity/journal.jsonl"
+    assert str(reserve_path()) == "data/paper/manual_reserve.json"
+
+    monkeypatch.setenv("CONVEXITY_VENUE", "prod")
+    assert str(V.state_root()) == "data/prod"
+    assert book_journal_path(BOOKS["crypto"]) == "data/prod/crypto/journal.jsonl"
+    assert book_journal_path(BOOKS["commodity"]) == "data/prod/commodity/journal.jsonl"
+    assert book_journal_path(BOOKS["equity"]) == "data/prod/equity/journal.jsonl"
+    assert str(reserve_path()) == "data/prod/manual_reserve.json"
+    assert str(sync_state_path()) == "data/prod/manual_sync.json"
+
+
+def test_venue_lock_isolation(tmp_path, monkeypatch):
+    """Demo and prod are different exchange accounts: their locks must not contend."""
+    import os
+
+    from convexity.paper.lock import account_lock
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("CONVEXITY_VENUE", raising=False)
+    with account_lock("demo-test", timeout=1.0):
+        monkeypatch.setenv("CONVEXITY_VENUE", "prod")
+        with account_lock("prod-test", timeout=1.0):  # would deadlock if shared
+            assert os.path.exists("data/paper/account.lock")
+            assert os.path.exists("data/prod/account.lock")
+

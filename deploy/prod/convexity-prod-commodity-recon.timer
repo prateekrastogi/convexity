@@ -1,0 +1,7 @@
+[Unit]
+Description=convexity commodity paper daily reconciliation (00:45 UTC, after crypto's 00:25) (PROD)
+[Timer]
+OnCalendar=*-*-* 00:50:00 UTC
+Persistent=true
+[Install]
+WantedBy=timers.target

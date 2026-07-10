@@ -39,8 +39,20 @@ import json
 import os
 import pathlib
 
-MANUAL_RESERVE_PATH = "data/paper/manual_reserve.json"
+MANUAL_RESERVE_PATH = "data/paper/manual_reserve.json"  # demo; prod resolves via venue
 SYNC_STATE_PATH = "data/paper/manual_sync.json"
+
+
+def reserve_path() -> pathlib.Path:
+    from convexity.paper.venue import state_root
+
+    return state_root() / "manual_reserve.json"
+
+
+def sync_state_path() -> pathlib.Path:
+    from convexity.paper.venue import state_root
+
+    return state_root() / "manual_sync.json"
 OUR_ORDER_PREFIX = "cvx-"
 TERMINAL_STATUSES = {"FILLED", "CANCELED", "CANCELLED", "EXPIRED", "REJECTED",
                      "EXPIRED_IN_MATCH"}
@@ -48,8 +60,8 @@ LOOKBACK_MS = 14 * 86_400_000  # re-scan window for orders that went terminal la
 _EPS = 1e-12
 
 
-def load_reserve(path: str | pathlib.Path = MANUAL_RESERVE_PATH) -> dict[str, float]:
-    p = pathlib.Path(path)
+def load_reserve(path: str | pathlib.Path | None = None) -> dict[str, float]:
+    p = pathlib.Path(path) if path is not None else reserve_path()
     if not p.exists():
         return {}
     try:
@@ -65,8 +77,8 @@ def load_reserve(path: str | pathlib.Path = MANUAL_RESERVE_PATH) -> dict[str, fl
 
 
 def save_reserve(reserve: dict[str, float],
-                 path: str | pathlib.Path = MANUAL_RESERVE_PATH) -> None:
-    p = pathlib.Path(path)
+                 path: str | pathlib.Path | None = None) -> None:
+    p = pathlib.Path(path) if path is not None else reserve_path()
     p.parent.mkdir(parents=True, exist_ok=True)
     tmp = p.with_suffix(".json.tmp")
     with tmp.open("w") as f:
@@ -155,12 +167,12 @@ def bootstrap_reserve(venue_positions: dict[str, float],
 
 
 def load_sync_state(now_ms: int,
-                    path: str | pathlib.Path = SYNC_STATE_PATH) -> dict:
+                    path: str | pathlib.Path | None = None) -> dict:
     """{"deploy_ms": int, "symbols": {sym: {"watermark": ms, "done": {orderId: update_ms}}}}.
 
     Created on first call with ``deploy_ms = now_ms`` — the anchor that keeps every pre-feature
     order (none of which carries the ``cvx-`` stamp) out of attribution forever."""
-    p = pathlib.Path(path)
+    p = pathlib.Path(path) if path is not None else sync_state_path()
     if not p.exists():
         state = {"deploy_ms": int(now_ms), "symbols": {}}
         _save_sync_state(state, p)
@@ -174,8 +186,8 @@ def load_sync_state(now_ms: int,
             f"good sync and now would then need a hand edit of the reserve ledger)")
 
 
-def _save_sync_state(state: dict, path: str | pathlib.Path = SYNC_STATE_PATH) -> None:
-    p = pathlib.Path(path)
+def _save_sync_state(state: dict, path: str | pathlib.Path | None = None) -> None:
+    p = pathlib.Path(path) if path is not None else sync_state_path()
     p.parent.mkdir(parents=True, exist_ok=True)
     tmp = p.with_suffix(".json.tmp")
     with tmp.open("w") as f:
@@ -189,8 +201,8 @@ def auto_sync(
     fetch_orders,
     venue_positions: dict[str, float],
     now_ms: int,
-    ledger_path: str | pathlib.Path = MANUAL_RESERVE_PATH,
-    state_path: str | pathlib.Path = SYNC_STATE_PATH,
+    ledger_path: str | pathlib.Path | None = None,
+    state_path: str | pathlib.Path | None = None,
 ) -> tuple[list[dict], list[str]]:
     """Adopt the operator's manual fills into the reserve ledger.
 

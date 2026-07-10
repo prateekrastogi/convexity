@@ -116,25 +116,22 @@ book share to 0 and journals the discrepancy (never inverts).
 - Backups: nightly 06:10 UTC to `/home/speculation/backups` + the repo's `journal-backups`
   branch. Restore = untar over `data/paper/`.
 
-## Prod deployment (separate checkout, PAPER.md §12.6)
+## Prod deployment (single checkout, dual venue — PAPER.md §12.6)
 
-The prod fleet runs from `/home/speculation/convexity-prod` — its own journals, account lock,
-`.env` (CONVEXITY_VENUE=prod + `BINANCE_FUTURES_API_KEY/_SECRET`) and venv; the lake is shared
-read-only via symlinks. The demo checkout keeps running untouched as the shadow book and stays
-the ONLY lake writer (lake-refresh/datamaint/discovery are not duplicated).
+Both fleets run from THIS checkout. The one `.env` holds BOTH key sets
+(`BINANCE_FUTURES_DEMO_API_KEY/_SECRET` and `BINANCE_FUTURES_API_KEY/_SECRET`) and must NOT set
+`CONVEXITY_VENUE` (EnvironmentFile= overrides Environment=; code defaults to demo). Prod units
+(`deploy/prod/`, +5 min stagger) pin the venue on ExecStart: `/usr/bin/env CONVEXITY_VENUE=prod`.
+State is venue-namespaced: demo at `data/paper/**` (unchanged), prod at
+`data/prod/<book>/journal.jsonl` + own account.lock/manual ledgers. One backup unit tars both.
 
 ```bash
-bash scripts/setup_prod_checkout.sh        # idempotent: checkout, symlinks, .env template,
-                                           # venv, prod units installed DISABLED (+5min stagger)
-# fill /home/speculation/convexity-prod/.env with the prod keys, then:
-cd /home/speculation/convexity-prod
-set -a; source .env; set +a
-.venv/bin/python scripts/prod_preflight.py # read-only checklist; exit 0 = ready
+CONVEXITY_VENUE=prod .venv/bin/python scripts/prod_preflight.py   # gate; exit 0 = ready
+sudo cp deploy/prod/convexity-prod-* /etc/systemd/system/ && sudo systemctl daemon-reload
 ```
 
-Cutover (first cycle SUPERVISED, §12.6): preflight green -> `manual --bootstrap` (if you hold
-positions) -> `allocate-split --total <prod USDT>` -> run rebalance/finalize by hand watching
-the venue record and `finalized mode=ids` -> `sudo systemctl enable --now
-convexity-prod-{paper,commodity,equity}-{rebalance,finalize,recon}.timer
-convexity-prod-watchdog.timer convexity-prod-backup.timer`. Backups land in
-`/home/speculation/backups/<checkout>` and per-checkout `journal-backups-<checkout>` branches.
+Cutover (first cycle SUPERVISED, §12.6): preflight green -> `CONVEXITY_VENUE=prod ... manual
+--bootstrap` (if you hold positions) -> `CONVEXITY_VENUE=prod ... allocate-split --total <prod
+USDT>` -> one supervised prod rebalance/finalize (watch the `venue` record + `finalized
+mode=ids`) -> `sudo systemctl enable --now convexity-prod-{paper,commodity,equity}-{rebalance,finalize,recon}.timer convexity-prod-watchdog.timer`.
+Manual prod CLI runs always prefix `CONVEXITY_VENUE=prod`; bare commands are demo by default.

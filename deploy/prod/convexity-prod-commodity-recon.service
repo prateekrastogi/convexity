@@ -1,0 +1,16 @@
+# Daily commodity-book reconciliation (PAPER.md §11): book model equity + domain-scoped venue
+# positions/unrealized + shared account equity journaled side by side (book_recon), so
+# live-vs-model drift is measured — never silently blended with the crypto book.
+[Unit]
+Description=convexity commodity paper daily reconciliation (PROD)
+Wants=network-online.target
+After=network-online.target
+OnFailure=convexity-alert@%n.service
+[Service]
+Type=oneshot
+User=ubuntu
+WorkingDirectory=/home/speculation/convexity
+EnvironmentFile=/home/speculation/convexity/.env
+Environment=PYTHONPATH=/home/speculation/convexity
+ExecStart=/usr/bin/env CONVEXITY_VENUE=prod /home/speculation/convexity/.venv/bin/python -m convexity.paper recon --live --book commodity
+TimeoutStartSec=300

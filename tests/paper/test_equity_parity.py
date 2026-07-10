@@ -46,11 +46,19 @@ pytestmark = pytest.mark.skipif(
 
 def _backtest_universe() -> list[str]:
     """The validated 93-name backtest universe, reconciled exactly as the D1 reference did:
-    equities sleeve, duka-history present, span >= 100d, minus the 6 leveraged/inverse ETFs."""
+    equities sleeve, duka-history present, span >= 100d, minus the 6 leveraged/inverse ETFs.
+
+    COMMITTED block only (include_discovered=False, pinned 2026-07-10): the weekly
+    auto-promotion grows the LIVE universe through the gitignored overlay (WEN was the first —
+    its 260d warmup completed 2026-05-05 and shifted breadth on 8 days, breaking day-level
+    parity at ~1.4e-3). The parity invariant is CODE vs the VALIDATED artifact on the VALIDATED
+    inputs; live-universe evolution is intended divergence, measured by recon/EDGE tracking,
+    never by this gate. A deliberate candidates.md promotion (committed, reviewed) DOES change
+    this set — re-baseline the reference consciously when that happens."""
     from convexity.panel.candidates import load_universe
 
     out = []
-    for x in load_universe()["equities"]:
+    for x in load_universe(include_discovered=False)["equities"]:
         sym = x["symbol"]
         if sym in EQUITY_ETF_EXCLUSIONS:
             continue

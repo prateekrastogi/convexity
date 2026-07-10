@@ -1,0 +1,17 @@
+# Window-end crossing of the equity book's unfilled maker remainders (PAPER.md §4 finalize
+# convention; 2h10m after its rebalance, mirroring the other books' spacing).
+[Unit]
+Description=convexity equity paper finalize (cross unfilled remainders) (PROD)
+Wants=network-online.target
+After=network-online.target
+OnFailure=convexity-alert@%n.service convexity-retry@%n.service
+StartLimitIntervalSec=14400
+StartLimitBurst=3
+[Service]
+Type=oneshot
+User=ubuntu
+WorkingDirectory=/home/speculation/convexity
+EnvironmentFile=/home/speculation/convexity/.env
+Environment=PYTHONPATH=/home/speculation/convexity
+ExecStart=/usr/bin/env CONVEXITY_VENUE=prod /home/speculation/convexity/.venv/bin/python -m convexity.paper finalize --live --book equity
+TimeoutStartSec=900

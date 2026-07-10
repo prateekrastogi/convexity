@@ -1,0 +1,21 @@
+# Weekly COMMODITY-BOOK rebalance (PAPER.md §11): settles the prior week (book-scoped model
+# equity), computes the frozen RV pair targets (band z + HL gate + pair RP + 10% vol target,
+# signal/rv_pairs.py), journals + submits maker-first orders, then sweeps THIS BOOK'S orphans
+# only. Staggered 30 min after the crypto book so the two sessions never interleave submissions
+# on the shared demo account. Oneshot pure-recompute; separate journal + journalctl unit so the
+# commodity book is monitored independently of crypto.
+[Unit]
+Description=convexity commodity paper weekly rebalance (RV pairs) (PROD)
+Wants=network-online.target
+After=network-online.target
+OnFailure=convexity-alert@%n.service convexity-retry@%n.service
+StartLimitIntervalSec=14400
+StartLimitBurst=3
+[Service]
+Type=oneshot
+User=ubuntu
+WorkingDirectory=/home/speculation/convexity
+EnvironmentFile=/home/speculation/convexity/.env
+Environment=PYTHONPATH=/home/speculation/convexity
+ExecStart=/usr/bin/env CONVEXITY_VENUE=prod /home/speculation/convexity/.venv/bin/python -m convexity.paper rebalance --live --book commodity
+TimeoutStartSec=1800
