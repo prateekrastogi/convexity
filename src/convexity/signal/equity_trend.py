@@ -1,4 +1,4 @@
-"""Equity trend book signal + policy (docs/EQUITY_BOOK_DESIGN.md §1) — the D1v2 deployable.
+"""Equity trend book signal + policy (PAPER.md §12.1) — the D1v2 deployable.
 
 An EXACT production port of the D1-validated construction (reference scripts pinned at
 ``tests/fixtures/equity_book/``; validated: CAGR 28.26%, maxDD 30.02%, Sharpe 1.1676, realized

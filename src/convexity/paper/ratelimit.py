@@ -1,4 +1,4 @@
-"""Shared API pacing (docs/EQUITY_BOOK_DESIGN.md §5) — deliberately simple.
+"""Shared API pacing (PAPER.md §12.2) — deliberately simple.
 
 A monotonic-clock minimum-interval gate per call class (authed vs public). At this fleet's order
 volume (tens of orders per WEEK across three books) a token bucket sized to Binance's documented

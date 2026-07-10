@@ -1,4 +1,4 @@
-"""PARITY TEST (docs/EQUITY_BOOK_DESIGN.md §1) — THE blocking anti-bug gate for the equity book.
+"""PARITY TEST (PAPER.md §12.1) — THE blocking anti-bug gate for the equity book.
 
 The production signal/sizing/brake chain (convexity.signal.equity_trend — the SAME functions the
 live rebalance calls), run in backtest mode over the validated historical window, must reproduce
@@ -129,7 +129,7 @@ def test_equity_book_parity_against_validated_reference():
 @pytest.mark.slow
 def test_l_half_provenance():
     """The frozen L_HALF constant must re-derive from the pinned fixture inputs — provenance
-    stays verifiable without runtime drift (design §1)."""
+    stays verifiable without runtime drift (PAPER.md §12.1)."""
     import importlib.util
 
     from convexity.paper.fleetconfig import EQUITY_L_HALF

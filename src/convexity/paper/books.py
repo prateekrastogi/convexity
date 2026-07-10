@@ -51,7 +51,7 @@ EQUITY = BookSpec(
     name="equity",
     sleeves=("equities",),
     journal_path="data/paper/equity/journal.jsonl",
-    default_nav=250.0,  # ALLOC_UNITS convention: 250/1000 (docs/EQUITY_BOOK_DESIGN.md §7)
+    default_nav=250.0,  # ALLOC_UNITS convention: 250/1000 (PAPER.md §12.1)
 )
 
 BOOKS: dict[str, BookSpec] = {b.name: b for b in (CRYPTO, COMMODITY, EQUITY)}

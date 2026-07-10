@@ -1,4 +1,4 @@
-"""Fleet configuration — every owner-tunable value in ONE place (docs/EQUITY_BOOK_DESIGN.md §7).
+"""Fleet configuration — every owner-tunable value in ONE place (PAPER.md §12.1).
 
 Values here are OWNER DECISIONS, changeable without code edits elsewhere. Provenance is noted per
 value; nothing in this module is derived at runtime.
@@ -44,7 +44,7 @@ EQUITY_FLAGS_PATH = "data/universe/equity_flags.json"
 # is an owner cutover option, not an autonomous change).
 LEVERAGE_DIAL: dict[str, int] = {"equity": 3}
 
-# --- Cross-margin software guardrails (docs/EQUITY_BOOK_DESIGN.md §3) --------------------------
+# --- Cross-margin software guardrails (PAPER.md §12.2) --------------------------
 # Account maintenance-margin-ratio thresholds. Justification: equity book worst historical day
 # −10.4% at ~1.9x ≈ −20% book NAV ≈ −5% of account at 250/1000; DERISK at 60% still leaves >3x
 # that shock before liquidation territory.
@@ -57,10 +57,10 @@ DERISK_PRIORITY: tuple[str, ...] = ("equity", "commodity", "crypto")
 LIQ_DISTANCE_MIN_MULTIPLE = 3.0
 WORST_HISTORICAL_DAY = 0.121
 
-# --- Account lock (docs/EQUITY_BOOK_DESIGN.md §4) ----------------------------------------------
+# --- Account lock (PAPER.md §12.2) ----------------------------------------------
 ACCOUNT_LOCK_PATH = "data/paper/account.lock"
 ACCOUNT_LOCK_TIMEOUT_S = 300.0
 
-# --- Shared API pacing (docs/EQUITY_BOOK_DESIGN.md §5) ------------------------------------------
+# --- Shared API pacing (PAPER.md §12.2) ------------------------------------------
 AUTHED_CALL_MIN_INTERVAL_S = 0.12
 PUBLIC_CALL_MIN_INTERVAL_S = 0.06

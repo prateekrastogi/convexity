@@ -1,4 +1,4 @@
-# Weekly EQUITY-BOOK rebalance (docs/EQUITY_BOOK_DESIGN.md): settles the prior week (book-scoped
+# Weekly EQUITY-BOOK rebalance (PAPER.md §12): settles the prior week (book-scoped
 # model equity on SCALED weights — the g_t carries L_half x breadth x brake), computes the
 # D1-validated trend-ensemble targets (signal/equity_trend.py, parity-pinned), journals + submits
 # maker-first orders under the account lock, then sweeps THIS BOOK'S orphans only. Staggered 30

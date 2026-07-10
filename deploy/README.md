@@ -61,3 +61,30 @@ Runbook BEFORE enabling (PAPER.md §11.5):
 Monitor the commodity book independently: `python -m convexity.paper status --book commodity`;
 `journalctl -u convexity-commodity-rebalance -n 100`; journal at
 `data/paper/commodity/journal.jsonl`, discovery log at `data/paper/commodity/discovery.jsonl`.
+
+## Equity book (PAPER.md §12) — separate units, separate monitoring
+
+**STATUS: MERGED 2026-07-10 (PR #3), TIMERS NOT ENABLED — the §12.4 runbook below must pass
+first.** Timed-beta book (owner decision; the certified research verdict on this universe was
+negative — EDGE.md §(g)); parity-pinned to the validated D1 construction (Invariant
+EQUITY-PARITY, tests/paper/test_equity_parity.py); 250/1000 allocation.
+
+Units (installed by the same `cp` above; staggered after crypto 00:10 and commodity 00:40):
+Sat 01:10 rebalance, Sat 03:20 finalize, daily 01:05 recon, Sat 05:30 data maintenance
+(dukascopy new-symbol backfill + split watch — PAPER.md §12.3).
+
+Runbook BEFORE enabling (PAPER.md §12.4 — supervised, touches live account state):
+1. Verify position-margin mode is CROSSED for traded symbols; asset mode stays SINGLE-ASSET
+   (PAPER.md §3.1 — the BTC mandate; two different axes).
+2. `python -m convexity.paper allocate-split --total <ACCOUNT_USDT>` — re-allocates ALL THREE
+   books 400/350/250 under the account lock.
+3. One supervised session: `python -m convexity.paper rebalance --live --book equity`, then
+   `finalize --live --book equity` ~2h later — watch the 3x leverage dial, maker fills, margin/
+   liq-distance journal records, and that the orphan sweep touches ONLY equity-domain symbols.
+4. `sudo systemctl enable --now convexity-equity-rebalance.timer convexity-equity-finalize.timer
+   convexity-equity-recon.timer convexity-equity-datamaint.timer`
+
+Kill switch (any book, any time): `python -m convexity.paper kill --book equity [--now]`;
+resume with `--resume`. Monitor: `status --book equity`; `journalctl -u
+convexity-equity-rebalance -n 100`; journal at `data/paper/equity/journal.jsonl`; split-watch
+flags at `data/universe/equity_flags.json` (clear a flag by setting `"cleared": true`).

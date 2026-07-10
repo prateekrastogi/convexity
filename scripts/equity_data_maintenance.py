@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Equity data maintenance (docs/EQUITY_BOOK_DESIGN.md §8) — its own timer, NEVER blocks trading.
+"""Equity data maintenance (PAPER.md §12.3) — its own timer, NEVER blocks trading.
 
 Two jobs, both idempotent, both degrade gracefully (trading proceeds on last-good data):
 
@@ -24,7 +24,7 @@ Two jobs, both idempotent, both degrade gracefully (trading proceeds on last-goo
     prior week's position meanwhile.
 
 Binance-side incremental updates for EXISTING symbols are NOT this script's job — the weekly
-lake-refresh chain already appends perp klines and re-stitches (recon-verified, design §8).
+lake-refresh chain already appends perp klines and re-stitches (recon-verified, PAPER.md §12.3).
 """
 
 from __future__ import annotations

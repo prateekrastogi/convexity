@@ -1,4 +1,4 @@
-# Equity data maintenance (docs/EQUITY_BOOK_DESIGN.md §8): new-symbol dukascopy backfill +
+# Equity data maintenance (PAPER.md §12.3): new-symbol dukascopy backfill +
 # split/corporate-action watch. Runs AFTER the Saturday lake refresh (04:00) it depends on.
 # Trading NEVER blocks on this — a failure degrades gracefully to last-good data.
 [Unit]

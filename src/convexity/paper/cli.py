@@ -56,7 +56,7 @@ STEP = 7
 # crypto: the recorded 13 bp parity anchor. commodity: Binance TradFi-perp VIP0 taker (same 5 bp
 # fee schedule) + the commodity sleeve's wider 3 bp half-spread + 0.5 bp impact = 17 bp RT —
 # inside the RV study's {12, 24} bp scenario band (RV_REPORT.md).
-# equity: 13 bp RT — the D1-validated backtest's own primary cost (parity anchor, design §1).
+# equity: 13 bp RT — the D1-validated backtest's own primary cost (parity anchor, PAPER.md §12.1).
 SETTLE_FRICTION: dict[str, float] = {
     "crypto": round_trip_friction(),
     "commodity": round_trip_friction(taker=5.0e-4, half_spread=3.0e-4, impact=0.5e-4),
@@ -216,7 +216,7 @@ def _settle_prior_week(j: Journal, spec: BookSpec, panel: Panel, d_now: int, liv
     # the commodity book's recorded deployable IS the vol-targeted book (RV_REPORT.md), and the
     # equity book's deployable IS the leveraged/braked book (its g_t carries L_half x breadth x
     # brake — the model equity MUST evolve on scaled weights or the brake would read drawdowns
-    # off an unlevered curve, docs/EQUITY_BOOK_DESIGN.md §1); crypto keeps its frozen legacy
+    # off an unlevered curve, PAPER.md §12.1); crypto keeps its frozen legacy
     # semantics (unit-target settle, G_t applied at the venue) to leave the recorded track
     # unchanged.
     w_prev = w_prev * scale_rec
@@ -292,7 +292,7 @@ def _commodity_targets(panel: Panel, d: int, _j: Journal, *, live: bool = False)
 def _equity_flags() -> frozenset[str]:
     """Split-watch flagged names (data maintenance writes; operator clears). Fail-open: a missing
     or unreadable flags file means no exclusions — trading proceeds on last-good knowledge and
-    the maintenance journal carries the staleness (design §8)."""
+    the maintenance journal carries the staleness (PAPER.md §12.3)."""
     import pathlib
 
     from convexity.paper.fleetconfig import EQUITY_FLAGS_PATH
@@ -309,7 +309,7 @@ def _equity_flags() -> frozenset[str]:
 
 
 def _equity_targets(panel: Panel, d: int, j: Journal, *, live: bool = False):
-    """The D1v2 equity trend book (docs/EQUITY_BOOK_DESIGN.md §1): the validated S1 ensemble ×
+    """The D1v2 equity trend book (PAPER.md §12.1): the validated S1 ensemble ×
     inverse-vol sizing × breadth-proportional gross × frozen half-Kelly × GZ brake@50% — the
     parity-pinned construction (tests/paper/test_equity_parity.py).
 
@@ -368,7 +368,7 @@ def _kill_path(spec: BookSpec) -> pathlib.Path:
 
 def _flatten_book_live(spec: BookSpec, j: Journal, reason: str) -> None:
     """Flatten every venue position in THIS book's domain, reduce-only (kill-switch / de-risk
-    action, docs/EQUITY_BOOK_DESIGN.md §6). Maker-then-taker is the finalize pass's job in
+    action, PAPER.md §12.2). Maker-then-taker is the finalize pass's job in
     ordinary flow; a KILL is an explicit 'get flat NOW' — reduce-only MARKET, the orphan-sweep
     convention. Domain scoping guarantees the other books' positions are untouchable."""
     from convexity.paper.gateway import GatewayError, cancel_open_orders, submit_intent
@@ -411,7 +411,7 @@ def _flatten_book_live(spec: BookSpec, j: Journal, reason: str) -> None:
 
 def _check_kill(spec: BookSpec, j: Journal, live: bool) -> bool:
     """True if the book is killed (control file present). Live: flatten first. Checked INSIDE
-    the account lock at the top of every venue-facing session (design §6)."""
+    the account lock at the top of every venue-facing session (PAPER.md §12.2)."""
     if not _kill_path(spec).exists():
         return False
     print(f"[kill:{spec.name}] KILL file present ({_kill_path(spec)}) — book is halted; "
@@ -425,7 +425,7 @@ def _check_kill(spec: BookSpec, j: Journal, live: bool) -> bool:
 
 def _margin_guardrails(spec: BookSpec, j: Journal, d_iso: str, nav: float, g_t: float,
                        live: bool) -> float:
-    """Cross-margin software guardrails (docs/EQUITY_BOOK_DESIGN.md §3). Returns the possibly
+    """Cross-margin software guardrails (PAPER.md §12.2). Returns the possibly
     scaled-down g_t. Dry-run: budget check only (no venue reads)."""
     from convexity.paper.fleetconfig import (
         LEVERAGE_DIAL,
@@ -485,7 +485,7 @@ def _margin_guardrails(spec: BookSpec, j: Journal, d_iso: str, nav: float, g_t: 
 
 def _boot_leverage_dial(spec: BookSpec, j: Journal, d_iso: str,
                         intents: list[OrderIntent]) -> None:
-    """Integer exchange-leverage boot (docs/EQUITY_BOOK_DESIGN.md §2): set the configured dial
+    """Integer exchange-leverage boot (PAPER.md §12.2): set the configured dial
     once per session for this book's traded symbols. Idempotent on the venue; errors (e.g.
     'cannot change with open position') are journaled, never fatal — the dial is a cap, not the
     sizing mechanism."""
@@ -528,7 +528,7 @@ def cmd_rebalance(args: argparse.Namespace) -> None:
 
     alloc_mode = _allocation_mode(j)
     domain = book_domain(spec)
-    # THE ACCOUNT LOCK (design §4): everything venue-facing — state read, margin checks,
+    # THE ACCOUNT LOCK (PAPER.md §12.2): everything venue-facing — state read, margin checks,
     # submissions, orphan sweep — runs in ONE critical section so no other book can interleave.
     # Signal computation stayed outside. Dry-run touches only this book's journal: no lock.
     lock_cm = account_lock(spec.name) if args.live else contextlib.nullcontext()
@@ -569,7 +569,7 @@ def cmd_rebalance(args: argparse.Namespace) -> None:
             nav = _book_equity(j, spec, fallback=args.nav)
             nav_note = "dry-run journal equity"
             used_assets = ("DRY",)
-        # Cross-margin guardrails (design §3): budget check both modes; monitor + liq-distance
+        # Cross-margin guardrails (PAPER.md §12.2): budget check both modes; monitor + liq-distance
         # live only. May scale g_t down (or flatten equity on DERISK, returning g_t=0).
         g_t = _margin_guardrails(spec, j, d_iso, nav, g_t, live=args.live)
         print(f"[size:{spec.name}] G_t={g_t:.4f} binding={binding} | NAV={nav:.2f} "
@@ -830,7 +830,7 @@ def cmd_recon(args: argparse.Namespace) -> None:
         else:
             eq = float(assets.get("USDT", 0.0)) + float(assets.get("USDC", 0.0))
             j.append("equity_mark", "recon", equity=eq)
-        # daily margin monitor (design §3): the recon is the fleet's fastest guardrail cadence.
+        # daily margin monitor (PAPER.md §12.2): the recon is the fleet's fastest guardrail cadence.
         _margin_guardrails(spec, j, "recon", nav=eq, g_t=0.0, live=True)
         t = j.last("targets")
         n_tgt = int(np.count_nonzero(np.asarray(t["weights"]))) if t else 0
@@ -862,7 +862,7 @@ def _flow_one(spec: BookSpec, amount: float, equity_before: float | None = None)
 def cmd_flow(args: argparse.Namespace) -> None:
     spec = _book(args)
     # serialized: a flow record landing mid-rebalance must not change NAV under a sizing session
-    # (design §4 — the rebalance reads NAV once inside its own lock hold).
+    # (PAPER.md §12.2 — the rebalance reads NAV once inside its own lock hold).
     with account_lock(f"flow:{spec.name}"):
         _flow_one(spec, args.amount, args.equity_before)
 
@@ -893,7 +893,7 @@ def cmd_allocate(args: argparse.Namespace) -> None:
 
 def cmd_allocate_split(args: argparse.Namespace) -> None:
     """Split a TOTAL account allocation across all three books per the fleet ratios
-    (docs/EQUITY_BOOK_DESIGN.md §7: 400/350/250 per 1000), atomically under the account lock —
+    (PAPER.md §12.1: 400/350/250 per 1000), atomically under the account lock —
     requirement 4's 'proportional re-allocation exactly like the other two'."""
     from convexity.paper.fleetconfig import ALLOC_UNITS, ALLOC_TOTAL
 
@@ -919,7 +919,7 @@ def cmd_flow_split(args: argparse.Namespace) -> None:
 
 
 def cmd_kill(args: argparse.Namespace) -> None:
-    """Per-book kill switch (docs/EQUITY_BOOK_DESIGN.md §6). ``kill``: creates the control file —
+    """Per-book kill switch (PAPER.md §12.2). ``kill``: creates the control file —
     the NEXT venue-facing session (or this command with --now under the lock, live) flattens the
     book and halts. ``--resume``: removes the file. Independent per book by construction."""
     spec = _book(args)

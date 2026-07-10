@@ -1,4 +1,4 @@
-"""Fleet-infrastructure tests (docs/EQUITY_BOOK_DESIGN.md §4-§7): lock, kill switches, margin
+"""Fleet-infrastructure tests (PAPER.md §12.2-§7): lock, kill switches, margin
 guardrails, split allocation, data-maintenance flows. Everything venue-facing is mocked — these
 are logic tests, not integration tests (those run in the D1v2 simulate phase)."""
 
@@ -64,7 +64,7 @@ def _die_holding_lock(path: str, started) -> None:
 
 
 def test_lock_released_on_holder_death(tmp_path):
-    """The chaos guarantee (design §4/§7): a kill -9 holder can never wedge the fleet — the
+    """The chaos guarantee (PAPER.md §12.2/§7): a kill -9 holder can never wedge the fleet — the
     kernel releases flock on process death; the next waiter proceeds normally."""
     path = str(tmp_path / "account.lock")
     started = multiprocessing.Event()

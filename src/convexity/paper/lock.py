@@ -1,4 +1,4 @@
-"""Account-level advisory lock (docs/EQUITY_BOOK_DESIGN.md §4) — ONE lock for the ONE account.
+"""Account-level advisory lock (PAPER.md §12.2) — ONE lock for the ONE account.
 
 Three books share one exchange account, one API budget, and one allocate/topup flow. Recon
 (D1v2) found NO serialization existed — the books relied purely on timer staggering. This module

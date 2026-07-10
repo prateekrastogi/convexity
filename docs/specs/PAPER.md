@@ -184,3 +184,113 @@ commodity lake stays as current as crypto's.
 3. One SUPERVISED `rebalance --live --book commodity` (same doctrine as §8) — verify the demo
    lists all 5 pairs' legs, fills, the orphan sweep touches nothing outside the domain.
 4. Only then enable `convexity-commodity-{rebalance,finalize,recon,discovery}.timer`.
+
+## 12. Multi-book III: the equity trend book + fleet hardening (added 2026-07-10)
+
+Third book on the same demo account (`--book equity`; own units, `journalctl -u
+convexity-equity-*`). OWNER DECISION OF RECORD: the certified equity research programs
+(E1/E2/E3 `research/equity/`, I1 `research/indices/`, C1 `research/cta/`) all closed as clean
+negatives — the owner deliberately deploys the SIMPLE ROBUST construction anyway, accepting the
+survivorship-curated universe as a feature and bull-market lag as the premium. This is TIMED
+BETA with beta-like drawdowns, capitalized small (250/1000), never presented as market-neutral
+alpha.
+
+### 12.1 The equity strategy (frozen validated config; Invariant EQUITY-PARITY)
+
+`signal/equity_trend.py` = the D1 drawdown-overlay program's validated construction EXACTLY
+(record: `research/cta/_dd_combined_waterfall*`; validated CAGR 28.26% / maxDD 30.02% / Sharpe
+1.1676 / realized avg leverage 1.11): per name, LONG/FLAT equal-weight ensemble of {200d SMA
+±2% hysteresis band (daily); 12-month total-return sign (monthly); 10-month SMA of month-end
+closes (monthly)} → state ∈ {0,⅓,⅔,1}; inverse-20d-vol weights (0.5× cross-sectional-median
+floor); book gross = **L_HALF × breadth_frac × m_brake** where L_HALF=2.3256 is the FROZEN
+half-Kelly constant (never re-derived at boot — that would drift with new data; a test
+re-derives it from pinned fixtures), breadth_frac = Σ(states over eligible)/n_eligible (NO
+unit-gross renormalization — the breadth-proportional design, zero parameters), and m_brake =
+clip(1 − DD_prev/0.50, 0, 1) off the book's OWN journal-equity running peak (weekly settles +
+latest recon mark — a disclosed, conservative-direction fidelity gap vs the backtest's daily
+marks). Decide Friday close, act next session; settle friction 13 bp RT (the backtest's own
+primary cost); the settle evolves the book on its SCALED weights (g_t carries the leverage —
+an unlevered settle would feed the brake wrong drawdowns). Eligibility: ≥260 real trading days
+(names below it are tracked-but-pending, journaled, never traded — perp-only listings mature
+through the same rule), MINUS the 6 leveraged/inverse/decay ETFs
+({UVXY,SQQQ,TQQQ,SOXL,KORU,MVLL}USDT — validated finding: structural daily-reset decay
+contaminates trend signals), MINUS split-watch-flagged names (§12.3). LIVE sessions gate on the
+execution venue's actual listings (§11.3's pattern) and journal the model-vs-tradeable gap
+(`tradeable_gap`; demo lists ~17–19 equities today).
+
+**Invariant EQUITY-PARITY**: `tests/paper/test_equity_parity.py` runs the PRODUCTION signal/
+sizing/brake chain in backtest mode and pins CAGR/maxDD/Sharpe/avg-leverage AND the day-level
+return series to the validated reference (`tests/fixtures/equity_book/`, provenance from the D1
+record). A deployment whose backtest-mode output diverges from the validated artifact is broken
+by definition. Owner-tunable values live in ONE place: `paper/fleetconfig.py` (allocations
+400/350/250 per 1000, L_HALF, brake ceiling, margin thresholds, leverage dials, ETF exclusions,
+warmup, lock/pacing constants). AAPLUSDT's unadjusted 2020-08-31 4:1 split (fake −74.12% day)
+was fixed at source with this book (KNOWN_SPLITS; pre-fix parquet kept in the lake).
+
+### 12.2 Fleet hardening (shipped with this book; applies to ALL THREE books)
+
+- **THE ACCOUNT LOCK** (`paper/lock.py`): recon found the two live books had NO serialization
+  (timer stagger only). One `flock` on `data/paper/account.lock` now serializes every
+  venue-facing critical section (state read → margin checks → submissions → orphan sweep) and
+  the allocate/flow writes, fleet-wide. Kernel releases on holder death (kill −9 can never
+  wedge the fleet — chaos-tested); a live-but-slow holder blocks waiters up to 300 s, then the
+  waiter ABORTS loudly, never proceeds unserialized. Signal computation stays outside the lock;
+  timer stagger remains defense-in-depth.
+- **KILL SWITCHES** (per book, independent): `data/paper/<book>/KILL` checked INSIDE the lock at
+  the top of every live rebalance/finalize/recon → cancel + flatten reduce-only + halt; CLI
+  `kill --book X [--resume|--now]`; systemctl disable is the third layer. Isolation test-pinned
+  (killing one book cannot touch another — domain scoping).
+- **CROSS-MARGIN + GUARDRAILS**: position-margin mode is CROSS (owner decision: the MN books'
+  legs offset — isolated would double their margin for zero risk benefit; worst-case account
+  gross ≈1.33×). This is a DIFFERENT AXIS from §3.1's SINGLE-ASSET asset-mode mandate (BTC
+  protection), which is unchanged. Software guardrails: (1) per-book IM budget — projected
+  initial margin (gross/dial) must fit the book's NAV, else g_t scales down (journaled);
+  (2) account maint-margin-ratio monitor, ALERT 40% / DERISK 60% (equity — the levered
+  directional book — flattens FIRST; justification: its worst day −10.4% at ~1.9× ≈ −5% of
+  account at 250/1000); (3) liquidation-distance journaled each session (floor = 3× the worst
+  historical one-day move, 12.1%). Monitors run daily via recon.
+- **INTEGER LEVERAGE DIAL**: Binance sets per-symbol leverage as an INTEGER; the dial is a
+  cap + margin divisor, NEVER the sizing mechanism (effective fractional leverage comes from
+  notional vs NAV). The equity book sets its symbols to 3× once per session
+  (`gateway.set_leverage`, idempotent, errors journaled never fatal). Crypto/commodity never
+  set the dial (venue default stands; normalizing them is an owner option, not autonomous).
+- **SPLIT ALLOCATION**: `allocate-split --total X` / `flow-split --amount X` write all three
+  books' records proportionally (400/350/250) under the lock — deposits/withdrawals cannot
+  change NAV under a sizing session (NAV is snapshotted once inside the lock).
+- **JOURNAL CRASH RECOVERY**: `Journal.read` now tolerates a torn FINAL line (kill −9
+  mid-append; skipped loudly, the record was never acknowledged) while a torn line anywhere
+  else still fails fast — a pre-existing fleet bug fixed for all three books, test-pinned both
+  directions.
+- **API PACING** (`paper/ratelimit.py`): min-interval gate on every gateway call — deliberately
+  simple at tens-of-orders-per-week volume; the lock is the real concurrency control.
+
+### 12.3 Equity data maintenance (own timer; trading NEVER blocks on it)
+
+`scripts/equity_data_maintenance.py` (Sat 05:30 UTC, after the §11.4 lake refresh it depends
+on): (a) NEW-SYMBOL BACKFILL — an equities entry with a `dukascopy` mapping but no stitched
+parquet gets dukascopy-backfilled (the established candle-mode machinery, politeness-spaced,
+resumable) → stitched → validated; unresolvable mappings or failed validation → flagged for
+human review in `data/universe/equity_flags.json`, never silently traded or dropped; new names
+then mature through the 260d warmup. Binance-side incremental updates for EXISTING symbols are
+already the lake refresh's job. (b) SPLIT/CORPORATE-ACTION WATCH — any |1-day| move >25% on a
+non-gap day in the fresh tail flags the name; `_equity_targets` EXCLUDES flagged names until an
+operator clears the flag (the AAPL failure mode, contained at the data layer; a genuine
+earnings blowup can flag too — accepted: a human confirms and clears, the book holds the prior
+week's position meanwhile). Failures degrade gracefully: trading proceeds on last-good data,
+staleness journaled per symbol (own audit log `data/universe/equity_datamaint_log.jsonl`).
+
+### 12.4 Equity runbook (deploy — DO NOT enable timers before this)
+
+Code merged 2026-07-10 (PR #3 + the research-record merges); timers NOT enabled. Honest scope
+note: live-path integration (real GTX submissions, the real `/fapi/v1/leverage` call, live
+margin fields) is untested until the supervised session below — the §8 doctrine.
+
+1. Redeploy units (`deploy/README.md`), keep the four equity timers DISABLED.
+2. ONE-TIME ACCOUNT STATE (supervised; touches the real demo account): verify position-margin
+   mode is CROSSED for traded symbols; confirm asset mode remains SINGLE-ASSET (§3.1).
+3. `allocate-split --total <ACCOUNT_USDT>` — all three books re-allocated 400/350/250 (the
+   equity book REFUSES to trade live without an allocation, §11.2's guard).
+4. One SUPERVISED `rebalance --live --book equity` (+ `finalize --live --book equity` ~2 h
+   later): watch the 3× dial get set, maker fills, the margin/liq-distance journal records, and
+   confirm the orphan sweep touches ONLY equity-domain symbols.
+5. Only then enable `convexity-equity-{rebalance,finalize,recon,datamaint}.timer`.

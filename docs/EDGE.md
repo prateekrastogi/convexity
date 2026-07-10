@@ -240,3 +240,54 @@ path to more commodity Sharpe is breadth (a 25–40-market futures venue), not a
 - Maker-first execution upside ~+1.75%/yr cost recovery (E2 scenario, contingent on paper fill
   rates); 85/15 carry sleeve tested and NOT adopted (+0.033 < +0.05 bar).
 - Sizing: **quarter-Kelly**, scale up only on live confirmation.
+
+---
+
+## (g) The equity arc (2026-07): five certified negatives, one owner-decision timed-beta book
+
+The TradFi-equity-perp sleeve (110 Binance perps, ~93 usable with real 2018+ underlying history)
+got the full certification treatment — five independently pre-registered, independently
+verified, adversarially reviewed programs. Every one closed negative. Records:
+`research/equity/` (E1/E2/E3 + `STATE.md`'s consolidated bug list), `research/indices/` (I1),
+`research/cta/` (C1 + the D1 drawdown-overlay record).
+
+- **E1 perp-native** (funding carry, basis MR, overnight structure): deployable −1.7 net,
+  DSR=0. Overnight>intraday is REAL gross (SPY 3.44 vs 1.11) but dies at 13 bp × daily
+  round-trips. Funding/weekend cells were underpowered (~4 months of perp history), not
+  disproven — **revisit trigger ~mid-2027** with 12+ months of perp era.
+- **E2 sector-residual reversal** (also the equity RV study — named pairs deliberately scoped
+  out as a documented anti-edge): −0.95 net, DSR=0. Found strong 3–10-day residual reversal —
+  which is why any equity momentum needs a skip-month.
+- **E3 momentum + BAB + PEAD** (monthly, earnings dates acquired + validated): combined book
+  fails all gates. S1/S2 look positive standalone but are FAKE BREADTH — S1 is 40% GameStop;
+  S2's whole edge is LLY+NVO (drop 2 of 93 names → negative). The defining equity-sleeve
+  lesson: apparent edges here concentrate into 2–4 idiosyncratic stories.
+- **I1 SPY/QQQ timed-beta overlay** (trend + vol-target + calendar tilts; benchmark-relative
+  gate): 0.69 net Sharpe vs buy-and-hold's 0.77 — the overlay's drawdown protection cost more
+  than it saved in a bull-heavy sample. Factor decomposition: the TREND filter alone beat the
+  benchmark (0.85); vol-targeting and tilts subtracted.
+- **C1 mathematically-optimal CTA** (Kalman/l1-trend/HMM/GARCH/Kelly/Grossman-Zhou/CDaR, a
+  29,760-cell exploratory grid + frozen confirmatory stage): fails all numeric gates; the
+  winner sat at the 99.96th percentile of its own search grid (DSR 0.13–0.19) — sophistication
+  found the CEILING, not an edge. Its lasting product: the leverage mathematics. 2–5× average
+  leverage is jointly INFEASIBLE with any sane drawdown budget on this universe (in-band best:
+  ~46% CAGR at 62% maxDD); Sharpe is leverage-invariant under linear costs, so CAGR@DD-budget
+  is the only honest leverage objective.
+- **D1 drawdown overlays** (the constructive coda): on the simple 3-rule trend ensemble at
+  frozen half-Kelly, a pre-declared 2-step waterfall (NO grid search; DSR@N=4 0.987) found
+  **GZ-brake@50% + breadth-proportional gross**: CAGR 28.26% / maxDD 30.02% / **Sharpe 1.17 >
+  the unlevered base's 1.06** at ~1.11× realized leverage, 21/21 CPCV paths positive,
+  independently reproduced bit-for-bit. The #5 index-gate addon FAILED its one-shot
+  pre-declared bar and was excluded. Regime honesty: protection is real where trend gets time
+  (2022: −21% vs benchmark −35%) and absent in fast crashes (2020-03); the 93-name equal-weight
+  benchmark (~41% CAGR, 41% maxDD, survivorship-flattered) still wins on raw Sharpe in this
+  bull-heavy sample.
+
+**Deployment (PAPER.md §12) is an OWNER DECISION, not a certification**: the research verdict
+on this universe stands negative; the owner deploys the D1-validated construction as timed beta
+— survivorship-curated universe accepted as a feature, bull-market lag accepted as the premium —
+at 250/1000, parity-pinned (Invariant EQUITY-PARITY) so the live book provably IS the validated
+one. The five programs also produced the fleet's standing engineering discipline: the five
+carried-forward bug patterns (source-aware returns, derived annualization, exposure-timing
+alignment, exposure-scaled costs, leveraged-ETF exclusion — `research/equity/STATE.md`), the
+synthetic-outlier injection test with naive control, and the parity-gate pattern.

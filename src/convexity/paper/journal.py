@@ -44,7 +44,7 @@ class Journal:
             except json.JSONDecodeError:
                 # A crash mid-append leaves a torn FINAL line (append-only contract). Tolerate
                 # exactly that -- skip it LOUDLY so replay recovers (D1v2 failsafe-restart,
-                # docs/EQUITY_BOOK_DESIGN.md §7). A torn line anywhere ELSE means real
+                # PAPER.md §12.1). A torn line anywhere ELSE means real
                 # corruption: fail fast rather than silently dropping history.
                 if i == len(lines) - 1:
                     print(f"[journal] WARNING: torn final line skipped ({self.path}) -- "
