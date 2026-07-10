@@ -374,7 +374,7 @@ Findings and fixes from the pre-prod adversarial audit; all shipped together.
 - **Drift observability** (P2-14): daily recon journals `position_drift` — per-symbol
   venue-vs-target notional and the absolute total, priced off the execution venue.
 
-**Prod cutover runbook** (supersedes the §12.4 venue notes): (1) set `CONVEXITY_VENUE=prod` +
+**Prod cutover runbook** (separate-checkout deployment — `scripts/setup_prod_checkout.sh` creates `/home/speculation/convexity-prod` with own journals/lock/.env/venv, shared read-only lake, prod-named units installed DISABLED at +5 min stagger; `scripts/prod_preflight.py` is the read-only gate): (1) set `CONVEXITY_VENUE=prod` +
 `BINANCE_FUTURES_API_KEY/_SECRET` in .env; (2) `manual --bootstrap` once (virgin account);
 (3) verify margin modes (cross + single-asset), sign the TradFi agreement, `allocate-split`;
 (4) one SUPERVISED rebalance+finalize cycle watching the `venue` journal records and finalize

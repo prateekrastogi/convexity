@@ -115,3 +115,26 @@ book share to 0 and journals the discrepancy (never inverts).
   after 15 min. Watchdog Sun 12:00 UTC verifies the Saturday cycle completed.
 - Backups: nightly 06:10 UTC to `/home/speculation/backups` + the repo's `journal-backups`
   branch. Restore = untar over `data/paper/`.
+
+## Prod deployment (separate checkout, PAPER.md §12.6)
+
+The prod fleet runs from `/home/speculation/convexity-prod` — its own journals, account lock,
+`.env` (CONVEXITY_VENUE=prod + `BINANCE_FUTURES_API_KEY/_SECRET`) and venv; the lake is shared
+read-only via symlinks. The demo checkout keeps running untouched as the shadow book and stays
+the ONLY lake writer (lake-refresh/datamaint/discovery are not duplicated).
+
+```bash
+bash scripts/setup_prod_checkout.sh        # idempotent: checkout, symlinks, .env template,
+                                           # venv, prod units installed DISABLED (+5min stagger)
+# fill /home/speculation/convexity-prod/.env with the prod keys, then:
+cd /home/speculation/convexity-prod
+set -a; source .env; set +a
+.venv/bin/python scripts/prod_preflight.py # read-only checklist; exit 0 = ready
+```
+
+Cutover (first cycle SUPERVISED, §12.6): preflight green -> `manual --bootstrap` (if you hold
+positions) -> `allocate-split --total <prod USDT>` -> run rebalance/finalize by hand watching
+the venue record and `finalized mode=ids` -> `sudo systemctl enable --now
+convexity-prod-{paper,commodity,equity}-{rebalance,finalize,recon}.timer
+convexity-prod-watchdog.timer convexity-prod-backup.timer`. Backups land in
+`/home/speculation/backups/<checkout>` and per-checkout `journal-backups-<checkout>` branches.
