@@ -279,6 +279,15 @@ earnings blowup can flag too — accepted: a human confirms and clears, the book
 week's position meanwhile). Failures degrade gracefully: trading proceeds on last-good data,
 staleness journaled per symbol (own audit log `data/universe/equity_datamaint_log.jsonl`).
 
+**Equity discovery (2026-07-10, owner option 2)**: the weekly TradFi discovery onboards new
+`underlyingType=EQUITY` perps data-first exactly like commodities — overlay membership +
+immediate perp-kline/funding backfill + perp-only stitched series — and NEVER trades them:
+perp-only history means the 260d warmup quarantines a new listing for ~a year, during which the
+weekly report is the review surface (leveraged/inverse ETFs go to `EQUITY_ETF_EXCLUSIONS`;
+promotion to a dukascopy-mapped candidates.md entry is a research decision). `KR_EQUITY` and
+`PREMARKET` types are FYI-only. Split-watch covers discovered names from day one (datamaint
+reads the merged universe).
+
 ### 12.4 Equity runbook (deploy — DO NOT enable timers before this)
 
 Code merged 2026-07-10 (PR #3 + the research-record merges); timers NOT enabled. Honest scope

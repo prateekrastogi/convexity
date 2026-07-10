@@ -72,8 +72,12 @@ def _log(event: str, **payload) -> None:
 
 
 def _equities() -> list[dict]:
-    block = re.search(r"```json\n(.*?)\n```", UNIVERSE_MD.read_text(), re.S).group(1)
-    return json.loads(block)["equities"]
+    """Committed candidates.md block + the discovery overlay (PAPER.md §12.3): discovered
+    perp-only equities get split-watch coverage from day one; without a dukascopy mapping the
+    new-symbol backfill correctly notes them perp_only and leaves history to the lake refresh."""
+    from convexity.panel.candidates import load_universe
+
+    return load_universe()["equities"]
 
 
 def _load_flags() -> dict:

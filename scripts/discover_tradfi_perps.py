@@ -3,9 +3,15 @@
 
 Weekly timer (deploy/convexity-commodity-discovery.timer). What it does:
 
-  1. Pull the venue's current exchangeInfo and select every TRADING perp with
-     ``underlyingType == "COMMODITY"`` (Binance marks its TradFi commodity perps
-     ``contractType=TRADIFI_PERPETUAL`` — the empirically verified predicate, 2026-07-05).
+  1. Pull the venue's current exchangeInfo ONCE and select every TRADING
+     ``contractType=TRADIFI_PERPETUAL`` with ``underlyingType == "COMMODITY"`` — and, since
+     2026-07-10 (owner decision), ``== "EQUITY"`` as well: new stock/ETF perps are onboarded
+     data-first exactly like commodities. ``KR_EQUITY``/``PREMARKET`` types are FYI-only by
+     design (no liquidity/history validation surface; PREMARKET marks pre-IPO books).
+     Discovered EQUITIES are doubly quarantined: perp-only history (no dukascopy mapping unless
+     the owner later curates one into candidates.md) means the equity book's 260d warmup blocks
+     them for ~a year from listing — review the weekly report for leveraged/inverse/decay ETFs
+     (-> EQUITY_ETF_EXCLUSIONS) well before any could mature.
   2. Any symbol not already in the universe (committed candidates.md block + overlay) is APPENDED
      to ``data/universe/discovered.json`` — the gitignored overlay ``load_universe`` merges — with
      its real venue filters + onboard date. From that moment panels, backfills and the commodity
@@ -52,15 +58,17 @@ def _journal(kind: str, **payload) -> None:
         f.write(json.dumps(rec, separators=(",", ":")) + "\n")
 
 
-def venue_commodity_perps() -> dict[str, dict]:
-    """symbol -> {filters, onboard} for every TRADING venue commodity perp."""
-    r = httpx.get(f"{FAPI}/fapi/v1/exchangeInfo", timeout=30)
-    r.raise_for_status()
+def venue_tradfi_perps(underlying: str, info: dict | None = None) -> dict[str, dict]:
+    """symbol -> {filters, onboard} for every TRADING venue TRADIFI perp of ``underlying``."""
+    if info is None:
+        r = httpx.get(f"{FAPI}/fapi/v1/exchangeInfo", timeout=30)
+        r.raise_for_status()
+        info = r.json()
     out: dict[str, dict] = {}
-    for s in r.json()["symbols"]:
-        if (s.get("underlyingType") != "COMMODITY" or s.get("status") != "TRADING"
+    for s in info["symbols"]:
+        if (s.get("underlyingType") != underlying or s.get("status") != "TRADING"
                 or s.get("contractType") != "TRADIFI_PERPETUAL"):
-            continue  # dated/delivery commodity futures are NOT this book's instrument
+            continue  # dated/delivery futures are NOT these books' instrument
         fs = {f["filterType"]: f for f in s["filters"]}
         try:
             out[s["symbol"]] = {
@@ -104,42 +112,84 @@ def main() -> None:
                     help="report what would change; write/backfill nothing")
     args = ap.parse_args()
 
-    venue = venue_commodity_perps()
+    r = httpx.get(f"{FAPI}/fapi/v1/exchangeInfo", timeout=30)
+    r.raise_for_status()
+    info = r.json()
     u = load_universe()  # committed block + current overlay
-    known = {d["symbol"]: d for d in u["commodities"]}
+    # (sleeve, venue underlyingType, overlay sector tag, never-traded note)
+    SLEEVES = (
+        ("commodities", "COMMODITY", "commodity-discovered",
+         "NEVER auto-traded (RV PAIRS are frozen research config)"),
+        ("equities", "EQUITY", "equity-discovered",
+         "NEVER auto-traded (perp-only history -> ~1y 260d warmup; review for leveraged/"
+         "inverse ETF -> EQUITY_ETF_EXCLUSIONS before maturity)"),
+    )
+    new_by_sleeve: dict[str, list[str]] = {}
+    venue_by_sleeve: dict[str, dict] = {}
+    # delisted/halted is judged against EVERYTHING trading on the venue, not the sleeve's
+    # underlyingType slice — a known name classified KR_EQUITY/PREMARKET is not "missing"
+    all_trading = {s["symbol"] for s in info["symbols"] if s.get("status") == "TRADING"}
+    for sleeve, underlying, _sector, _note in SLEEVES:
+        venue = venue_tradfi_perps(underlying, info)
+        known = {d["symbol"]: d for d in u[sleeve]}
+        new = sorted(set(venue) - set(known))
+        drift = {
+            s: {k: (known[s].get(k), venue[s][k])
+                for k in ("tick_size", "lot_size", "min_qty", "min_notional")
+                if known[s].get(k) is not None and float(known[s][k]) != venue[s][k]}
+            for s in set(venue) & set(known)
+        }
+        drift = {s: d for s, d in drift.items() if d}
+        delisted = sorted(set(known) - all_trading)
+        print(f"[discover] venue {sleeve} perps={len(venue)} known={len(known)} "
+              f"new={new or 'none'} filter_drift={list(drift) or 'none'} "
+              f"venue_missing={delisted or 'none'}")
+        if drift:
+            if not args.dry_run:
+                _journal("filter_drift", sleeve=sleeve, detail=drift)
+            print(f"[discover] FILTER DRIFT ({sleeve}; live re-quantizes anyway): {drift}")
+        if delisted:
+            if not args.dry_run:
+                _journal("venue_missing", sleeve=sleeve, symbols=delisted)
+            print(f"[discover] {sleeve} known symbols missing from venue (halted/delisted?): "
+                  f"{delisted} — the listed mask + orphan sweep handle the position side; "
+                  f"investigate")
+        new_by_sleeve[sleeve] = new
+        venue_by_sleeve[sleeve] = venue
+    # FYI-only underlying types: never onboarded by design (KR_EQUITY: no validation surface;
+    # PREMARKET: pre-IPO marks with no underlying history — not trend material).
+    exotic: dict[str, list[str]] = {}
+    for s in info["symbols"]:
+        if s.get("contractType") == "TRADIFI_PERPETUAL" and s.get("status") == "TRADING":
+            ut = str(s.get("underlyingType"))
+            if ut not in ("COMMODITY", "EQUITY"):
+                exotic.setdefault(ut, []).append(s["symbol"])
+    if exotic:
+        print(f"[discover] FYI non-onboarded TradFi types (by design): "
+              f"{ {k: sorted(v) for k, v in exotic.items()} }")
 
-    new = sorted(set(venue) - set(known))
-    drift = {
-        s: {k: (known[s].get(k), venue[s][k])
-            for k in ("tick_size", "lot_size", "min_qty", "min_notional")
-            if known[s].get(k) is not None and float(known[s][k]) != venue[s][k]}
-        for s in set(venue) & set(known)
-    }
-    drift = {s: d for s, d in drift.items() if d}
-    delisted = sorted(set(known) - set(venue))
-
-    print(f"[discover] venue commodity perps={len(venue)} known={len(known)} "
-          f"new={new or 'none'} filter_drift={list(drift) or 'none'} "
-          f"venue_missing={delisted or 'none'}")
-
-    if new and args.dry_run:
-        print(f"[discover] DRY-RUN: would add {new} to {OVERLAY} and backfill — no writes")
-    elif new:
-        overlay = json.loads(OVERLAY.read_text()) if OVERLAY.exists() else {"commodities": []}
-        have = {d["symbol"] for d in overlay.get("commodities", [])}
-        for sym in new:
-            if sym in have:
-                continue
-            overlay.setdefault("commodities", []).append(
-                {"symbol": sym, "sector": "commodity-discovered", "source": "binance",
-                 **venue[sym]})
+    new_total = [s for lst in new_by_sleeve.values() for s in lst]
+    if new_total and args.dry_run:
+        print(f"[discover] DRY-RUN: would add {new_by_sleeve} to {OVERLAY} and backfill — "
+              f"no writes")
+    elif new_total:
+        overlay = json.loads(OVERLAY.read_text()) if OVERLAY.exists() else {}
+        for sleeve, _u_, sector, note in SLEEVES:
+            have = {d["symbol"] for d in overlay.get(sleeve, [])}
+            added = [s for s in new_by_sleeve[sleeve] if s not in have]
+            for sym in added:
+                overlay.setdefault(sleeve, []).append(
+                    {"symbol": sym, "sector": sector, "source": "binance",
+                     **venue_by_sleeve[sleeve][sym]})
+            if added:
+                print(f"[discover] {sleeve} overlay +{len(added)} — data+universe only, {note}")
         OVERLAY.parent.mkdir(parents=True, exist_ok=True)
         tmp = OVERLAY.with_suffix(".json.tmp")
         tmp.write_text(json.dumps(overlay, indent=1))
         tmp.rename(OVERLAY)
-        _journal("discovered", symbols=new, detail={s: venue[s] for s in new})
-        print(f"[discover] overlay updated: {OVERLAY} (+{len(new)}) — data+universe only, "
-              f"NEVER auto-traded (RV PAIRS are frozen research config)")
+        _journal("discovered", by_sleeve=new_by_sleeve,
+                 detail={s: venue_by_sleeve[sl][s]
+                         for sl, lst in new_by_sleeve.items() for s in lst})
 
         # backfill the new symbols' data NOW (resumable dump scripts read the merged universe,
         # so the just-written overlay is already in their symbol list), then write perp-only
@@ -160,7 +210,7 @@ def main() -> None:
         # missing parquet (review finding 2026-07-05). Backfills are resumable — next weekly
         # run retries the rolled-back symbol from wherever the dumps got to.
         failed = []
-        for sym in new:
+        for sym in new_total:
             n = stitch_perp_only(sym)
             _journal("stitched", symbol=sym, rows=n)
             print(f"[discover] stitched {sym}: {n} rows (perp-only)")
@@ -168,26 +218,17 @@ def main() -> None:
                 failed.append(sym)
         if failed:
             overlay = json.loads(OVERLAY.read_text())
-            overlay["commodities"] = [d for d in overlay.get("commodities", [])
-                                      if d["symbol"] not in failed]
+            for sleeve, _u_, _s_, _n_ in SLEEVES:
+                overlay[sleeve] = [d for d in overlay.get(sleeve, [])
+                                   if d["symbol"] not in failed]
             tmp = OVERLAY.with_suffix(".json.tmp")
             tmp.write_text(json.dumps(overlay, indent=1))
             tmp.rename(OVERLAY)
             _journal("rolled_back", symbols=failed)
             print(f"[discover] ROLLED BACK (no stitched data yet, retried next week): {failed}")
 
-    if drift:
-        if not args.dry_run:
-            _journal("filter_drift", detail=drift)
-        print(f"[discover] FILTER DRIFT (venue revised; live re-quantizes anyway): {drift}")
-    if delisted:
-        if not args.dry_run:
-            _journal("venue_missing", symbols=delisted)
-        print(f"[discover] known symbols missing from venue (halted/delisted?): {delisted} — "
-              f"the listed mask + orphan sweep handle the position side; investigate")
-
     # R7 disclosure: the crypto universe is FROZEN by design — report drift, never act on it.
-    r = httpx.get(f"{FAPI}/fapi/v1/exchangeInfo", timeout=30).json()
+    r = info  # same exchangeInfo snapshot fetched above
     venue_crypto = {s["symbol"] for s in r["symbols"]
                     if s.get("underlyingType") == "COIN" and s.get("status") == "TRADING"
                     and s.get("contractType") == "PERPETUAL"}
