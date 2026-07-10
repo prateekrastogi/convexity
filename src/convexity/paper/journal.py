@@ -34,13 +34,26 @@ class Journal:
             return []
         out = []
         with self.path.open() as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
+            lines = f.readlines()
+        for i, line in enumerate(lines):
+            line = line.strip()
+            if not line:
+                continue
+            try:
                 rec = json.loads(line)
-                if kind is None or rec.get("kind") == kind:
-                    out.append(rec)
+            except json.JSONDecodeError:
+                # A crash mid-append leaves a torn FINAL line (append-only contract). Tolerate
+                # exactly that -- skip it LOUDLY so replay recovers (D1v2 failsafe-restart,
+                # docs/EQUITY_BOOK_DESIGN.md §7). A torn line anywhere ELSE means real
+                # corruption: fail fast rather than silently dropping history.
+                if i == len(lines) - 1:
+                    print(f"[journal] WARNING: torn final line skipped ({self.path}) -- "
+                          f"crash-mid-append recovery; the interrupted record was never "
+                          f"acknowledged and is treated as never written")
+                    continue
+                raise
+            if kind is None or rec.get("kind") == kind:
+                out.append(rec)
         return out
 
     def last(self, kind: str) -> dict | None:

@@ -63,6 +63,9 @@ def _build_api():
 
 
 def _run(coro):
+    from convexity.paper.ratelimit import pace
+
+    pace("authed")  # shared API pacing (docs/EQUITY_BOOK_DESIGN.md §5)
     try:
         return asyncio.run(coro)
     except GatewayError:
@@ -76,6 +79,9 @@ class AccountSnapshot:
     equity: float  # totalMarginBalance (wallet + unrealized PnL), USDT
     positions: dict[str, float]  # symbol -> signed position qty (base units)
     unrealized: dict[str, float]  # symbol -> unrealized PnL (quote units), open positions only
+    # Margin-guardrail context (docs/EQUITY_BOOK_DESIGN.md §3); 0.0 when unavailable.
+    maint_margin: float = 0.0  # totalMaintMargin (quote units)
+    initial_margin: float = 0.0  # totalInitialMargin (quote units)
 
 
 def account_snapshot() -> AccountSnapshot:
@@ -83,7 +89,8 @@ def account_snapshot() -> AccountSnapshot:
 
     ``unrealized`` (per symbol, from position_risk) lets a BOOK sum the venue-truth unrealized
     P&L over ITS OWN symbol domain (PAPER.md §11 book_recon) — the shared account's aggregate
-    equity blends every book and cannot attribute.
+    equity blends every book and cannot attribute. ``maint_margin``/``initial_margin`` feed the
+    cross-margin software guardrails (design §3).
     """
     _client, api, _clock = _build_api()
 
@@ -100,7 +107,31 @@ def account_snapshot() -> AccountSnapshot:
                 positions[str(p.symbol)] = amt
                 unrealized[str(p.symbol)] = float(getattr(p, "unRealizedProfit", 0.0) or 0.0)
         return AccountSnapshot(equity=float(info.totalMarginBalance), positions=positions,
-                               unrealized=unrealized)
+                               unrealized=unrealized,
+                               maint_margin=float(getattr(info, "totalMaintMargin", 0.0) or 0.0),
+                               initial_margin=float(
+                                   getattr(info, "totalInitialMargin", 0.0) or 0.0))
+
+    return _run(go())
+
+
+def set_leverage(symbol: str, leverage: int) -> dict:
+    """Set the symbol's INTEGER leverage dial (docs/EQUITY_BOOK_DESIGN.md §2) — once at book
+    boot, never per-trade. Idempotent: re-setting the same value is a no-op on the venue.
+    Official SIGNED endpoint ``POST /fapi/v1/leverage``; reuses the Nautilus client's own
+    ``sign_request`` (never a hand-rolled signer, the sign_tradfi_agreement precedent)."""
+    from nautilus_trader.core.nautilus_pyo3 import HttpMethod
+
+    client, _api, clock = _build_api()
+
+    async def go() -> dict:
+        resp = await client.sign_request(
+            http_method=HttpMethod.POST,
+            url_path="/fapi/v1/leverage",
+            payload={"symbol": symbol, "leverage": str(int(leverage)),
+                     "timestamp": str(clock.timestamp_ms()), "recvWindow": "5000"},
+        )
+        return {"symbol": symbol, "leverage": int(leverage), "resp": str(resp)[:120]}
 
     return _run(go())
 
