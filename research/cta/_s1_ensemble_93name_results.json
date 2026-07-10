@@ -1,0 +1,130 @@
+{
+  "meta": {
+    "universe_n": 93,
+    "names_usable": 91,
+    "names_failed": [
+      "BMNRUSDT",
+      "CRCLUSDT"
+    ],
+    "master_calendar_span": [
+      "2018-05-01",
+      "2026-07-01"
+    ],
+    "scored_span": [
+      "2018-05-07",
+      "2026-06-26"
+    ],
+    "n_obs_daily": 2046,
+    "span_years": 8.136892539356605,
+    "periods_per_yr_derived": 251.44734185733512,
+    "n_weeks": 411
+  },
+  "aapl_fix_evidence": {
+    "before_close_window": {
+      "2020-08-25": 499.7134974809416,
+      "2020-08-26": 506.58643387272156,
+      "2020-08-27": 500.5838693384159,
+      "2020-08-28": 499.9736086107615,
+      "2020-08-31": 129.39528281118118,
+      "2020-09-01": 134.68754387559392,
+      "2020-09-02": 131.6562487857696,
+      "2020-09-03": 120.99169246315331
+    },
+    "before_worst_single_day_return": -0.7411957739715063,
+    "before_worst_single_day_date": "2020-08-31",
+    "after_close_window": {
+      "2020-08-25": 124.9283743702354,
+      "2020-08-26": 126.64660846818039,
+      "2020-08-27": 125.14596733460398,
+      "2020-08-28": 124.99340215269038,
+      "2020-08-31": 129.39528281118118,
+      "2020-09-01": 134.68754387559392,
+      "2020-09-02": 131.6562487857696,
+      "2020-09-03": 120.99169246315331
+    },
+    "after_return_on_2020_08_31": 0.035216904113974934
+  },
+  "injection_test": {
+    "inject_pos": 1026,
+    "inject_date": "2022-05-26",
+    "baseline_state_at_inject_pos": 1.0,
+    "shock_multiplier_used": 0.2,
+    "state_before_inject_unaffected": true,
+    "state_reacts_at_or_after_inject": true
+  },
+  "headline_13bp": {
+    "cagr": 0.22047809242901129,
+    "maxdd": 0.38730298021638526,
+    "sharpe": 1.0600334628729118,
+    "ev_per_week_bp": 43.639577339586204,
+    "win_rate_weekly": 0.5085158150851582,
+    "win_rate_daily": 0.5654627539503386,
+    "weekly_turnover_mean": 0.15099195863492745,
+    "worst_week": -0.12959028152366925,
+    "worst_day": -0.12141765487005131,
+    "avg_active_names": 50.948905109489054
+  },
+  "cost_scenarios_cagr": {
+    "6.5bp": 0.22654318658847838,
+    "13bp": 0.22047809242901129,
+    "26bp": 0.2084346621172548
+  },
+  "regime_returns_13bp": {
+    "2020-03_COVID": -0.10956370711394481,
+    "2020H2_2021_recovery": 0.7208706776686626,
+    "2018Q4_chop": 0.0,
+    "2022_chop_decline": -0.3076936246072153,
+    "2022_full_year": -0.3076936246072153,
+    "2023_2024_meltup": 0.8072016364659278,
+    "2025-04_squeeze_week": -0.0019592859198603874
+  },
+  "regime_active_name_honesty_check": {
+    "2020-03_COVID": {
+      "n_days_in_window": 41,
+      "mean_active_names": 44.63414634146341,
+      "all_zero": false
+    },
+    "2020H2_2021_recovery": {
+      "n_days_in_window": 380,
+      "mean_active_names": 64.02894736842106,
+      "all_zero": false
+    },
+    "2018Q4_chop": {
+      "n_days_in_window": 63,
+      "mean_active_names": 0.0,
+      "all_zero": true
+    },
+    "2022_chop_decline": {
+      "n_days_in_window": 251,
+      "mean_active_names": 29.258964143426294,
+      "all_zero": false
+    },
+    "2022_full_year": {
+      "n_days_in_window": 251,
+      "mean_active_names": 29.258964143426294,
+      "all_zero": false
+    },
+    "2023_2024_meltup": {
+      "n_days_in_window": 502,
+      "mean_active_names": 68.46812749003983,
+      "all_zero": false
+    },
+    "2025-04_squeeze_week": {
+      "n_days_in_window": 6,
+      "mean_active_names": 53.666666666666664,
+      "all_zero": false
+    }
+  },
+  "benchmark_fresh_recompute": {
+    "same_scored_range": {
+      "cagr": 0.40472684672556336,
+      "maxdd": 0.41039143089603664,
+      "sharpe": 1.2421683023733647
+    },
+    "full_range": {
+      "cagr": 0.413780369039912,
+      "maxdd": 0.4103914308960375,
+      "sharpe": 1.2613484500431094
+    }
+  }
+}

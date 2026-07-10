@@ -1,0 +1,26 @@
+{
+  "SPYUSDT": {
+    "symbol": "SPYUSDT",
+    "n": 1993,
+    "shock_idx": 996,
+    "gated_target_first_react": 253,
+    "exposure_first_react": 253,
+    "naive_unlagged_first_react": 20,
+    "gated_target_causal_ok": false,
+    "exposure_causal_ok": false,
+    "naive_reacts_strictly_before_shock": true,
+    "overall_pass": false
+  },
+  "MSFTUSDT": {
+    "symbol": "MSFTUSDT",
+    "n": 2002,
+    "shock_idx": 1001,
+    "gated_target_first_react": 253,
+    "exposure_first_react": 253,
+    "naive_unlagged_first_react": 20,
+    "gated_target_causal_ok": false,
+    "exposure_causal_ok": false,
+    "naive_reacts_strictly_before_shock": true,
+    "overall_pass": false
+  }
+}

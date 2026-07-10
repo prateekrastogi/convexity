@@ -1,0 +1,295 @@
+{
+  "meta": {
+    "source_csv": "/home/speculation/convexity-cta/research/cta/_dd_combined_waterfall_netret.csv",
+    "n_obs": 2046,
+    "date_range": [
+      "2018-05-07",
+      "2026-06-26"
+    ],
+    "periods_per_yr": 251.44734185733512,
+    "cpcv_function_used": "ctaB_pipeline.cpcv_paths (imported verbatim)",
+    "cpcv_n_groups": 8,
+    "cpcv_k": 2,
+    "embargo_trading_days": 252,
+    "embargo_rationale": "252 trading days = the slowest signal-component horizon used ANYWHERE in the base construction or its overlays: the 12-month (252-trading-day) total-return rule (research/cta/_s1_ensemble_93name.py) and the 10-month SMA rule (~210 trading days, Meb Faber convention, same file) are the two slowest axes; Axis-C causal_hmm_regime_posterior's min_train=252 (ctaB_pipeline.py) independently corroborates the same 252-day figure. All other components (vol_window=20, ewma_0.94 ~15.7d memory, corr_window<=120, the GZ-style drawdown-brake's own m_t which looks back only to running-peak-to-date with no extra fixed window) are faster/shorter. 252 (>=210) is therefore used, matching ctaB_pipeline.py's own EMBARGO_TRADING_DAYS constant exactly -- not re-derived independently, reused because it is the SAME base construction's own frozen figure."
+  },
+  "cpcv": {
+    "n_theoretical_combinations": 28,
+    "n_valid_combinations_used": 21,
+    "dropped_combinations": 7,
+    "drop_reason": "a (group,group) combo is dropped by cpcv_paths() itself when, after removing the +/-252-day embargo halo around each of the k=2 test groups, the remaining test segment has <=20 obs or zero variance -- with n_obs=2046 split into 8 groups of ~256 obs each, a 252-day embargo on EACH side of EACH of the 2 test groups consumes very close to an entire adjacent group's width, so most combinations that include two adjacent (or once-removed) groups collapse to a near-empty or empty remaining test segment and are dropped; only combinations of groups that are far enough apart (and/or near the sample edges, where there is no embargo on the outward side) survive with >20 obs remaining.",
+    "sharpe_mean": 1.1278652569441452,
+    "sharpe_std": 0.699018541937465,
+    "sharpe_median": 1.4171962583397164,
+    "sharpe_min": 0.035794202991101184,
+    "sharpe_max": 2.301071242141308,
+    "frac_positive_sharpe": 1.0,
+    "folds": [
+      {
+        "combo": [
+          0,
+          2
+        ],
+        "n_obs": 511,
+        "sharpe_ann": 1.4893960065877663,
+        "cagr_proxy": 0.36014018730941344
+      },
+      {
+        "combo": [
+          0,
+          3
+        ],
+        "n_obs": 511,
+        "sharpe_ann": 0.16066024416011812,
+        "cagr_proxy": 0.012934923394765319
+      },
+      {
+        "combo": [
+          0,
+          4
+        ],
+        "n_obs": 510,
+        "sharpe_ann": 0.035794202991101184,
+        "cagr_proxy": 0.0005349348686380928
+      },
+      {
+        "combo": [
+          0,
+          5
+        ],
+        "n_obs": 511,
+        "sharpe_ann": 1.4171962583397164,
+        "cagr_proxy": 0.23200822974349133
+      },
+      {
+        "combo": [
+          0,
+          6
+        ],
+        "n_obs": 511,
+        "sharpe_ann": 0.46461238597072085,
+        "cagr_proxy": 0.07309475476626104
+      },
+      {
+        "combo": [
+          0,
+          7
+        ],
+        "n_obs": 511,
+        "sharpe_ann": 1.7501181310814085,
+        "cagr_proxy": 0.44568790212485276
+      },
+      {
+        "combo": [
+          1,
+          3
+        ],
+        "n_obs": 512,
+        "sharpe_ann": 0.2890697109134176,
+        "cagr_proxy": 0.041523815818834686
+      },
+      {
+        "combo": [
+          1,
+          4
+        ],
+        "n_obs": 511,
+        "sharpe_ann": 0.24303489919273918,
+        "cagr_proxy": 0.02885468777553868
+      },
+      {
+        "combo": [
+          1,
+          5
+        ],
+        "n_obs": 512,
+        "sharpe_ann": 1.0738397913548337,
+        "cagr_proxy": 0.2662958716955226
+      },
+      {
+        "combo": [
+          1,
+          6
+        ],
+        "n_obs": 512,
+        "sharpe_ann": 0.497890969150603,
+        "cagr_proxy": 0.10325725971904531
+      },
+      {
+        "combo": [
+          1,
+          7
+        ],
+        "n_obs": 512,
+        "sharpe_ann": 1.4819139344392736,
+        "cagr_proxy": 0.48545829397697826
+      },
+      {
+        "combo": [
+          2,
+          4
+        ],
+        "n_obs": 511,
+        "sharpe_ann": 1.4609026628372412,
+        "cagr_proxy": 0.3608663494936575
+      },
+      {
+        "combo": [
+          2,
+          5
+        ],
+        "n_obs": 512,
+        "sharpe_ann": 2.0383044982567786,
+        "cagr_proxy": 0.6740151968886963
+      },
+      {
+        "combo": [
+          2,
+          6
+        ],
+        "n_obs": 512,
+        "sharpe_ann": 1.4334288710509706,
+        "cagr_proxy": 0.4584817499046048
+      },
+      {
+        "combo": [
+          2,
+          7
+        ],
+        "n_obs": 512,
+        "sharpe_ann": 2.301071242141308,
+        "cagr_proxy": 0.9637430825169233
+      },
+      {
+        "combo": [
+          3,
+          5
+        ],
+        "n_obs": 512,
+        "sharpe_ann": 1.1214234855168257,
+        "cagr_proxy": 0.24740440251331686
+      },
+      {
+        "combo": [
+          3,
+          6
+        ],
+        "n_obs": 512,
+        "sharpe_ann": 0.46267616495293123,
+        "cagr_proxy": 0.08679811222603528
+      },
+      {
+        "combo": [
+          3,
+          7
+        ],
+        "n_obs": 512,
+        "sharpe_ann": 1.535778350611941,
+        "cagr_proxy": 0.46329720966060584
+      },
+      {
+        "combo": [
+          4,
+          6
+        ],
+        "n_obs": 511,
+        "sharpe_ann": 0.4584679504922549,
+        "cagr_proxy": 0.07366766691038507
+      },
+      {
+        "combo": [
+          4,
+          7
+        ],
+        "n_obs": 511,
+        "sharpe_ann": 1.7158677207225252,
+        "cagr_proxy": 0.4464597371860737
+      },
+      {
+        "combo": [
+          5,
+          7
+        ],
+        "n_obs": 512,
+        "sharpe_ann": 2.253722915062573,
+        "cagr_proxy": 0.7790925061084872
+      }
+    ]
+  },
+  "drop_top5_periods": {
+    "top5_dates": [
+      "2026-02-06",
+      "2026-05-06",
+      "2020-03-13",
+      "2020-11-05",
+      "2026-04-30"
+    ],
+    "top5_returns": [
+      0.0550582661204196,
+      0.0531967230999566,
+      0.0507922199349993,
+      0.0471055456031238,
+      0.0467487083987612
+    ],
+    "full_sample_cagr": 0.2826424023722276,
+    "full_sample_maxdd": 0.3002344377821513,
+    "full_sample_sharpe_ann": 1.1678526719599218,
+    "cagr_after_drop5": 0.24433963460867414,
+    "maxdd_after_drop5": 0.33405905664096447,
+    "sharpe_ann_after_drop5": 1.0512137109610211
+  },
+  "per_year_sharpe": {
+    "2018": 0.0,
+    "2019": 1.303,
+    "2020": 1.219,
+    "2021": 1.401,
+    "2022": -1.864,
+    "2023": 1.495,
+    "2024": 1.628,
+    "2025": 1.333,
+    "2026": 2.705
+  },
+  "per_year_return": {
+    "2018": 0.0,
+    "2019": 0.21283,
+    "2020": 0.4114,
+    "2021": 0.43079,
+    "2022": -0.21115,
+    "2023": 0.2318,
+    "2024": 0.50831,
+    "2025": 0.37834,
+    "2026": 0.53192
+  },
+  "dsr_informational": {
+    "n_trials_honest_waterfall": 4,
+    "waterfall_stopping_points_rationale": "The combined policy was reached via a MECHANICAL waterfall (Step A -> C -> D-corr -> D-index), not a fitted grid search: at each step there was exactly one pre-specified next overlay to test and the waterfall stops (or proceeds) based on a pre-registered pass/fail gate, not on picking the best of many. That gives AT MOST 4 distinct configurations that could ever actually have been the 'final' one the waterfall stopped at (stop-after-A, stop-after-C, stop-after-D-corr, stop-after-D-index) -- not 2^5=32 (all combinations of 5 independent overlays a grid search would have implied), and not even 2^4=16 restricted to the 4 steps actually walked, because the waterfall's sequential accept/reject logic collapses the combinatorial overlay space down to a single ordered path with one decision (continue Y/N) per step, i.e. a linear chain of <=4 stopping points rather than a tree/lattice of configurations.",
+    "dsr_at_n_trials_4": {
+      "sr_obs": 0.07365,
+      "psr_vs0": 0.9994,
+      "dsr": 0.9867,
+      "sr0_obs": 0.02326,
+      "n_trials": 4,
+      "T": 2046,
+      "sharpe_ann_obs": 1.1679
+    },
+    "dsr_at_n_trials_2_near_naive_reference": {
+      "sr_obs": 0.07365,
+      "psr_vs0": 0.9994,
+      "dsr": 0.9969,
+      "sr0_obs": 0.01149,
+      "n_trials": 2,
+      "T": 2046,
+      "sharpe_ann_obs": 1.1679
+    },
+    "dsr_at_n_trials_32_full_grid_contrast_only": {
+      "sr_obs": 0.07365,
+      "psr_vs0": 0.9994,
+      "dsr": 0.8847,
+      "sr0_obs": 0.04642,
+      "n_trials": 32,
+      "T": 2046,
+      "sharpe_ann_obs": 1.1679
+    },
+    "contrast_note": "At N_trials=2 (near-naive lower-bound reference; N_trials=1 is degenerate for this PPF-based DSR formula) vs N_trials=4 (honest waterfall count) vs N_trials=32 (what a full independent grid search over all 5 overlays' on/off combinations would have implied, ignoring within-overlay parameter variation which would push the true grid count higher still) -- the DSR haircut from 2->4 is small precisely because the waterfall's sequential, pre-registered, gate-based structure never actually multiplicity-tested a combinatorial lattice of overlay on/off states; it tested a short ordered chain. This is DSR/PBO reported INFORMATIONALLY ONLY per the frozen adoption-gate convention (ctaB_pipeline.py docstring: 'DSR/PBO are computed and reported INFORMATIONALLY ONLY -- they never gate adoption here') -- neither DSR nor PBO is a pass/fail gate for this program."
+  }
+}

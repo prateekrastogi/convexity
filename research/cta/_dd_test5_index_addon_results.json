@@ -1,0 +1,378 @@
+{
+  "step1_reproduction": {
+    "recomputed": {
+      "cagr": 0.2826424023722276,
+      "maxdd": 0.3002344377821513,
+      "sharpe": 1.167567238087405,
+      "worst_day": -0.0865279201745064,
+      "best_day": 0.0550582661204196,
+      "realized_avg_leverage": 1.1103454095396768
+    },
+    "previously_reported": {
+      "cagr": 0.28264240237223026,
+      "maxdd": 0.30023443778215164,
+      "sharpe": 1.1675672380874091,
+      "realized_avg_leverage": 1.1103454095396768,
+      "n_obs": 2046
+    },
+    "passed": true
+  },
+  "combination_method_precedent_note": "m5(t) applied via notional/margin scaling with NO incremental cost for the overlay's own day-to-day multiplier changes beyond the explicit flip-cost line item -- the same precedent already established for overlay #1 (GZ-brake m_t) and overlay #3 (vol-targeting scale(t)) in _dd_combined_waterfall.py.",
+  "overlay5_gate": {
+    "n_flip_days": 17,
+    "gate_active_fraction_of_days": 0.20185728250244378,
+    "n_leading_days_defaulted_gate_off": 253,
+    "data_gap_tail_calendar_days_spy_vs_book": 81,
+    "total_extra_flip_cost_bp": 81.58249175403995,
+    "mean_extra_flip_cost_bp_per_flip_day": 4.798970103178821
+  },
+  "step2_combination_result": {
+    "metrics": {
+      "cagr": 0.24347275304426064,
+      "maxdd": 0.2624169514122588,
+      "sharpe": 1.098505326692739,
+      "worst_day": -0.0865279201745064,
+      "best_day": 0.0550582661204196
+    },
+    "realized_avg_leverage": 1.0536610501562076,
+    "ev_per_week_bp": 48.21179527634024,
+    "win_rate_weekly": 0.4975609756097561,
+    "worst_week": -0.148866952775925,
+    "n_weeks": 410,
+    "mean_daily_effective_leverage_turnover_125": 0.033719994534854976,
+    "mean_daily_effective_leverage_turnover_12_only": 0.03287068968112354
+  },
+  "step3_verdict": {
+    "sharpe_125": 1.098505326692739,
+    "required_sharpe_gt": 1.1676,
+    "sharpe_pass": false,
+    "maxdd_125": 0.2624169514122588,
+    "required_maxdd_lte": 0.3003,
+    "maxdd_pass": true,
+    "overall_verdict": "FAIL"
+  },
+  "step4_regime_breakdown": {
+    "2020-03_COVID": {
+      "window": [
+        "2020-02-15",
+        "2020-04-15"
+      ],
+      "n_days": 41,
+      "cum_return_125": -0.22530083847616644,
+      "cum_return_12_only": -0.23759982404623448,
+      "maxdd_in_window_125": 0.26241695141225874,
+      "mean_effective_leverage_125": 0.5985063284952259,
+      "frac_days_gate_engaged": 0.7317073170731707
+    },
+    "2022_full_year": {
+      "window": [
+        "2022-01-01",
+        "2022-12-31"
+      ],
+      "n_days": 251,
+      "cum_return_125": -0.20142333030092774,
+      "cum_return_12_only": -0.2111467015531595,
+      "maxdd_in_window_125": 0.22095277400619062,
+      "mean_effective_leverage_125": 0.283200733886148,
+      "frac_days_gate_engaged": 0.8326693227091634
+    },
+    "2018Q4_chop": {
+      "window": [
+        "2018-10-01",
+        "2018-12-31"
+      ],
+      "n_days": 63,
+      "cum_return_125": 0.0,
+      "cum_return_12_only": 0.0,
+      "maxdd_in_window_125": 0.0,
+      "mean_effective_leverage_125": 0.0,
+      "frac_days_gate_engaged": 0.0
+    },
+    "2018Q4_warmup_caveat": "Inherited warmup artifact (not a market signal), same as the underlying #1+#2 and 1x base construction: the 2018Q4_chop window predates the point where enough of the 93-name universe has sufficient own trailing history for all three S1 rules to be simultaneously defined, so the #1+#2 book itself already shows exactly 0.0% return for this quarter (established fact, not introduced by overlay #5) -- read as 'strategy not yet live', not 'de-risked out of a bear market'.",
+    "2023_2024_meltup": {
+      "window": [
+        "2023-01-01",
+        "2024-12-31"
+      ],
+      "n_days": 502,
+      "cum_return_125": 0.7859158235340984,
+      "cum_return_12_only": 0.857932082293275,
+      "maxdd_in_window_125": 0.25119571951185804,
+      "mean_effective_leverage_125": 1.245772477874611,
+      "frac_days_gate_engaged": 0.045816733067729085
+    },
+    "2025-04_squeeze_week": {
+      "window": [
+        "2025-04-04",
+        "2025-04-11"
+      ],
+      "n_days": 6,
+      "cum_return_125": -0.010029132234628202,
+      "cum_return_12_only": -0.02092155141640495,
+      "maxdd_in_window_125": 0.21727506001323182,
+      "mean_effective_leverage_125": 0.24433446266898043,
+      "frac_days_gate_engaged": 1.0
+    }
+  },
+  "step5_injection_test": {
+    "inject_pos": 350,
+    "inject_date": "2016-05-06",
+    "baseline_state_at_inject_pos": 1.0,
+    "shock_multiplier_used": 0.2,
+    "causal_version_of_full_combination_step": {
+      "pre_injection_days_unaffected": true,
+      "unaffected_on_injection_day_itself": true,
+      "reacts_starting_next_day": true
+    },
+    "naive_unlagged_control_same_combination_step": {
+      "reacts_on_injection_day_itself": true
+    },
+    "test_has_discriminating_power": true
+  },
+  "step6_cpcv": {
+    "n_groups": 8,
+    "k": 2,
+    "embargo": 252,
+    "n_theoretical_combinations": 28,
+    "n_valid_combinations_used": 21,
+    "dropped_combinations": 7,
+    "sharpe_mean": 1.0563216873965624,
+    "sharpe_std": 0.609197139077988,
+    "sharpe_median": 1.2533208000388127,
+    "sharpe_min": 0.11894684806942817,
+    "sharpe_max": 2.0724266517869183,
+    "frac_positive_sharpe": 1.0,
+    "folds": [
+      {
+        "combo": [
+          0,
+          2
+        ],
+        "n_obs": 511,
+        "sharpe_ann": 1.4480559907950115,
+        "cagr_proxy": 0.3469014130587842
+      },
+      {
+        "combo": [
+          0,
+          3
+        ],
+        "n_obs": 511,
+        "sharpe_ann": 0.11894684806942817,
+        "cagr_proxy": 0.0066707525486569
+      },
+      {
+        "combo": [
+          0,
+          4
+        ],
+        "n_obs": 510,
+        "sharpe_ann": 0.2162198119292901,
+        "cagr_proxy": 0.008547986023755838
+      },
+      {
+        "combo": [
+          0,
+          5
+        ],
+        "n_obs": 511,
+        "sharpe_ann": 1.3263041724243176,
+        "cagr_proxy": 0.21344445919582045
+      },
+      {
+        "combo": [
+          0,
+          6
+        ],
+        "n_obs": 511,
+        "sharpe_ann": 0.46079051134492865,
+        "cagr_proxy": 0.06946127187727735
+      },
+      {
+        "combo": [
+          0,
+          7
+        ],
+        "n_obs": 511,
+        "sharpe_ann": 1.4825194677818379,
+        "cagr_proxy": 0.3087662053536142
+      },
+      {
+        "combo": [
+          1,
+          3
+        ],
+        "n_obs": 512,
+        "sharpe_ann": 0.2762815006802029,
+        "cagr_proxy": 0.0370802598547737
+      },
+      {
+        "combo": [
+          1,
+          4
+        ],
+        "n_obs": 511,
+        "sharpe_ann": 0.31174482691113936,
+        "cagr_proxy": 0.03907092654669553
+      },
+      {
+        "combo": [
+          1,
+          5
+        ],
+        "n_obs": 512,
+        "sharpe_ann": 1.1040765530013734,
+        "cagr_proxy": 0.24964414292703663
+      },
+      {
+        "combo": [
+          1,
+          6
+        ],
+        "n_obs": 512,
+        "sharpe_ann": 0.5194037780552907,
+        "cagr_proxy": 0.1016373595310005
+      },
+      {
+        "combo": [
+          1,
+          7
+        ],
+        "n_obs": 512,
+        "sharpe_ann": 1.3046371142781723,
+        "cagr_proxy": 0.3476104883796389
+      },
+      {
+        "combo": [
+          2,
+          4
+        ],
+        "n_obs": 511,
+        "sharpe_ann": 1.462900875792725,
+        "cagr_proxy": 0.35839208076878926
+      },
+      {
+        "combo": [
+          2,
+          5
+        ],
+        "n_obs": 512,
+        "sharpe_ann": 1.9510053340267914,
+        "cagr_proxy": 0.6328225934852063
+      },
+      {
+        "combo": [
+          2,
+          6
+        ],
+        "n_obs": 512,
+        "sharpe_ann": 1.4137602260247146,
+        "cagr_proxy": 0.43943248215954567
+      },
+      {
+        "combo": [
+          2,
+          7
+        ],
+        "n_obs": 512,
+        "sharpe_ann": 2.0724266517869183,
+        "cagr_proxy": 0.7608283646974074
+      },
+      {
+        "combo": [
+          3,
+          5
+        ],
+        "n_obs": 512,
+        "sharpe_ann": 1.0432129969724087,
+        "cagr_proxy": 0.22106171030852484
+      },
+      {
+        "combo": [
+          3,
+          6
+        ],
+        "n_obs": 512,
+        "sharpe_ann": 0.43278620291488323,
+        "cagr_proxy": 0.07644020578363242
+      },
+      {
+        "combo": [
+          3,
+          7
+        ],
+        "n_obs": 512,
+        "sharpe_ann": 1.2533208000388127,
+        "cagr_proxy": 0.3167873246828985
+      },
+      {
+        "combo": [
+          4,
+          6
+        ],
+        "n_obs": 511,
+        "sharpe_ann": 0.49856126799436806,
+        "cagr_proxy": 0.07858504588531945
+      },
+      {
+        "combo": [
+          4,
+          7
+        ],
+        "n_obs": 511,
+        "sharpe_ann": 1.4941805890389441,
+        "cagr_proxy": 0.31993153447866773
+      },
+      {
+        "combo": [
+          5,
+          7
+        ],
+        "n_obs": 512,
+        "sharpe_ann": 1.9916199154662486,
+        "cagr_proxy": 0.5866810231263804
+      }
+    ]
+  },
+  "step6_drop_top5": {
+    "top5_dates": [
+      "2026-02-06",
+      "2020-11-05",
+      "2021-01-07",
+      "2024-02-22",
+      "2021-03-01"
+    ],
+    "top5_returns": [
+      0.0550582661204196,
+      0.0471055456031238,
+      0.0451559445012858,
+      0.0451541215513215,
+      0.0446297843894099
+    ],
+    "full_sample_sharpe_ann_per_obs_convention": 1.0987738770760918,
+    "cagr_after_drop5": 0.2085760097469278,
+    "maxdd_after_drop5": 0.2624169514122588,
+    "sharpe_ann_after_drop5": 0.9803043032390873
+  },
+  "step7_dsr_informational": {
+    "dsr_n_trials_2_nearest_lower_bound": {
+      "sr_obs": 0.06929,
+      "psr_vs0": 0.9989,
+      "dsr": 0.9946,
+      "sr0_obs": 0.01149,
+      "n_trials": 2,
+      "T": 2046,
+      "sharpe_ann_obs": 1.0988
+    },
+    "dsr_n_trials_5_full_lineage_count": {
+      "sr_obs": 0.06929,
+      "psr_vs0": 0.9989,
+      "dsr": 0.9707,
+      "sr0_obs": 0.02637,
+      "n_trials": 5,
+      "T": 2046,
+      "sharpe_ann_obs": 1.0988
+    },
+    "note": "DSR/PBO reported informationally only per the frozen adoption-gate convention (ctaB_pipeline.py docstring) -- never a pass/fail gate here."
+  }
+}

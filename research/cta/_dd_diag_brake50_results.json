@@ -1,0 +1,207 @@
+{
+  "overlay": "1_alone_gz_brake_50pct_ceiling_on_half_kelly",
+  "n_obs": 2046,
+  "span_years": 8.136892539356605,
+  "ppy": 251.44734185733512,
+  "base_1x_reproduction_check": {
+    "metrics": {
+      "cagr": 0.22047809242901062,
+      "maxdd": 0.3873029802163849,
+      "sharpe": 1.0600334628729087,
+      "final_wealth": 5.059239228929336,
+      "worst_day": -0.1214176548700513,
+      "best_day": 0.0921175296634772
+    },
+    "checks": {
+      "cagr_matches": true,
+      "maxdd_matches": true,
+      "sharpe_matches": true,
+      "n_obs_matches": true
+    }
+  },
+  "L_star_rederived": 4.651257067218902,
+  "L_half_rederived": 2.325628533609451,
+  "L_half_matches_established": true,
+  "dd_ceiling": 0.5,
+  "overlay_metrics": {
+    "cagr": 0.303601146104592,
+    "maxdd": 0.4246091723820895,
+    "sharpe": 1.0406339660049524,
+    "final_wealth": 8.64809245493578,
+    "worst_day": -0.11077778315334896,
+    "best_day": 0.07432966789308995
+  },
+  "realized_avg_leverage": 1.661369746684667,
+  "nominal_L_half": 2.325628533609451,
+  "realized_over_nominal_ratio": 0.7143745110944986,
+  "engagement": {
+    "n_days_engaged": 1607,
+    "pct_days_engaged": 0.7854349951124144,
+    "n_episodes": 73,
+    "top_episodes": [
+      {
+        "start": "2021-12-29",
+        "end": "2024-11-07",
+        "n_days": 720,
+        "min_exposure": 0.35066211976128814,
+        "min_exposure_frac_of_target": 0.150781655235821,
+        "max_dd_in_episode": 0.4246091723820895
+      },
+      {
+        "start": "2020-02-21",
+        "end": "2020-09-02",
+        "n_days": 136,
+        "min_exposure": 0.4740524976006742,
+        "min_exposure_frac_of_target": 0.20383844227475545,
+        "max_dd_in_episode": 0.3980807788626223
+      },
+      {
+        "start": "2025-02-20",
+        "end": "2025-08-12",
+        "n_days": 120,
+        "min_exposure": 0.7556757235749494,
+        "min_exposure_frac_of_target": 0.3249339749036,
+        "max_dd_in_episode": 0.3375330125482
+      },
+      {
+        "start": "2021-02-18",
+        "end": "2021-06-10",
+        "n_days": 79,
+        "min_exposure": 1.5231888845251353,
+        "min_exposure_frac_of_target": 0.6549579447071441,
+        "max_dd_in_episode": 0.17252102764642796
+      },
+      {
+        "start": "2019-07-26",
+        "end": "2019-11-07",
+        "n_days": 74,
+        "min_exposure": 1.5801297600077753,
+        "min_exposure_frac_of_target": 0.6794420248857898,
+        "max_dd_in_episode": 0.16027898755710512
+      },
+      {
+        "start": "2020-09-04",
+        "end": "2020-11-19",
+        "n_days": 54,
+        "min_exposure": 1.497838423951306,
+        "min_exposure_frac_of_target": 0.6440574676070956,
+        "max_dd_in_episode": 0.1779712661964522
+      },
+      {
+        "start": "2025-10-31",
+        "end": "2026-01-06",
+        "n_days": 45,
+        "min_exposure": 1.5086619800224468,
+        "min_exposure_frac_of_target": 0.6487115023829513,
+        "max_dd_in_episode": 0.17564424880852436
+      },
+      {
+        "start": "2021-09-08",
+        "end": "2021-10-28",
+        "n_days": 37,
+        "min_exposure": 1.7348658871294018,
+        "min_exposure_frac_of_target": 0.7459772109163254,
+        "max_dd_in_episode": 0.1270113945418373
+      },
+      {
+        "start": "2021-11-10",
+        "end": "2021-12-27",
+        "n_days": 32,
+        "min_exposure": 1.8285939440100718,
+        "min_exposure_frac_of_target": 0.7862794584705386,
+        "max_dd_in_episode": 0.1068602707647307
+      },
+      {
+        "start": "2026-02-27",
+        "end": "2026-04-13",
+        "n_days": 31,
+        "min_exposure": 1.4945772471910876,
+        "min_exposure_frac_of_target": 0.6426551900235999,
+        "max_dd_in_episode": 0.17867240498820003
+      },
+      {
+        "start": "2024-12-10",
+        "end": "2025-01-22",
+        "n_days": 28,
+        "min_exposure": 1.793714697476574,
+        "min_exposure_frac_of_target": 0.7712816864577554,
+        "max_dd_in_episode": 0.1143591567711223
+      },
+      {
+        "start": "2026-01-30",
+        "end": "2026-02-25",
+        "n_days": 18,
+        "min_exposure": 1.8081511992145467,
+        "min_exposure_frac_of_target": 0.7774892563810427,
+        "max_dd_in_episode": 0.11125537180947864
+      },
+      {
+        "start": "2026-06-04",
+        "end": "2026-06-26",
+        "n_days": 16,
+        "min_exposure": 1.7727247466397449,
+        "min_exposure_frac_of_target": 0.7622561905397758,
+        "max_dd_in_episode": 0.11887190473011211
+      },
+      {
+        "start": "2021-07-07",
+        "end": "2021-07-23",
+        "n_days": 13,
+        "min_exposure": 2.0139265446319214,
+        "min_exposure_frac_of_target": 0.8659708614368616,
+        "max_dd_in_episode": 0.06701456928156924
+      },
+      {
+        "start": "2021-08-09",
+        "end": "2021-08-25",
+        "n_days": 13,
+        "min_exposure": 2.0317309363738527,
+        "min_exposure_frac_of_target": 0.8736265947083734,
+        "max_dd_in_episode": 0.06318670264581328
+      }
+    ],
+    "ceiling_ever_fully_binds_to_zero": false,
+    "book_own_realized_maxdd": 0.4246091723820895,
+    "book_own_realized_maxdd_date": "2022-10-14",
+    "budget_headroom_used_pct": 0.849218344764179
+  },
+  "regime_2020_03_covid": {
+    "window": [
+      "2020-02-15",
+      "2020-04-15"
+    ],
+    "n_days_in_window": 41,
+    "days_engaged": 40,
+    "pct_days_engaged": 0.975609756097561,
+    "min_exposure": 0.4740524976006742,
+    "mean_exposure": 1.063324258121625,
+    "target_L_half": 2.325628533609451,
+    "window_return_brake50": -0.30707199247529127,
+    "window_return_naive_half_kelly_no_brake": -0.3366781626856473,
+    "window_return_unlevered_1x": -0.10956370711394436,
+    "any_engaged": true
+  },
+  "regime_2022": {
+    "window": [
+      "2022-01-01",
+      "2022-12-31"
+    ],
+    "n_days_in_window": 251,
+    "days_engaged": 251,
+    "pct_days_engaged": 1.0,
+    "min_exposure": 0.35066211976128814,
+    "mean_exposure": 0.8738563198578343,
+    "target_L_half": 2.325628533609451,
+    "window_return_brake50": -0.3832816992867175,
+    "window_return_naive_half_kelly_no_brake": -0.6133534301943708,
+    "window_return_unlevered_1x": -0.30769362460721517,
+    "any_engaged": true
+  },
+  "causality_check": {
+    "honest_run_brake_unaffected_strictly_before_shock_day": true,
+    "honest_run_brake_unaffected_ON_shock_day_itself": true,
+    "honest_run_brake_reacts_starting_day_AFTER_shock": true,
+    "naive_control_reacts_on_shock_day_itself (proves test has discriminating power)": true
+  },
+  "causality_pass": true
+}

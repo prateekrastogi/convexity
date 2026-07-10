@@ -1,0 +1,55 @@
+{
+  "axisC_hmm_injection_SPY": {
+    "injection_idx": 1982,
+    "n_obs": 1992,
+    "shock": 0.5,
+    "causal_first_divergence_idx": 1983,
+    "naive_first_divergence_idx": 1982,
+    "causal_passes": true,
+    "naive_reacts_same_day": true,
+    "max_abs_diff_at_or_before_injection_causal": 0.0,
+    "PASS": true
+  },
+  "axisD_vol_injection_SPY": {
+    "trailing_rv_20": {
+      "causal_forecast_j_unchanged": true,
+      "causal_forecast_j+1_changed": true,
+      "naive_control_forecast_j_changed": true,
+      "PASS": true
+    },
+    "yang_zhang_20": {
+      "causal_forecast_j_unchanged": true,
+      "causal_forecast_j+1_changed": true,
+      "naive_control_forecast_j_changed": true,
+      "PASS": true
+    },
+    "ewma_0.94": {
+      "causal_forecast_j_unchanged": true,
+      "causal_forecast_j+1_changed": true,
+      "naive_control_forecast_j_changed": true,
+      "PASS": true
+    }
+  },
+  "axisF_corr_injection_synthetic": {
+    "t_inject": 560,
+    "causal_fn_unchanged_at_injection_day": true,
+    "causal_fn_changed_day_after": true,
+    "naive_control_changed_same_day": true,
+    "PASS": true,
+    "baseline_val_at_inject": 0.030527269165729225,
+    "injected_val_at_inject": 0.030527269165729225,
+    "baseline_val_day_after": 0.029337371504086458,
+    "injected_val_day_after": 0.9654391069381113,
+    "naive_baseline_val_at_inject": 0.029337371504086458,
+    "naive_injected_val_at_inject": 0.9654391069381113
+  },
+  "axisE_cdar_full_sample_calibration_check": {
+    "L_full_sample_base": 0.7655725912452959,
+    "L_full_sample_after_late_shock": 0.6197069851148406,
+    "L_changes_with_future_shock": true,
+    "L_prefix_through_late_idx_minus_1_base": 0.8061204835623104,
+    "L_prefix_through_late_idx_minus_1_shocked": 0.8061204835623104,
+    "prefix_L_identical_as_expected": true,
+    "interpretation": "CDaR L is a SINGLE constant fit on the entire realized sample by explicit design (documented in ctaB_pipeline.py's apply_leverage_cdar docstring); a shock placed near the END of the sample changes the constant applied to EVERY day including the very first day of the backtest. This is not a per-day causality bug (there is no such notion for a single full-sample scalar) but it IS a real in-sample/retrospective-calibration property: the realized 0.9718x leverage was chosen WITH HINDSIGHT of the entire 8.17-year realized path, including 2025-2026 data. A live/paper deployment could not have known this constant in Jan 2018; it would have had to re-estimate CDaR on a trailing/expanding window, which was NOT done here or in Stage A. This is disclosed in the docstring but not flagged as a limitation in CTA_PREREG.md or the pipeline's own adoption-gate reporting."
+  }
+}
