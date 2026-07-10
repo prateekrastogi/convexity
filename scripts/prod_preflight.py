@@ -54,7 +54,7 @@ def main() -> None:  # noqa: C901 — a checklist is linear by nature
     for sub in ("stitched", "klines", "funding", "universe"):
         p = pathlib.Path("data") / sub
         rec("PASS" if p.exists() else "FAIL", f"lake:{sub}",
-            "reachable" if p.exists() else "missing symlink — rerun setup_prod_checkout.sh")
+            "reachable" if p.exists() else "missing — lake dir absent in this checkout")
     from convexity.paper.venue import state_root
     pp = state_root()
     pp.mkdir(parents=True, exist_ok=True)
