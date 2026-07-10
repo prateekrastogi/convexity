@@ -1,0 +1,85 @@
+{
+  "meta": {
+    "n_obs": 2046,
+    "span_years": 8.136892539356605,
+    "ppy_derived": 251.44734185733512,
+    "ewma_lambda": 0.94,
+    "warmup_obs": 20,
+    "scale_cap": 2.0
+  },
+  "base_1x_reproduction": {
+    "cagr": 0.22047809242901062,
+    "maxdd": 0.3873029802163849,
+    "sharpe": 1.0600334628729087,
+    "final_wealth": 5.059239228929336,
+    "worst_day": -0.1214176548700513,
+    "best_day": 0.0921175296634772
+  },
+  "L_star_fresh": 4.651257067218902,
+  "L_half_fresh": 2.325628533609451,
+  "half_kelly_no_overlay_reproduction": {
+    "cagr": 0.4838996653013412,
+    "maxdd": 0.7051972339843262,
+    "sharpe": 1.0600334628729084,
+    "final_wealth": 24.814201086828014,
+    "worst_day": -0.2823723626497358,
+    "best_day": 0.21423115543099755
+  },
+  "causality_test": {
+    "inject_pos": 1023,
+    "inject_date": "2022-05-27",
+    "fake_move": -0.2,
+    "honest_before_unaffected": true,
+    "honest_reacts_at_inject_day": false,
+    "honest_reacts_at_t_plus_1": true,
+    "naive_control_reacts_at_inject_day": true,
+    "causal_pass": true,
+    "control_has_teeth": true
+  },
+  "overlay3_metrics": {
+    "cagr": 0.48615704378806956,
+    "maxdd": 0.6682317953364625,
+    "sharpe": 1.109386733829024,
+    "final_wealth": 25.12302947939753,
+    "worst_day": -0.14037347114011842,
+    "best_day": 0.11896307129941226
+  },
+  "realized_avg_leverage": 2.4780314319112495,
+  "nominal_half_kelly_target": 2.325628533609451,
+  "scale_cap_diagnostics": {
+    "n_valid_postwarmup": 1771,
+    "n_cap_bind": 21,
+    "pct_cap_bind": 1.185770750988142,
+    "raw_scale_min": 0.23413806976711884,
+    "raw_scale_p5": 0.3624488294758471,
+    "raw_scale_median": 1.0862033945481306,
+    "raw_scale_p95": 1.6809779537062308,
+    "raw_scale_max": 2.274339636874924,
+    "applied_scale_min": 0.23413806976711884,
+    "applied_scale_max": 2.0,
+    "mean_excess_over_cap": 0.13309522524389056,
+    "max_excess_over_cap": 0.2743396368749238
+  },
+  "regime_2020_03_covid": {
+    "n_days": 41,
+    "L_t_min": 0.5445181758546519,
+    "L_t_mean": 0.8123901302210349,
+    "L_t_max": 1.4580013047007527,
+    "scale_min": 0.23413806976711884,
+    "scale_mean": 0.3493206754563589,
+    "scale_max": 0.6269278535372489,
+    "cum_ret_overlay3": -0.11871380777370755,
+    "cum_ret_half_kelly_only": -0.3366781626856473
+  },
+  "regime_2022": {
+    "n_days": 251,
+    "L_t_min": 1.560701776365977,
+    "L_t_mean": 2.090641194165843,
+    "L_t_max": 2.7545506712940933,
+    "scale_min": 0.671088161248055,
+    "scale_mean": 0.8989574921155186,
+    "scale_max": 1.1844327808529858,
+    "cum_ret_overlay3": -0.5840752007886756,
+    "cum_ret_half_kelly_only": -0.6133534301943708
+  }
+}

@@ -1,0 +1,100 @@
+{
+  "meta": {
+    "diagnostic_only": true,
+    "overlay_tested": "#4 CORRELATION-SPIKE DE-RISKING, ALONE",
+    "nominal_leverage_L_half": 2.325628533609451,
+    "corr_window_days": 60,
+    "norm_window_weeks": 52,
+    "norm_min_periods_weeks": 26,
+    "spike_multiple": 1.5,
+    "derisk_multiplier_when_triggered": 0.5,
+    "n_obs_daily": 2046,
+    "n_weeks": 411
+  },
+  "reproduction_check": {
+    "max_abs_diff_vs_established_csv": 9.974659986866641e-17,
+    "byte_level_match": true,
+    "recomputed_1x_metrics": {
+      "cagr": 0.22047809242901129,
+      "maxdd": 0.38730298021638526,
+      "sharpe": 1.0600334628729118,
+      "ppy": 251.44734185733512
+    }
+  },
+  "overlay4_alone_result": {
+    "cagr": 0.4289314250844931,
+    "maxdd": 0.6567064244173098,
+    "sharpe": 1.0310687963136993,
+    "realized_avg_leverage": 2.2363998728624606,
+    "nominal_L_half": 2.325628533609451,
+    "n_days_engaged": 157,
+    "n_days_total": 2046,
+    "pct_days_engaged": 7.6735092864125125,
+    "n_weeks_triggered": 29,
+    "n_weeks_total": 411,
+    "pct_weeks_triggered": 7.0559610705596105
+  },
+  "corr_regime_diagnostics": {
+    "overall": {
+      "overall_mean_corr": 0.3424342350136365,
+      "overall_median_corr": 0.32111721145639033,
+      "overall_p90_corr": 0.5008247632440523,
+      "overall_min_corr": 0.14596208808275754,
+      "overall_max_corr": 0.7510142010119689
+    },
+    "covid_2020_03": {
+      "window": "2020-03 COVID crash",
+      "start": "2020-02-15",
+      "end": "2020-05-31",
+      "n_weeks_in_window": 14,
+      "mean_corr_in_window": 0.6170462520775339,
+      "max_corr_in_window": 0.7510142010119689,
+      "mean_trailing_median_norm_in_window": 0.40034592692073634,
+      "overall_sample_median_corr": 0.32111721145639033,
+      "n_weeks_triggered_in_window": 10,
+      "pct_weeks_triggered_in_window": 71.42857142857143
+    },
+    "y2022": {
+      "window": "2022 chop/decline",
+      "start": "2022-01-01",
+      "end": "2022-12-31",
+      "n_weeks_in_window": 51,
+      "mean_corr_in_window": 0.41315948060503416,
+      "max_corr_in_window": 0.5302709953895082,
+      "mean_trailing_median_norm_in_window": 0.3357565640265356,
+      "overall_sample_median_corr": 0.32111721145639033,
+      "n_weeks_triggered_in_window": 5,
+      "pct_weeks_triggered_in_window": 9.803921568627452
+    }
+  },
+  "causality_injection_test": {
+    "k_inj": 228,
+    "inject_date": "2022-11-11",
+    "n_shocked_names": 10,
+    "shocked_names": [
+      "AAOIUSDT",
+      "AAPLUSDT",
+      "AMATUSDT",
+      "ASMLUSDT",
+      "ASTSUSDT",
+      "BEUSDT",
+      "BRKBUSDT",
+      "BXUSDT",
+      "CATUSDT",
+      "COSTUSDT"
+    ],
+    "base_corr_at_k_inj": 0.47661921240808003,
+    "injected_corr_at_k_inj": 0.43205667752415294,
+    "causal_impl": {
+      "pre_injection_weeks_byte_identical": true,
+      "reacts_at_k_inj": true,
+      "k_inj_minus_1_unaffected (no early leak)": true
+    },
+    "naive_unlagged_control": {
+      "description": "deliberately mislabels week k's corr using a window ending at fri_positions[k+1] (one week AHEAD) instead of fri_positions[k]",
+      "pre_k_inj_minus_1_weeks_byte_identical": true,
+      "reacts_one_week_early_at_k_inj_minus_1": true
+    },
+    "verdict": "PASS: naive control demonstrably reacts one week EARLY (proving the injection test has real discriminating power to catch a lookahead bug), while the real causal implementation used in the overlay shows no such early reaction and only reacts at/after its own proper decision week."
+  }
+}

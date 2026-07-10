@@ -1,0 +1,85 @@
+{
+  "step0_base_reproduction": {
+    "n_obs": 2046,
+    "cagr": 0.22047809242901062,
+    "maxdd": 0.3873029802163848,
+    "sharpe": 1.0600334628729087,
+    "passed": "True"
+  },
+  "kelly": {
+    "L_star_reredived": 4.651257067218902,
+    "L_half_rederived": 2.325628533609451,
+    "L_half_previously_reported": 2.325629,
+    "reproduction_ok": true
+  },
+  "overlay2_alone_at_half_kelly": {
+    "cagr": 0.369958057212493,
+    "maxdd": 0.3907499633277239,
+    "sharpe": 1.2109547169226798,
+    "realized_avg_leverage": 1.3143677111815655,
+    "nominal_target_leverage": 2.325628533609451,
+    "n_obs": 2046,
+    "scored_span": [
+      "2018-05-07",
+      "2026-06-26"
+    ],
+    "periods_per_yr": 251.44734185733512,
+    "worst_day": -0.1300253693556191,
+    "best_day": 0.11682040433241439
+  },
+  "breadth_fraction_stats": {
+    "overall": {
+      "mean": 0.5651666601895464,
+      "min": 0.0,
+      "max": 0.9333333333333332,
+      "std": 0.30135811014831554
+    },
+    "2020-03_COVID_window": {
+      "n_days": 41,
+      "mean": 0.5361982191250484,
+      "min": 0.2804232804232804,
+      "max": 0.7989417989417988
+    },
+    "2022_full_year_window": {
+      "n_days": 251,
+      "mean": 0.25403238205916484,
+      "min": 0.05761316872427983,
+      "max": 0.6761904761904762
+    }
+  },
+  "regime_detail": {
+    "2020-03_COVID": {
+      "n_days": 41,
+      "maxdd_in_window": 0.39074996332772394,
+      "mean_realized_leverage_in_window": 1.2469978780677853,
+      "min_realized_leverage_in_window": 0.6521603824407456,
+      "cum_ret_in_window": -0.26767273737747377
+    },
+    "2022_full_year": {
+      "n_days": 251,
+      "maxdd_in_window": 0.2873874344125301,
+      "mean_realized_leverage_in_window": 0.5907849561775713,
+      "min_realized_leverage_in_window": 0.1339868290968408,
+      "cum_ret_in_window": -0.26422594311102565
+    }
+  },
+  "injection_test": {
+    "k_inject": 205,
+    "inject_date": "2022-06-03",
+    "n_names_flipped": 43,
+    "causal_impl": {
+      "all_weeks_strictly_before_injection_byte_identical": true,
+      "injected_week_itself_reacts": true,
+      "all_weeks_strictly_after_injection_also_unaffected (single-week shock)": true,
+      "week_immediately_before_injection_unaffected (== naive-control's leak point)": true
+    },
+    "naive_unlagged_control (deliberately wrong: week k uses f_{k+1} state)": {
+      "leak_week_checked": 204,
+      "leak_week_date": "2022-05-27",
+      "future_shock_LEAKS_into_prior_week (proves test has discriminating power)": true
+    },
+    "verdict": "CAUSAL: breadth-proportional-gross overlay #2's actual implementation shows zero leakage of future-day breadth into any current/prior decision week; the naive/unlagged control constructed from the SAME injected shock DOES leak into the immediately-preceding week, proving the injection methodology itself has real power to detect such a bug (not a vacuous pass)."
+  },
+  "causality_confirmed": true,
+  "note": "overlay #2 tested ALONE, per task -- no brake in this script"
+}

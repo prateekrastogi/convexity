@@ -1,0 +1,89 @@
+{
+  "check1_hand_derivation": {
+    "my_L_half": 2.325628533609451,
+    "reported_L_half": 2.325628533609451,
+    "L_half_diff": 0.0,
+    "my_pre_brake_book": {
+      "cagr": 0.369958057212493,
+      "maxdd": 0.3907499633277239,
+      "sharpe": 1.2109547169226798,
+      "avg_leverage": 1.3143677111815655
+    },
+    "my_step_A": {
+      "cagr": 0.28264240237223026,
+      "maxdd": 0.30023443778215164,
+      "sharpe": 1.1675672380874091,
+      "avg_eff_leverage": 1.1103454095396768
+    },
+    "reported_step_A": {
+      "cagr": 0.28264240237223026,
+      "maxdd": 0.30023443778215164,
+      "sharpe": 1.1675672380874091,
+      "realized_avg_leverage": 1.1103454095396768,
+      "decision": "STOP -- maxDD_A <= 50%, this is the FINAL policy"
+    },
+    "diffs": {
+      "cagr": 0.0,
+      "maxdd": 0.0,
+      "sharpe": 0.0,
+      "lev": 0.0
+    },
+    "passed": "True"
+  },
+  "check3_waterfall_decision": {
+    "my_maxdd_A": 0.30023443778215164,
+    "my_decision": "STOP",
+    "reported_maxdd_A": 0.30023443778215164,
+    "reported_decision_raw": "STOP -- maxDD_A <= 50%, this is the FINAL policy",
+    "decision_matches": true
+  },
+  "check2_injection_tests": {
+    "brake": {
+      "no_leak_before": true,
+      "no_leak_on_day": true,
+      "reacts_after": true,
+      "naive_control_leaks_on_day": true,
+      "passed": true
+    },
+    "breadth": {
+      "raw_inputs_unchanged": true,
+      "weights_changed": true,
+      "breadth_changed": true,
+      "weights_unaffected_by_future_return_shock": true,
+      "passed": true
+    },
+    "note_overlays_3_4_5_not_reached": "waterfall stopped at Step A per the mechanical rule, so vol-targeting/corr-spike/index-gate code paths never executed against real data -- confirmed by reading the script (step_C.decision NOT REACHED, step_D_notes NOT REACHED) and by our own maxDD_A recomputation in check 1/3 which independently gives maxDD_A <= 50%, so no injection test is applicable/needed for those unused components.",
+    "passed": true
+  },
+  "check4_cpcv": {
+    "my_cpcv": {
+      "n_valid_paths": 21,
+      "mean_sharpe": 1.1278652569441452,
+      "std_sharpe": 0.699018541937465,
+      "frac_pos": 1.0
+    },
+    "reused_ctaB_cpcv_paths_direct_call": {
+      "n_valid_paths": 21,
+      "mean_sharpe": 1.1278652569441452,
+      "std_sharpe": 0.699018541937465,
+      "frac_pos": 1.0
+    },
+    "my_vs_reused_agree": true,
+    "reported": {
+      "n_valid_path_combinations": 21,
+      "cpcv_path_sharpe_mean": 1.1279,
+      "cpcv_path_sharpe_std": 0.699,
+      "cpcv_frac_pos": 1.0
+    },
+    "matches_reported": {
+      "n": true,
+      "mean": "True",
+      "std": "True",
+      "frac_pos": "True"
+    },
+    "embargo_sensitivity_check_embargo5_n_paths": 28,
+    "embargo_sensitivity_ok": true,
+    "passed": true
+  },
+  "all_checks_passed": true
+}

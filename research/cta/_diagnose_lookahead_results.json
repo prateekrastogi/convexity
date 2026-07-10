@@ -1,0 +1,22 @@
+{
+  "fvol_first_react": 997,
+  "shock_idx": 996,
+  "target_daily_vol_base": 0.008504127376558826,
+  "target_daily_vol_shocked": 0.008605013840351007,
+  "target_daily_vol_rel_diff": 0.011863235265063126,
+  "vol_scale_diff_at_idx300": 0.015593936631690175,
+  "vol_scale_early_window_max_diff": 0.02312330149118602,
+  "vol_scale_early_window_n_nonzero": 736,
+  "vol_scale_early_window_n_total": 736,
+  "hmm_standalone_injection_test": {
+    "injection_idx": 995,
+    "n_obs": 1992,
+    "shock": 0.4,
+    "causal_first_divergence_idx": 996,
+    "naive_first_divergence_idx": 995,
+    "causal_passes": true,
+    "naive_reacts_same_day": true,
+    "max_abs_diff_at_or_before_injection_causal": 0.0,
+    "PASS": true
+  }
+}

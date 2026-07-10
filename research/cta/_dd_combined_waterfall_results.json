@@ -1,0 +1,133 @@
+{
+  "step0_base_reproduction": {
+    "n_obs": 2046,
+    "cagr": 0.22047809242901062,
+    "maxdd": 0.3873029802163848,
+    "sharpe": 1.0600334628729087,
+    "passed": "True"
+  },
+  "L_half_rederived": 2.325628533609451,
+  "pre_brake_bh_book_sanity_check": {
+    "recomputed": {
+      "cagr": 0.369958057212493,
+      "maxdd": 0.3907499633277239,
+      "sharpe": 1.2109547169226798,
+      "realized_avg_leverage": 1.3143677111815655
+    },
+    "previously_reported_overlay2_alone": {
+      "cagr": 0.369958,
+      "maxdd": 0.39075,
+      "sharpe": 1.210955,
+      "realized_avg_leverage": 1.314368
+    },
+    "passed": true
+  },
+  "step_A": {
+    "cagr": 0.28264240237223026,
+    "maxdd": 0.30023443778215164,
+    "sharpe": 1.1675672380874091,
+    "realized_avg_leverage": 1.1103454095396768,
+    "decision": "STOP -- maxDD_A <= 50%, this is the FINAL policy"
+  },
+  "step_A_causality_check": {
+    "result": {
+      "honest_unaffected_strictly_before_shock": true,
+      "honest_unaffected_ON_shock_day_itself": true,
+      "honest_reacts_starting_day_after_shock": true,
+      "naive_control_reacts_on_shock_day_itself (proves test has discriminating power)": true
+    },
+    "passed": true
+  },
+  "step_C": {
+    "decision": "NOT REACHED -- maxDD_A already <= 50%, waterfall stops at Step A/B"
+  },
+  "step_D_notes": "NOT REACHED",
+  "temptation_notes": [],
+  "final_policy_description": "Overlay #1 (GZ-brake, ceiling=0.50) + overlay #2 (breadth-proportional gross) together, on top of half-Kelly nominal leverage (L=2.325628534). No #3/#4/#5 added, per the mechanical waterfall rule (maxDD_A <= 50%).",
+  "final_metrics": {
+    "cagr": 0.28264240237223026,
+    "maxdd": 0.30023443778215164,
+    "sharpe": 1.1675672380874091,
+    "realized_avg_leverage": 1.1103454095396768,
+    "ev_per_week_bp": 54.83820127582021,
+    "win_rate_weekly": 0.49878345498783455,
+    "worst_week": -0.1488669527759252,
+    "mean_daily_effective_leverage_turnover": 0.032870689681123534,
+    "n_obs": 2046,
+    "span_years": 8.136892539356605,
+    "periods_per_yr": 251.44734185733512
+  },
+  "regime_behavior": {
+    "2020-03_COVID": {
+      "window": [
+        "2020-02-15",
+        "2020-04-15"
+      ],
+      "n_days": 41,
+      "cum_return_final_policy": -0.2375998240462348,
+      "maxdd_in_window": 0.30023443778215164,
+      "mean_effective_leverage_in_window": 0.7920010796053302,
+      "min_effective_leverage_in_window": 0.2903421881241859,
+      "max_effective_leverage_in_window": 1.8580418443123126,
+      "mean_n_eligible_names_in_window": 63.0,
+      "min_n_eligible_names_in_window": 63.0
+    },
+    "2022_full_year": {
+      "window": [
+        "2022-01-01",
+        "2022-12-31"
+      ],
+      "n_days": 251,
+      "cum_return_final_policy": -0.21114670155315896,
+      "maxdd_in_window": 0.23272872079772278,
+      "mean_effective_leverage_in_window": 0.4034379560456456,
+      "min_effective_leverage_in_window": 0.07162166241793907,
+      "max_effective_leverage_in_window": 1.5508034384647165,
+      "mean_n_eligible_names_in_window": 78.0,
+      "min_n_eligible_names_in_window": 72.0
+    },
+    "2018Q4_chop": {
+      "window": [
+        "2018-10-01",
+        "2018-12-31"
+      ],
+      "n_days": 63,
+      "cum_return_final_policy": 0.0,
+      "maxdd_in_window": 0.0,
+      "mean_effective_leverage_in_window": 0.0,
+      "min_effective_leverage_in_window": 0.0,
+      "max_effective_leverage_in_window": 0.0,
+      "mean_n_eligible_names_in_window": 0.0,
+      "min_n_eligible_names_in_window": 0.0
+    },
+    "2018Q4_warmup_caveat": "GENUINE, VERIFIED DATA-AVAILABILITY WARMUP ARTIFACT (not a market signal): every single Friday decision inside the 2018Q4_chop window has n_eligible=0 (checked directly -- mean/min n_eligible_names_in_window = 0.0), i.e. not one of the 93 reconciled names yet has enough own trailing history for all three S1 rules (200d-SMA, 12mo-momentum, 10mo-SMA) to be simultaneously defined this early in the panel's own master calendar (most per-name price histories in this universe begin ~2017, per the repo's own known data-vintage limits). Consequently BOTH the inherited base 1x book (r13_base) AND every overlay built on top of it (breadth scaling, the brake, the final combined policy) show EXACTLY 0.0% return for the full quarter -- this is the base construction's own already-established behavior (reused unchanged from the existing, already-verified netret CSV, not introduced or altered by this task's overlays) and should be read as 'strategy not yet live' rather than 'de-risked out of a bear market'.",
+    "2023_2024_meltup": {
+      "window": [
+        "2023-01-01",
+        "2024-12-31"
+      ],
+      "n_days": 502,
+      "cum_return_final_policy": 0.8579320822932723,
+      "maxdd_in_window": 0.25386598856308895,
+      "mean_effective_leverage_in_window": 1.2567638983137093,
+      "min_effective_leverage_in_window": 0.3048472584718137,
+      "max_effective_leverage_in_window": 1.8918803547219738,
+      "mean_n_eligible_names_in_window": 84.72549019607843,
+      "min_n_eligible_names_in_window": 84.0
+    },
+    "2025-04_squeeze_week": {
+      "window": [
+        "2025-04-04",
+        "2025-04-11"
+      ],
+      "n_days": 6,
+      "cum_return_final_policy": -0.02092155141640495,
+      "maxdd_in_window": 0.25336271813162925,
+      "mean_effective_leverage_in_window": 0.48866892533796086,
+      "min_effective_leverage_in_window": 0.4179624016705908,
+      "max_effective_leverage_in_window": 0.7427590210442399,
+      "mean_n_eligible_names_in_window": 86.0,
+      "min_n_eligible_names_in_window": 86.0
+    }
+  }
+}

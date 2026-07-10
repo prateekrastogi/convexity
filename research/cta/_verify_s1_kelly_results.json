@@ -1,0 +1,295 @@
+{
+  "check1_hand_derived_1x": {
+    "n_obs": 2046,
+    "date_range": [
+      "2018-05-07",
+      "2026-06-26"
+    ],
+    "periods_per_yr": 251.44734185733512,
+    "hand_derived_cagr": 0.22047809242901106,
+    "hand_derived_maxdd": 0.3873029802163851,
+    "hand_derived_sharpe": 1.0600334628729113,
+    "reported_cagr": 0.2205,
+    "reported_maxdd": 0.3873,
+    "reported_sharpe": 1.06,
+    "cagr_diff": -2.1907570988938252e-05,
+    "maxdd_diff": 2.9802163851178065e-06,
+    "sharpe_diff": 3.3462872911282915e-05
+  },
+  "check2_injection_test": {
+    "injection_symbol": "CATUSDT",
+    "injection_date": "2023-08-25",
+    "injection_master_calendar_pos": 1339,
+    "baseline_state_at_injection": 1.0,
+    "shock_multiplier": 0.2,
+    "per_name_state_rvol_causality": {
+      "state_unaffected_strictly_before_injection": true,
+      "rvol_unaffected_strictly_before_injection": true,
+      "state_reacts_at_injection_day_itself": true
+    },
+    "weekly_decision_causality": {
+      "weeks_decided_before_injection_friday_unchanged": true,
+      "week_decided_ON_injection_friday_reacts": true
+    },
+    "full_chain_correct_construction (decide@Fri_k, act next week)": {
+      "injection_day_own_return_weight_unaffected": true,
+      "all_rows_strictly_before_injection_unaffected": true
+    },
+    "naive_unlagged_control (decide@Fri_k, act retroactively on SAME week)": {
+      "injection_day_own_return_weight_DIFFERS": true,
+      "some_row_at_or_before_injection_differs": true
+    },
+    "test_has_discriminating_power": true
+  },
+  "check3_aapl_fix": {
+    "unpatched_return_on_2020_08_31": -0.7411957739715063,
+    "unpatched_worst_single_day_return": -0.7411957739715063,
+    "unpatched_worst_single_day_date": "2020-08-31",
+    "unpatched_close_window": {
+      "2020-08-25": 499.7134974809416,
+      "2020-08-26": 506.58643387272156,
+      "2020-08-27": 500.5838693384159,
+      "2020-08-28": 499.9736086107615,
+      "2020-08-31": 129.39528281118118,
+      "2020-09-01": 134.68754387559392,
+      "2020-09-02": 131.6562487857696,
+      "2020-09-03": 120.99169246315331
+    },
+    "patched_return_on_2020_08_31": 0.035216904113974934,
+    "patched_close_window": {
+      "2020-08-25": 124.9283743702354,
+      "2020-08-26": 126.64660846818039,
+      "2020-08-27": 125.14596733460398,
+      "2020-08-28": 124.99340215269038,
+      "2020-08-31": 129.39528281118118,
+      "2020-09-01": 134.68754387559392,
+      "2020-09-02": 131.6562487857696,
+      "2020-09-03": 120.99169246315331
+    },
+    "fake_74pct_crash_gone": true,
+    "patched_worst_single_day_return_overall": -0.11970813466262098
+  },
+  "check4_kelly": {
+    "reported_full_kelly_L": 4.651257067218902,
+    "my_kelly_L_on_build_csv_series": 4.651255242983122,
+    "my_kelly_L_on_own_handderived_series": 4.651255242983122,
+    "diff_vs_reported_on_build_series": -1.8242357793241126e-06,
+    "method": "bisection on root of mean[r/(1+L*r)]=0 (derivative of E[log(1+Lr)]); reported figure used scipy bounded scalar minimize -- different numerical method, same objective."
+  },
+  "check5_brake": {
+    "L_target_half_kelly": 2.325629,
+    "overall_engagement": {
+      "n_days_engaged": 1656,
+      "n_total": 2046,
+      "pct": 0.8093841642228738
+    },
+    "reported_overall_engagement": {
+      "n_days_engaged": 1656,
+      "n_total": 2046,
+      "pct": 0.8094
+    },
+    "covid_2020_02_15_to_2020_05_31": {
+      "n_days_in_window": 72,
+      "n_days_engaged": 71,
+      "reported_n_days_engaged": 71,
+      "reported_n_total": 72,
+      "sample_dates": [
+        {
+          "date": "2020-02-18",
+          "multiplier": 0.996096218683878,
+          "exposure": 2.3165502529615685
+        },
+        {
+          "date": "2020-02-19",
+          "multiplier": 0.9672657820290778,
+          "exposure": 2.249501353394502
+        },
+        {
+          "date": "2020-02-20",
+          "multiplier": 1.0,
+          "exposure": 2.325629
+        },
+        {
+          "date": "2020-02-21",
+          "multiplier": 0.9576769038845958,
+          "exposure": 2.227201180304229
+        },
+        {
+          "date": "2020-02-24",
+          "multiplier": 0.855341127916196,
+          "exposure": 1.989206131974615
+        },
+        {
+          "date": "2020-02-25",
+          "multiplier": 0.6592142284354379,
+          "exposure": 1.533087726862079
+        },
+        {
+          "date": "2020-02-26",
+          "multiplier": 0.555647916808487,
+          "exposure": 1.2922309091194049
+        },
+        {
+          "date": "2020-02-27",
+          "multiplier": 0.5554723205153806,
+          "exposure": 1.2918225372878642
+        },
+        {
+          "date": "2020-02-28",
+          "multiplier": 0.4312575470654648,
+          "exposure": 1.00294505792431
+        },
+        {
+          "date": "2020-03-02",
+          "multiplier": 0.4253224256374336,
+          "exposure": 0.9891421674127592
+        },
+        {
+          "date": "2020-03-03",
+          "multiplier": 0.5229007370148508,
+          "exposure": 1.2160731181231106
+        },
+        {
+          "date": "2020-03-04",
+          "multiplier": 0.4477368136819585,
+          "exposure": 1.0412697182663595
+        },
+        {
+          "date": "2020-03-05",
+          "multiplier": 0.5471352535661699,
+          "exposure": 1.2724336126158382
+        },
+        {
+          "date": "2020-03-06",
+          "multiplier": 0.4725324067728619,
+          "exposure": 1.0989350686307642
+        },
+        {
+          "date": "2020-03-09",
+          "multiplier": 0.4210988723907785,
+          "exposure": 0.9793197494992938
+        }
+      ],
+      "mean_exposure_in_window": 0.6089097274746275,
+      "reported_mean_exposure": 0.609
+    },
+    "y2022_full_year": {
+      "n_days_in_window": 251,
+      "n_days_engaged": 251,
+      "reported_n_days_engaged": 251,
+      "reported_n_total": 251,
+      "sample_dates": [
+        {
+          "date": "2022-01-03",
+          "multiplier": 0.8963808252286608,
+          "exposure": 2.0846492421957055
+        },
+        {
+          "date": "2022-01-04",
+          "multiplier": 0.9528599865710825,
+          "exposure": 2.21599881770932
+        },
+        {
+          "date": "2022-01-05",
+          "multiplier": 0.9485163783082301,
+          "exposure": 2.205897196368591
+        },
+        {
+          "date": "2022-01-06",
+          "multiplier": 0.787801939785256,
+          "exposure": 1.8321350374208454
+        },
+        {
+          "date": "2022-01-07",
+          "multiplier": 0.7934754774891828,
+          "exposure": 1.8453295812376909
+        },
+        {
+          "date": "2022-01-10",
+          "multiplier": 0.7470935005821986,
+          "exposure": 1.737462310665478
+        },
+        {
+          "date": "2022-01-11",
+          "multiplier": 0.7450742260605874,
+          "exposure": 1.7327662272790578
+        },
+        {
+          "date": "2022-01-12",
+          "multiplier": 0.7925055834912149,
+          "exposure": 1.8430739676290908
+        },
+        {
+          "date": "2022-01-13",
+          "multiplier": 0.8083990905566714,
+          "exposure": 1.8800363685722212
+        },
+        {
+          "date": "2022-01-14",
+          "multiplier": 0.741625149107704,
+          "exposure": 1.7247449538942008
+        },
+        {
+          "date": "2022-01-18",
+          "multiplier": 0.761961739489935,
+          "exposure": 1.772040318248238
+        },
+        {
+          "date": "2022-01-19",
+          "multiplier": 0.6498777231141187,
+          "exposure": 1.511374479328165
+        },
+        {
+          "date": "2022-01-20",
+          "multiplier": 0.5812752334515551,
+          "exposure": 1.3518305398967068
+        },
+        {
+          "date": "2022-01-21",
+          "multiplier": 0.5258364475879513,
+          "exposure": 1.2229004917675197
+        },
+        {
+          "date": "2022-01-24",
+          "multiplier": 0.46739087591634954,
+          "exposure": 1.0869777753664642
+        },
+        {
+          "date": "2022-01-25",
+          "multiplier": 0.4779256725014358,
+          "exposure": 1.1114778038138418
+        },
+        {
+          "date": "2022-01-26",
+          "multiplier": 0.43676873680652417,
+          "exposure": 1.01576204061062
+        },
+        {
+          "date": "2022-01-27",
+          "multiplier": 0.44390441404828584,
+          "exposure": 1.032356978538701
+        },
+        {
+          "date": "2022-01-28",
+          "multiplier": 0.4145676672413111,
+          "exposure": 0.9641305893987432
+        },
+        {
+          "date": "2022-01-31",
+          "multiplier": 0.45492219678076584,
+          "exposure": 1.0579802535770557
+        }
+      ],
+      "mean_exposure_in_window": 0.552122493420103,
+      "reported_mean_exposure": 0.552
+    },
+    "brake_metrics": {
+      "cagr": 0.21101487640764338,
+      "maxdd": 0.3337938189265407,
+      "reported_brake_cagr": 0.21101489056798628,
+      "reported_brake_maxdd": 0.3337938081225025
+    },
+    "realized_avg_leverage": 1.378781911796526,
+    "reported_realized_avg_leverage": 1.378781807290258
+  }
+}
