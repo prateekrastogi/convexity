@@ -35,6 +35,7 @@ target-version = "py312"
 testpaths = ["tests"]
 markers = [
     "nautilus: integration tests that import nautilus_trader and drive a BacktestEngine; VM-only, skipped where nautilus is not installed (ARCHITECTURE §8.4).",
+    "slow: multi-minute tests reading the full stitched lake (the equity-book parity gate); included in the full suite, deselect with -m \"not slow\" for quick iterations.",
 ]
 
 [tool.uv]

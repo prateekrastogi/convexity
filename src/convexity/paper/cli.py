@@ -53,12 +53,14 @@ STEP = 7
 # crypto: the recorded 13 bp parity anchor. commodity: Binance TradFi-perp VIP0 taker (same 5 bp
 # fee schedule) + the commodity sleeve's wider 3 bp half-spread + 0.5 bp impact = 17 bp RT —
 # inside the RV study's {12, 24} bp scenario band (RV_REPORT.md).
+# equity: 13 bp RT — the D1-validated backtest's own primary cost (parity anchor, design §1).
 SETTLE_FRICTION: dict[str, float] = {
     "crypto": round_trip_friction(),
     "commodity": round_trip_friction(taker=5.0e-4, half_spread=3.0e-4, impact=0.5e-4),
+    "equity": round_trip_friction(),
 }
 # Plan (no-trade band) half-spread per book; other CostFacts inputs keep policy defaults.
-PLAN_HALF_SPREAD: dict[str, float] = {"crypto": 1.0e-4, "commodity": 3.0e-4}
+PLAN_HALF_SPREAD: dict[str, float] = {"crypto": 1.0e-4, "commodity": 3.0e-4, "equity": 3.0e-4}
 
 
 def _book(args: argparse.Namespace) -> BookSpec:
@@ -207,10 +209,13 @@ def _settle_prior_week(j: Journal, spec: BookSpec, panel: Panel, d_now: int, liv
               f"panel yet — settle deferred, equity mark unchanged")
         return
     w_prev = _aligned_weights(prev, panel)
-    scale_rec = float(prev.get("g_t", 1.0)) if spec.name == "commodity" else 1.0
-    # the commodity book's recorded deployable IS the vol-targeted book (RV_REPORT.md), so
-    # its equity evolves on the SCALED weights; crypto keeps its frozen legacy semantics
-    # (unit-target settle, G_t applied at the venue) to leave the recorded track unchanged.
+    scale_rec = float(prev.get("g_t", 1.0)) if spec.name in ("commodity", "equity") else 1.0
+    # the commodity book's recorded deployable IS the vol-targeted book (RV_REPORT.md), and the
+    # equity book's deployable IS the leveraged/braked book (its g_t carries L_half x breadth x
+    # brake — the model equity MUST evolve on scaled weights or the brake would read drawdowns
+    # off an unlevered curve, docs/EQUITY_BOOK_DESIGN.md §1); crypto keeps its frozen legacy
+    # semantics (unit-target settle, G_t applied at the venue) to leave the recorded track
+    # unchanged.
     w_prev = w_prev * scale_rec
     alloc_mode = _allocation_mode(j)
     # Model-evolved books must pay their REAL weekly rebalance turnover: carry the WEEK-BEFORE
@@ -218,10 +223,10 @@ def _settle_prior_week(j: Journal, spec: BookSpec, panel: Panel, d_now: int, liv
     # (Legacy crypto keeps w_prev=w_target: its live equity comes from the venue, where the
     # cost is already real — changing it would rewrite the recorded track's semantics.)
     w_carry_in = w_prev
-    if (alloc_mode or spec.name == "commodity") and len(recs) >= 2:
+    if (alloc_mode or spec.name in ("commodity", "equity")) and len(recs) >= 2:
         p2 = recs[-2]
         w_carry_in = _aligned_weights(p2, panel)
-        if spec.name == "commodity":
+        if spec.name in ("commodity", "equity"):
             w_carry_in = w_carry_in * float(p2.get("g_t", 1.0))
     res, _ = settle_week(panel.close, panel.funding, panel.listed, d0=d_prev, d1=d1,
                          w_target=w_prev, w_prev=w_carry_in,
@@ -281,7 +286,77 @@ def _commodity_targets(panel: Panel, d: int, _j: Journal, *, live: bool = False)
     return rvb.w_unit[-1], rvb.vt_scale, "rv_vol_target", rvb.diag
 
 
-TARGETS_BY_BOOK = {"crypto": _crypto_targets, "commodity": _commodity_targets}
+def _equity_flags() -> frozenset[str]:
+    """Split-watch flagged names (data maintenance writes; operator clears). Fail-open: a missing
+    or unreadable flags file means no exclusions — trading proceeds on last-good knowledge and
+    the maintenance journal carries the staleness (design §8)."""
+    import pathlib
+
+    from convexity.paper.fleetconfig import EQUITY_FLAGS_PATH
+
+    p = pathlib.Path(EQUITY_FLAGS_PATH)
+    if not p.exists():
+        return frozenset()
+    try:
+        data = json.loads(p.read_text())
+        return frozenset(s for s, meta in data.items()
+                         if isinstance(meta, dict) and not meta.get("cleared", False))
+    except Exception:
+        return frozenset()
+
+
+def _equity_targets(panel: Panel, d: int, j: Journal, *, live: bool = False):
+    """The D1v2 equity trend book (docs/EQUITY_BOOK_DESIGN.md §1): the validated S1 ensemble ×
+    inverse-vol sizing × breadth-proportional gross × frozen half-Kelly × GZ brake@50% — the
+    parity-pinned construction (tests/paper/test_equity_parity.py).
+
+    g_t = L_HALF × breadth_frac × m_brake; the brake reads the BOOK's own journal equity chain
+    through the prior mark (weekly settles + latest recon — the disclosed fidelity gap vs the
+    backtest's daily marks, conservative direction). Live sessions gate on what the demo venue
+    actually lists (the commodity book's pattern) and journal the model-vs-tradeable gap."""
+    import pandas as pd
+
+    from convexity.signal.equity_trend import live_decision
+
+    dates = pd.DatetimeIndex(panel.dates[:d + 1])
+    closes: dict[str, pd.Series] = {}
+    for i, sym in enumerate(panel.symbols):
+        c = pd.Series(panel.close[:d + 1, i], index=dates).dropna()
+        if len(c):
+            closes[sym] = c
+
+    tradeable_gap: list[str] = []
+    if live:
+        from convexity.paper.topup import fetch_execution_venue_tradeable
+        tradeable = fetch_execution_venue_tradeable()
+        gated = {s: c for s, c in closes.items() if s in tradeable}
+        tradeable_gap = sorted(set(closes) - set(gated))
+        closes = gated
+
+    # The book's own equity chain for the brake: settled marks in journal order, then the latest
+    # live recon context (model equity + venue unrealized) as the freshest observation.
+    chain = [float(r["equity"]) for r in j.read("equity_mark")]
+    br = j.last("book_recon")
+    if br is not None:
+        chain.append(float(br["book_equity"]) + float(br.get("unrealized_book", 0.0)))
+    dec = live_decision(closes, np.asarray(chain, dtype=float), flagged=_equity_flags())
+
+    by_sym = dict(zip(dec["symbols"], dec["w_unit"], strict=True))
+    w_unit = np.array([by_sym.get(s, 0.0) for s in panel.symbols], dtype=float)
+    diag = {
+        "breadth": round(dec["breadth"], 4), "m_brake": round(dec["m_brake"], 4),
+        "n_eligible": dec["n_eligible"], "n_active": dec["n_active"],
+        "n_pending_warmup": len(dec["pending"]), "excluded": dec["excluded"],
+        "tradeable_gap_n": len(tradeable_gap),
+    }
+    if live:
+        j.append("tradeable_gap", str(panel.dates[d].date()), model_only=tradeable_gap,
+                 n_model_only=len(tradeable_gap))
+    return w_unit, dec["g_t"], "breadth_x_halfkelly_x_brake", diag
+
+
+TARGETS_BY_BOOK = {"crypto": _crypto_targets, "commodity": _commodity_targets,
+                   "equity": _equity_targets}
 
 
 def cmd_rebalance(args: argparse.Namespace) -> None:
