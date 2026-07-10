@@ -275,3 +275,23 @@ def test_split_watch_gap_days_not_flagged(tmp_path, monkeypatch):
     monkeypatch.setattr(m, "STITCHED", stitched)
     ok, reason = m.validate_symbol("GAPUSDT")
     assert ok, f"gap-flagged day wrongly flagged: {reason}"
+
+# ---------------------------------------------------------------- venue precision clamp
+
+
+def test_effective_filters_precision_clamp():
+    """-1111 containment (PAPER.md §12.2): the effective grid is the coarser of LOT_SIZE/
+    PRICE_FILTER and the venue's decimal-precision caps — the SPCX whole-share case."""
+    from convexity.paper.topup import effective_filters
+
+    # SPCX demo case: fractional lot from a stale source, but quantityPrecision=0 -> lot 1.0
+    tick, lot = effective_filters(0.01, 0.001, price_prec=7, qty_prec=0)
+    assert lot == 1.0
+    assert tick == 0.01  # 10**-7 finer than the tick: tick stands
+    # normal case: precision looser than the grids -> grids stand
+    tick, lot = effective_filters(0.01, 0.01, price_prec=5, qty_prec=2)
+    assert (tick, lot) == (0.01, 0.01)
+    # missing precisions (defensive): grids stand
+    tick, lot = effective_filters(0.5, 0.1, price_prec=None, qty_prec=None)
+    assert (tick, lot) == (0.5, 0.1)
+

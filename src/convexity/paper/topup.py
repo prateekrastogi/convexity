@@ -58,23 +58,45 @@ def fetch_execution_venue_tradeable() -> frozenset[str]:
                          if s.get("status") == "TRADING")
 
 
+def effective_filters(tick: float, lot: float, price_prec: int | None,
+                      qty_prec: int | None) -> tuple[float, float]:
+    """Clamp tick/step by the venue's decimal-precision caps (pure helper, test-pinned).
+
+    Binance enforces BOTH the PRICE_FILTER/LOT_SIZE grids AND per-symbol pricePrecision/
+    quantityPrecision (max decimals). A step finer than the precision draws -1111 "Precision is
+    over the maximum defined for this asset" — live-caught in the equity book's first supervised
+    session (2026-07-10: SPCXUSDT demo has quantityPrecision=0, whole shares only, while the
+    stale filter source implied a fractional lot). The effective grid is the COARSER of the two
+    constraints."""
+    if price_prec is not None:
+        tick = max(tick, 10.0 ** -int(price_prec))
+    if qty_prec is not None:
+        lot = max(lot, 10.0 ** -int(qty_prec))
+    return tick, lot
+
+
 def fetch_live_filters() -> dict[str, tuple[float, float, float, float]]:
-    """(tick, lot, min_qty, min_notional) from the venue's CURRENT exchangeInfo — one call.
+    """(tick, lot, min_qty, min_notional) from the EXECUTION venue's CURRENT exchangeInfo.
 
     The candidates.md filters are a committed SNAPSHOT (EXECUTION.md §16's documented limitation);
     Binance revises tick/lot occasionally, and a stale tick draws -4014 at submission (learned in
     the first supervised session). Live sessions quantize against THESE; research keeps the
-    snapshot."""
+    snapshot. Reads the DEMO venue (the venue the gateway actually trades — prod filters drift
+    from demo on TradFi listings, the SPCX -1111 lesson) and clamps tick/step by the venue's own
+    pricePrecision/quantityPrecision via ``effective_filters``."""
     with httpx.Client(timeout=30.0) as client:
-        r = client.get(f"{FAPI}/fapi/v1/exchangeInfo")
+        r = client.get("https://demo-fapi.binance.com/fapi/v1/exchangeInfo")
         r.raise_for_status()
         out: dict[str, tuple[float, float, float, float]] = {}
         for s in r.json()["symbols"]:
             fs = {f["filterType"]: f for f in s["filters"]}
             try:
-                out[s["symbol"]] = (
+                tick, lot = effective_filters(
                     float(fs["PRICE_FILTER"]["tickSize"]),
                     float(fs["LOT_SIZE"]["stepSize"]),
+                    s.get("pricePrecision"), s.get("quantityPrecision"))
+                out[s["symbol"]] = (
+                    tick, lot,
                     float(fs["LOT_SIZE"]["minQty"]),
                     float(fs.get("MIN_NOTIONAL", {}).get("notional", 5.0)),
                 )
