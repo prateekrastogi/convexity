@@ -325,6 +325,12 @@ kill-flattened. The carve-out:
 - **Margin**: cross mode means manual positions share collateral. Guardrails deliberately read
   WHOLE-ACCOUNT margin (a large manual position tightens the books' budget — conservative), but
   DERISK/kill only ever close book shares, never the reserve.
+- **Bootstrap (prod cutover)**: pre-existing positions predate the stamp and are invisible to
+  attribution — but at enablement the books hold nothing, so every venue position is the
+  operator's by definition. `python -m convexity.paper manual --bootstrap` seeds the ledger with
+  the full venue snapshot and anchors attribution; it refuses on any account where a book already
+  has live targets journaled or the ledger is non-empty (then: hand-edit the JSON). Run it once,
+  before enabling timers.
 - **Operator contract**: none — trade freely from the app. Fills are adopted at the next sync
   (daily recons are the floor; every trading session syncs first). Residual edge: a manual fill
   landing DURING a Saturday session after its sync could be seen by that session's snapshot —

@@ -1030,6 +1030,29 @@ def cmd_manual(args: argparse.Namespace) -> None:
     )
 
     now_ms = int(_time.time() * 1000)
+    if getattr(args, "bootstrap", False):
+        from convexity.paper.gateway import account_snapshot
+        from convexity.paper.manual import bootstrap_reserve, save_reserve
+
+        with account_lock("manual"):
+            live_books = [
+                b.name for b in BOOKS.values()
+                if any(r.get("mode") == "live" for r in _journal(b).read("targets"))]
+            try:
+                seeded = bootstrap_reserve(account_snapshot().positions,
+                                           load_reserve(), live_books)
+            except RuntimeError as e:
+                raise SystemExit(f"[manual] {e}")
+            load_sync_state(now_ms)  # anchor deploy_ms NOW: history stays out of attribution
+            save_reserve(seeded)
+        if not seeded:
+            print("[manual] bootstrap: no venue positions — ledger empty, attribution anchored")
+        for sym, qty in sorted(seeded.items()):
+            print(f"[manual] bootstrap: {sym:>14} seeded {qty:+g} (operator-owned)")
+        if seeded:
+            print(f"[manual] bootstrap: {len(seeded)} positions seeded — the books will never "
+                  f"touch them; app fills from now on adjust reserves automatically")
+        return
     res = load_reserve()
     if not res:
         print(f"[manual] no operator reserves ({MANUAL_RESERVE_PATH}) — auto-adopted from "
@@ -1090,7 +1113,10 @@ def main() -> None:
                    help="flatten immediately (live) instead of at the next session")
     k.add_argument("--reason", default=None)
     k.set_defaults(fn=cmd_kill)
-    mn = sub.add_parser("manual")  # read-only: the ledger is auto-maintained (§12.5)
+    mn = sub.add_parser("manual")  # ledger is auto-maintained (§12.5); no-args = read-only
+    mn.add_argument("--bootstrap", action="store_true",
+                    help="virgin-account cutover: seed the reserve with ALL venue positions "
+                         "(refuses if any book has live targets or the ledger is non-empty)")
     mn.set_defaults(fn=cmd_manual)
     s = sub.add_parser("status")
     add_book(s)

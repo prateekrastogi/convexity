@@ -412,3 +412,18 @@ def test_manual_autosync_first_run_anchor(tmp_path):
               ledger_path=tmp_path / "r.json", state_path=tmp_path / "s.json")
     assert seen == [T_LATE]
 
+def test_manual_bootstrap_rule():
+    """PAPER.md §12.5: virgin account -> every venue position seeds the reserve; any live book
+    or prior seeding refuses (never freeze a book out of its own positions, never double-count)."""
+    import pytest
+
+    from convexity.paper.manual import bootstrap_reserve
+
+    seeded = bootstrap_reserve({"AAPLUSDT": 3.5, "DUSTUSDT": 0.0, "CLUSDT": -2.0}, {}, [])
+    assert seeded == {"AAPLUSDT": 3.5, "CLUSDT": -2.0}   # dust dropped, shorts kept signed
+
+    with pytest.raises(RuntimeError, match="live targets"):
+        bootstrap_reserve({"AAPLUSDT": 3.5}, {}, ["equity"])
+    with pytest.raises(RuntimeError, match="one-time"):
+        bootstrap_reserve({"AAPLUSDT": 3.5}, {"NVDAUSDT": 1.0}, [])
+

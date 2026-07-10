@@ -130,6 +130,26 @@ def book_share_qty(symbol: str, venue_qty: float,
 # ------------------------------------------------------------------ automatic fill attribution
 
 
+def bootstrap_reserve(venue_positions: dict[str, float],
+                      existing_reserve: dict[str, float],
+                      live_books: list[str]) -> dict[str, float]:
+    """Virgin-account seeding rule (PAPER.md §12.5): at enablement the books hold NOTHING, so
+    every venue position is the operator's by definition — seed the whole snapshot. Refuses on
+    any evidence the account is not virgin: a book with live targets journaled means venue
+    positions may be a book's (seeding them would freeze the book out of its own positions),
+    and a non-empty ledger means bootstrap already happened (re-seeding would double-count)."""
+    if live_books:
+        raise RuntimeError(
+            f"bootstrap refused: books already have live targets journaled "
+            f"({sorted(live_books)}) — on a non-virgin account venue positions may belong to a "
+            f"book; hand-edit {MANUAL_RESERVE_PATH} for the operator-owned ones instead")
+    if existing_reserve:
+        raise RuntimeError(
+            f"bootstrap refused: reserve ledger already non-empty ({sorted(existing_reserve)}) "
+            f"— bootstrap is one-time; hand-edit {MANUAL_RESERVE_PATH} to adjust")
+    return {s: float(q) for s, q in venue_positions.items() if abs(float(q)) > _EPS}
+
+
 def load_sync_state(now_ms: int,
                     path: str | pathlib.Path = SYNC_STATE_PATH) -> dict:
     """{"deploy_ms": int, "symbols": {sym: {"watermark": ms, "done": {orderId: update_ms}}}}.

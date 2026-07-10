@@ -97,7 +97,10 @@ sync (every recon/rebalance/finalize/kill, inside the account lock). Books net t
 of sizing, orphan sweeps, kills and finalize; manual closes auto-release.
 
 ```bash
-python -m convexity.paper manual   # read-only: reserves + attribution watermark age
+python -m convexity.paper manual               # read-only: reserves + watermark age
+python -m convexity.paper manual --bootstrap   # PROD CUTOVER, once, BEFORE enabling timers:
+                                               # seeds ledger with all existing venue positions
+                                               # (refuses unless the account is virgin)
 ```
 
 Wrong adoption? Hand-edit the ledger JSON. A reserve exceeding the venue position clamps the
