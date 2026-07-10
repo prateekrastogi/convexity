@@ -7,7 +7,7 @@ value; nothing in this module is derived at runtime.
 from __future__ import annotations
 
 # --- Cross-book capital allocation (per 1000 quantized units; owner decision, D1v2) -----------
-ALLOC_UNITS: dict[str, int] = {"crypto": 400, "commodity": 350, "equity": 250}
+ALLOC_UNITS: dict[str, int] = {"crypto": 400, "commodity": 300, "equity": 300}
 ALLOC_TOTAL = 1000
 
 
@@ -46,7 +46,7 @@ LEVERAGE_DIAL: dict[str, int] = {"equity": 3}
 
 # --- Cross-margin software guardrails (PAPER.md §12.2) --------------------------
 # Account maintenance-margin-ratio thresholds. Justification: equity book worst historical day
-# −10.4% at ~1.9x ≈ −20% book NAV ≈ −5% of account at 250/1000; DERISK at 60% still leaves >3x
+# −10.4% at ~1.9x ≈ −20% book NAV ≈ −6% of account at 300/1000; DERISK at 60% still leaves >3x
 # that shock before liquidation territory.
 MARGIN_ALERT_RATIO = 0.40
 MARGIN_DERISK_RATIO = 0.60

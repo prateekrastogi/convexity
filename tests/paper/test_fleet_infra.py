@@ -186,7 +186,7 @@ def test_alloc_split_ratios():
     from convexity.paper.fleetconfig import ALLOC_TOTAL, ALLOC_UNITS, alloc_fraction
 
     assert sum(ALLOC_UNITS.values()) == ALLOC_TOTAL == 1000
-    assert ALLOC_UNITS == {"crypto": 400, "commodity": 350, "equity": 250}
+    assert ALLOC_UNITS == {"crypto": 400, "commodity": 300, "equity": 300}
     assert abs(sum(alloc_fraction(b) for b in ALLOC_UNITS) - 1.0) < 1e-12
 
 

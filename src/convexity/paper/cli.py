@@ -893,7 +893,7 @@ def cmd_allocate(args: argparse.Namespace) -> None:
 
 def cmd_allocate_split(args: argparse.Namespace) -> None:
     """Split a TOTAL account allocation across all three books per the fleet ratios
-    (PAPER.md §12.1: 400/350/250 per 1000), atomically under the account lock —
+    (PAPER.md §12.1: 400/300/300 per 1000), atomically under the account lock —
     requirement 4's 'proportional re-allocation exactly like the other two'."""
     from convexity.paper.fleetconfig import ALLOC_UNITS, ALLOC_TOTAL
 

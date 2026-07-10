@@ -286,7 +286,7 @@ verified, adversarially reviewed programs. Every one closed negative. Records:
 **Deployment (PAPER.md §12) is an OWNER DECISION, not a certification**: the research verdict
 on this universe stands negative; the owner deploys the D1-validated construction as timed beta
 — survivorship-curated universe accepted as a feature, bull-market lag accepted as the premium —
-at 250/1000, parity-pinned (Invariant EQUITY-PARITY) so the live book provably IS the validated
+at 300/1000, parity-pinned (Invariant EQUITY-PARITY) so the live book provably IS the validated
 one. The five programs also produced the fleet's standing engineering discipline: the five
 carried-forward bug patterns (source-aware returns, derived annualization, exposure-timing
 alignment, exposure-scaled costs, leveraged-ETF exclusion — `research/equity/STATE.md`), the

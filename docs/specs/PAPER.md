@@ -192,7 +192,7 @@ convexity-equity-*`). OWNER DECISION OF RECORD: the certified equity research pr
 (E1/E2/E3 `research/equity/`, I1 `research/indices/`, C1 `research/cta/`) all closed as clean
 negatives — the owner deliberately deploys the SIMPLE ROBUST construction anyway, accepting the
 survivorship-curated universe as a feature and bull-market lag as the premium. This is TIMED
-BETA with beta-like drawdowns, capitalized small (250/1000), never presented as market-neutral
+BETA with beta-like drawdowns, capitalized small (300/1000), never presented as market-neutral
 alpha.
 
 ### 12.1 The equity strategy (frozen validated config; Invariant EQUITY-PARITY)
@@ -223,7 +223,7 @@ sizing/brake chain in backtest mode and pins CAGR/maxDD/Sharpe/avg-leverage AND 
 return series to the validated reference (`tests/fixtures/equity_book/`, provenance from the D1
 record). A deployment whose backtest-mode output diverges from the validated artifact is broken
 by definition. Owner-tunable values live in ONE place: `paper/fleetconfig.py` (allocations
-400/350/250 per 1000, L_HALF, brake ceiling, margin thresholds, leverage dials, ETF exclusions,
+400/300/300 per 1000, L_HALF, brake ceiling, margin thresholds, leverage dials, ETF exclusions,
 warmup, lock/pacing constants). AAPLUSDT's unadjusted 2020-08-31 4:1 split (fake −74.12% day)
 was fixed at source with this book (KNOWN_SPLITS; pre-fix parquet kept in the lake).
 
@@ -246,8 +246,8 @@ was fixed at source with this book (KNOWN_SPLITS; pre-fix parquet kept in the la
   protection), which is unchanged. Software guardrails: (1) per-book IM budget — projected
   initial margin (gross/dial) must fit the book's NAV, else g_t scales down (journaled);
   (2) account maint-margin-ratio monitor, ALERT 40% / DERISK 60% (equity — the levered
-  directional book — flattens FIRST; justification: its worst day −10.4% at ~1.9× ≈ −5% of
-  account at 250/1000); (3) liquidation-distance journaled each session (floor = 3× the worst
+  directional book — flattens FIRST; justification: its worst day −10.4% at ~1.9× ≈ −6% of
+  account at 300/1000); (3) liquidation-distance journaled each session (floor = 3× the worst
   historical one-day move, 12.1%). Monitors run daily via recon.
 - **INTEGER LEVERAGE DIAL**: Binance sets per-symbol leverage as an INTEGER; the dial is a
   cap + margin divisor, NEVER the sizing mechanism (effective fractional leverage comes from
@@ -255,7 +255,7 @@ was fixed at source with this book (KNOWN_SPLITS; pre-fix parquet kept in the la
   (`gateway.set_leverage`, idempotent, errors journaled never fatal). Crypto/commodity never
   set the dial (venue default stands; normalizing them is an owner option, not autonomous).
 - **SPLIT ALLOCATION**: `allocate-split --total X` / `flow-split --amount X` write all three
-  books' records proportionally (400/350/250) under the lock — deposits/withdrawals cannot
+  books' records proportionally (400/300/300) under the lock — deposits/withdrawals cannot
   change NAV under a sizing session (NAV is snapshotted once inside the lock).
 - **JOURNAL CRASH RECOVERY**: `Journal.read` now tolerates a torn FINAL line (kill −9
   mid-append; skipped loudly, the record was never acknowledged) while a torn line anywhere
@@ -288,7 +288,7 @@ margin fields) is untested until the supervised session below — the §8 doctri
 1. Redeploy units (`deploy/README.md`), keep the four equity timers DISABLED.
 2. ONE-TIME ACCOUNT STATE (supervised; touches the real demo account): verify position-margin
    mode is CROSSED for traded symbols; confirm asset mode remains SINGLE-ASSET (§3.1).
-3. `allocate-split --total <ACCOUNT_USDT>` — all three books re-allocated 400/350/250 (the
+3. `allocate-split --total <ACCOUNT_USDT>` — all three books re-allocated 400/300/300 (the
    equity book REFUSES to trade live without an allocation, §11.2's guard).
 4. One SUPERVISED `rebalance --live --book equity` (+ `finalize --live --book equity` ~2 h
    later): watch the 3× dial get set, maker fills, the margin/liq-distance journal records, and
