@@ -58,7 +58,7 @@ LIQ_DISTANCE_MIN_MULTIPLE = 3.0
 WORST_HISTORICAL_DAY = 0.121
 
 # --- Account lock (PAPER.md §12.2) ----------------------------------------------
-ACCOUNT_LOCK_PATH = "data/paper/account.lock"
+# lock path is venue-resolved (venue.state_root()/account.lock) — see lock.py, PAPER.md §12.6
 ACCOUNT_LOCK_TIMEOUT_S = 300.0
 
 # --- Shared API pacing (PAPER.md §12.2) ------------------------------------------
