@@ -284,8 +284,15 @@ staleness journaled per symbol (own audit log `data/universe/equity_datamaint_lo
 immediate perp-kline/funding backfill + perp-only stitched series — and NEVER trades them:
 perp-only history means the 260d warmup quarantines a new listing for ~a year, during which the
 weekly report is the review surface (leveraged/inverse ETFs go to `EQUITY_ETF_EXCLUSIONS`;
-promotion to a dukascopy-mapped candidates.md entry is a research decision). `KR_EQUITY` and
-`PREMARKET` types are FYI-only. Split-watch covers discovered names from day one (datamaint
+promotion is AUTOMATED for names dukascopy carries (owner decision 2026-07-10): the weekly
+curation pass — `scripts/duka_autopromote.py`, equities in Sat datamaint (≤2/run, ~450d
+window), commodities in Fri discovery (≤1/run, full 2017 depth) — probes the underlying, sets
+the overlay mapping, deep-backfills and re-stitches. A promoted EQUITY first trades the
+FOLLOWING Saturday (datamaint runs after the rebalance — one-week veto window, push-alerted;
+leveraged/inverse ETFs → `EQUITY_ETF_EXCLUSIONS`), and validation failures are flagged.
+Promoted COMMODITIES are research/pair-ready only (RV PAIRS stay frozen). Probe misses (true
+IPOs, non-US listings) stay on the perp-only ~1y warmup path — "only those which we don't have
+any data need the full year". `KR_EQUITY` and `PREMARKET` types are FYI-only. Split-watch covers discovered names from day one (datamaint
 reads the merged universe).
 
 ### 12.4 Equity runbook (deploy — DO NOT enable timers before this)

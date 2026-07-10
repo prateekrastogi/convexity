@@ -194,8 +194,30 @@ def split_watch() -> None:
     _log("split_watch_done", scanned=n_scanned, newly_flagged=n_flagged, active_flags=active)
 
 
+def autopromote_equities() -> None:
+    """Weekly dukascopy auto-promotion of discovered perp-only equities (owner decision
+    2026-07-10, PAPER.md §12.3): probe <TICKER>USUSD; a hit backfills ~450 days of underlying
+    history and re-stitches — the name enters the ensemble the FOLLOWING Saturday (this timer
+    runs after the morning rebalance: a one-week veto window). Validation failures are flagged
+    like any other data problem; probe misses (true IPOs) stay on the perp-only warmup path."""
+    ap = _load_script("duka_autopromote")
+    promoted, failed = ap.autopromote(
+        "equities", window_days=450, max_promotions=2, log=_log, validator=validate_symbol)
+    if failed:
+        flags = _load_flags()
+        for sym in failed:
+            flags[sym] = {"reason": "auto-promotion validation failed (see datamaint log)",
+                          "flagged_ts": int(time.time() * 1000), "cleared": False}
+        _save_flags(flags)
+    _log("autopromote_done", promoted=promoted, failed_validation=failed)
+
+
 def main() -> None:
     _log("run_start")
+    try:
+        autopromote_equities()
+    except Exception as e:  # noqa: BLE001
+        _log("autopromote_phase_error", error=repr(e)[:300])
     try:
         backfill_new_symbols()
     except Exception as e:  # noqa: BLE001

@@ -227,6 +227,26 @@ def main() -> None:
             _journal("rolled_back", symbols=failed)
             print(f"[discover] ROLLED BACK (no stitched data yet, retried next week): {failed}")
 
+    # Dukascopy auto-promotion for discovered commodities (owner decision 2026-07-10):
+    # full-depth proxy history so the name is RESEARCH/pair-ready — the RV book's PAIRS stay
+    # frozen research config, a promoted commodity never auto-trades.
+    if not args.dry_run:
+        try:
+            import importlib.util as _ilu
+            _spec = _ilu.spec_from_file_location(
+                "duka_autopromote", REPO / "scripts" / "duka_autopromote.py")
+            _ap = _ilu.module_from_spec(_spec)
+            sys.modules["duka_autopromote"] = _ap
+            _spec.loader.exec_module(_ap)
+            promoted, _failed = _ap.autopromote(
+                "commodities", window_days=None, max_promotions=1,
+                log=lambda kind, **kw: _journal(kind, **kw))
+            if promoted:
+                print(f"[discover] auto-promoted (proxy history, research-ready): {promoted}")
+        except Exception as e:  # noqa: BLE001 — promotion must never sink discovery
+            _journal("autopromote_error", error=repr(e)[:300])
+            print(f"[discover] auto-promotion phase error (journaled): {e!r}")
+
     # R7 disclosure: the crypto universe is FROZEN by design — report drift, never act on it.
     r = info  # same exchangeInfo snapshot fetched above
     venue_crypto = {s["symbol"] for s in r["symbols"]
