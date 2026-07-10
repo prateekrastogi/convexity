@@ -68,9 +68,13 @@ def test_domain_is_required_keyword():
 
 
 def test_books_registry_shape():
-    assert set(BOOKS) == {"crypto", "commodity"}
+    assert set(BOOKS) == {"crypto", "commodity", "equity"}
     assert BOOKS["crypto"].journal_path == "data/paper/journal.jsonl"  # legacy path unchanged
-    assert BOOKS["commodity"].journal_path != BOOKS["crypto"].journal_path
+    # every book owns its own journal — pairwise distinct, never shared
+    paths = [b.journal_path for b in BOOKS.values()]
+    assert len(set(paths)) == len(paths)
+    assert BOOKS["equity"].sleeves == ("equities",)
+    assert BOOKS["equity"].journal_path == "data/paper/equity/journal.jsonl"
 
 
 def test_order_intents_with_commodity_filters_are_lot_legal():

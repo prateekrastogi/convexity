@@ -72,6 +72,11 @@ KNOWN_SPLITS: dict[str, list[tuple[str, int]]] = {
                                        # trading began 2025-02-10 (verified); observed ratio
                                        # 10.54 vs true 10.00, outside SPLIT_TOL for the same
                                        # same-day-price-movement reason as KLAC/TSLA
+    "AAPLDBN": [("2020-08-31", 4)],    # Apple 4-for-1, effective 2020-08-31 (same effective date
+                                       # as TSLA's -- both announced for that Monday; well known).
+                                       # Missed by the detector for the same drift-outside-
+                                       # SPLIT_TOL reason; live-caught 2026-07 as a fake -74.12%
+                                       # single-day return poisoning trend signals (D1v2 fix).
 }
 
 # Explicit REJECTIONS: (symbol, date) pairs where the ratio+persistence check finds a clean-ish

@@ -1,0 +1,15 @@
+# Equity data maintenance (docs/EQUITY_BOOK_DESIGN.md §8): new-symbol dukascopy backfill +
+# split/corporate-action watch. Runs AFTER the Saturday lake refresh (04:00) it depends on.
+# Trading NEVER blocks on this — a failure degrades gracefully to last-good data.
+[Unit]
+Description=convexity equity data maintenance (dukascopy backfill + split watch)
+Wants=network-online.target
+After=network-online.target
+[Service]
+Type=oneshot
+User=ubuntu
+WorkingDirectory=/home/speculation/convexity
+EnvironmentFile=/home/speculation/convexity/.env
+Environment=PYTHONPATH=/home/speculation/convexity
+ExecStart=/home/speculation/convexity/.venv/bin/python scripts/equity_data_maintenance.py
+TimeoutStartSec=7200

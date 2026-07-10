@@ -18,7 +18,9 @@ sent. --live swaps in the gateway for equity/positions/submission.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
+import pathlib
 
 import numpy as np
 
@@ -44,6 +46,7 @@ from convexity.paper.policy import (
     orphan_close_intents,
     size_gross,
 )
+from convexity.paper.lock import account_lock
 from convexity.paper.topup import extend_panel, fetch_tails
 from convexity.portfolio.portfolio import realized_vol
 
@@ -53,12 +56,14 @@ STEP = 7
 # crypto: the recorded 13 bp parity anchor. commodity: Binance TradFi-perp VIP0 taker (same 5 bp
 # fee schedule) + the commodity sleeve's wider 3 bp half-spread + 0.5 bp impact = 17 bp RT —
 # inside the RV study's {12, 24} bp scenario band (RV_REPORT.md).
+# equity: 13 bp RT — the D1-validated backtest's own primary cost (parity anchor, design §1).
 SETTLE_FRICTION: dict[str, float] = {
     "crypto": round_trip_friction(),
     "commodity": round_trip_friction(taker=5.0e-4, half_spread=3.0e-4, impact=0.5e-4),
+    "equity": round_trip_friction(),
 }
 # Plan (no-trade band) half-spread per book; other CostFacts inputs keep policy defaults.
-PLAN_HALF_SPREAD: dict[str, float] = {"crypto": 1.0e-4, "commodity": 3.0e-4}
+PLAN_HALF_SPREAD: dict[str, float] = {"crypto": 1.0e-4, "commodity": 3.0e-4, "equity": 3.0e-4}
 
 
 def _book(args: argparse.Namespace) -> BookSpec:
@@ -207,10 +212,13 @@ def _settle_prior_week(j: Journal, spec: BookSpec, panel: Panel, d_now: int, liv
               f"panel yet — settle deferred, equity mark unchanged")
         return
     w_prev = _aligned_weights(prev, panel)
-    scale_rec = float(prev.get("g_t", 1.0)) if spec.name == "commodity" else 1.0
-    # the commodity book's recorded deployable IS the vol-targeted book (RV_REPORT.md), so
-    # its equity evolves on the SCALED weights; crypto keeps its frozen legacy semantics
-    # (unit-target settle, G_t applied at the venue) to leave the recorded track unchanged.
+    scale_rec = float(prev.get("g_t", 1.0)) if spec.name in ("commodity", "equity") else 1.0
+    # the commodity book's recorded deployable IS the vol-targeted book (RV_REPORT.md), and the
+    # equity book's deployable IS the leveraged/braked book (its g_t carries L_half x breadth x
+    # brake — the model equity MUST evolve on scaled weights or the brake would read drawdowns
+    # off an unlevered curve, docs/EQUITY_BOOK_DESIGN.md §1); crypto keeps its frozen legacy
+    # semantics (unit-target settle, G_t applied at the venue) to leave the recorded track
+    # unchanged.
     w_prev = w_prev * scale_rec
     alloc_mode = _allocation_mode(j)
     # Model-evolved books must pay their REAL weekly rebalance turnover: carry the WEEK-BEFORE
@@ -218,10 +226,10 @@ def _settle_prior_week(j: Journal, spec: BookSpec, panel: Panel, d_now: int, liv
     # (Legacy crypto keeps w_prev=w_target: its live equity comes from the venue, where the
     # cost is already real — changing it would rewrite the recorded track's semantics.)
     w_carry_in = w_prev
-    if (alloc_mode or spec.name == "commodity") and len(recs) >= 2:
+    if (alloc_mode or spec.name in ("commodity", "equity")) and len(recs) >= 2:
         p2 = recs[-2]
         w_carry_in = _aligned_weights(p2, panel)
-        if spec.name == "commodity":
+        if spec.name in ("commodity", "equity"):
             w_carry_in = w_carry_in * float(p2.get("g_t", 1.0))
     res, _ = settle_week(panel.close, panel.funding, panel.listed, d0=d_prev, d1=d1,
                          w_target=w_prev, w_prev=w_carry_in,
@@ -281,7 +289,223 @@ def _commodity_targets(panel: Panel, d: int, _j: Journal, *, live: bool = False)
     return rvb.w_unit[-1], rvb.vt_scale, "rv_vol_target", rvb.diag
 
 
-TARGETS_BY_BOOK = {"crypto": _crypto_targets, "commodity": _commodity_targets}
+def _equity_flags() -> frozenset[str]:
+    """Split-watch flagged names (data maintenance writes; operator clears). Fail-open: a missing
+    or unreadable flags file means no exclusions — trading proceeds on last-good knowledge and
+    the maintenance journal carries the staleness (design §8)."""
+    import pathlib
+
+    from convexity.paper.fleetconfig import EQUITY_FLAGS_PATH
+
+    p = pathlib.Path(EQUITY_FLAGS_PATH)
+    if not p.exists():
+        return frozenset()
+    try:
+        data = json.loads(p.read_text())
+        return frozenset(s for s, meta in data.items()
+                         if isinstance(meta, dict) and not meta.get("cleared", False))
+    except Exception:
+        return frozenset()
+
+
+def _equity_targets(panel: Panel, d: int, j: Journal, *, live: bool = False):
+    """The D1v2 equity trend book (docs/EQUITY_BOOK_DESIGN.md §1): the validated S1 ensemble ×
+    inverse-vol sizing × breadth-proportional gross × frozen half-Kelly × GZ brake@50% — the
+    parity-pinned construction (tests/paper/test_equity_parity.py).
+
+    g_t = L_HALF × breadth_frac × m_brake; the brake reads the BOOK's own journal equity chain
+    through the prior mark (weekly settles + latest recon — the disclosed fidelity gap vs the
+    backtest's daily marks, conservative direction). Live sessions gate on what the demo venue
+    actually lists (the commodity book's pattern) and journal the model-vs-tradeable gap."""
+    import pandas as pd
+
+    from convexity.signal.equity_trend import live_decision
+
+    dates = pd.DatetimeIndex(panel.dates[:d + 1])
+    closes: dict[str, pd.Series] = {}
+    for i, sym in enumerate(panel.symbols):
+        c = pd.Series(panel.close[:d + 1, i], index=dates).dropna()
+        if len(c):
+            closes[sym] = c
+
+    tradeable_gap: list[str] = []
+    if live:
+        from convexity.paper.topup import fetch_execution_venue_tradeable
+        tradeable = fetch_execution_venue_tradeable()
+        gated = {s: c for s, c in closes.items() if s in tradeable}
+        tradeable_gap = sorted(set(closes) - set(gated))
+        closes = gated
+
+    # The book's own equity chain for the brake: settled marks in journal order, then the latest
+    # live recon context (model equity + venue unrealized) as the freshest observation.
+    chain = [float(r["equity"]) for r in j.read("equity_mark")]
+    br = j.last("book_recon")
+    if br is not None:
+        chain.append(float(br["book_equity"]) + float(br.get("unrealized_book", 0.0)))
+    dec = live_decision(closes, np.asarray(chain, dtype=float), flagged=_equity_flags())
+
+    by_sym = dict(zip(dec["symbols"], dec["w_unit"], strict=True))
+    w_unit = np.array([by_sym.get(s, 0.0) for s in panel.symbols], dtype=float)
+    diag = {
+        "breadth": round(dec["breadth"], 4), "m_brake": round(dec["m_brake"], 4),
+        "n_eligible": dec["n_eligible"], "n_active": dec["n_active"],
+        "n_pending_warmup": len(dec["pending"]), "excluded": dec["excluded"],
+        "tradeable_gap_n": len(tradeable_gap),
+    }
+    if live:
+        j.append("tradeable_gap", str(panel.dates[d].date()), model_only=tradeable_gap,
+                 n_model_only=len(tradeable_gap))
+    return w_unit, dec["g_t"], "breadth_x_halfkelly_x_brake", diag
+
+
+TARGETS_BY_BOOK = {"crypto": _crypto_targets, "commodity": _commodity_targets,
+                   "equity": _equity_targets}
+
+
+def _kill_path(spec: BookSpec) -> pathlib.Path:
+    return pathlib.Path(f"data/paper/{spec.name}/KILL")
+
+
+def _flatten_book_live(spec: BookSpec, j: Journal, reason: str) -> None:
+    """Flatten every venue position in THIS book's domain, reduce-only (kill-switch / de-risk
+    action, docs/EQUITY_BOOK_DESIGN.md §6). Maker-then-taker is the finalize pass's job in
+    ordinary flow; a KILL is an explicit 'get flat NOW' — reduce-only MARKET, the orphan-sweep
+    convention. Domain scoping guarantees the other books' positions are untouchable."""
+    from convexity.paper.gateway import GatewayError, cancel_open_orders, submit_intent
+    from convexity.paper.policy import fmt_step
+    from convexity.paper.topup import fetch_live_filters
+
+    domain = book_domain(spec)
+    positions, _upnl, _eq, _assets, _unowned = _venue_book_state(domain)
+    for sym in sorted(positions):
+        try:
+            cancel_open_orders(sym)
+        except GatewayError:
+            pass
+    live_f = fetch_live_filters()
+    from convexity.execution.execution import quantize_qty
+    n_ok = n_failed = 0
+    dust = []
+    for sym, amt in sorted(positions.items()):
+        lf = live_f.get(sym)
+        if lf is None:
+            dust.append(sym)
+            continue
+        _tick, lot, min_qty, _mn = lf
+        qty = quantize_qty(-amt, lot_size=lot, min_qty=min_qty)
+        if qty == 0.0:
+            dust.append(sym)
+            continue
+        try:
+            submit_intent(OrderIntent(symbol=sym, qty=qty, tactic="MARKET", ref_price=0.0,
+                                      slice_idx=0, n_slices=1, reduce_only=True,
+                                      qty_str=fmt_step(abs(qty), lot), price_str=""))
+            n_ok += 1
+        except GatewayError as e:
+            n_failed += 1
+            j.append("order_error", "kill", symbol=sym, error=f"flatten: {str(e)[:280]}")
+    j.append("killed", "kill", reason=reason, n_closed=n_ok, n_failed=n_failed, dust=dust)
+    print(f"[kill:{spec.name}] flattened {n_ok} positions ({n_failed} failed"
+          + (f"; sub-lot dust: {dust}" if dust else "") + f") — {reason}")
+
+
+def _check_kill(spec: BookSpec, j: Journal, live: bool) -> bool:
+    """True if the book is killed (control file present). Live: flatten first. Checked INSIDE
+    the account lock at the top of every venue-facing session (design §6)."""
+    if not _kill_path(spec).exists():
+        return False
+    print(f"[kill:{spec.name}] KILL file present ({_kill_path(spec)}) — book is halted; "
+          f"`python -m convexity.paper kill --book {spec.name} --resume` to resume")
+    if live:
+        _flatten_book_live(spec, j, reason="KILL file present at session start")
+    else:
+        j.append("killed", "kill", reason="KILL file present (dry-run: no venue action)")
+    return True
+
+
+def _margin_guardrails(spec: BookSpec, j: Journal, d_iso: str, nav: float, g_t: float,
+                       live: bool) -> float:
+    """Cross-margin software guardrails (docs/EQUITY_BOOK_DESIGN.md §3). Returns the possibly
+    scaled-down g_t. Dry-run: budget check only (no venue reads)."""
+    from convexity.paper.fleetconfig import (
+        LEVERAGE_DIAL,
+        LIQ_DISTANCE_MIN_MULTIPLE,
+        MARGIN_ALERT_RATIO,
+        MARGIN_DERISK_RATIO,
+        WORST_HISTORICAL_DAY,
+    )
+
+    # (1) per-book budget: projected initial margin = gross notional / dial must fit in NAV.
+    dial = LEVERAGE_DIAL.get(spec.name, 20)
+    own_im = g_t * nav / dial
+    if own_im > nav:
+        g_scaled = dial * 0.98  # cap gross so IM fits with a hair of headroom
+        j.append("margin_budget", d_iso, action="scaled_down", g_t_before=round(g_t, 6),
+                 g_t_after=round(g_scaled, 6), dial=dial)
+        print(f"[margin:{spec.name}] projected IM {own_im:.2f} > NAV {nav:.2f} — "
+              f"g_t {g_t:.4f} -> {g_scaled:.4f}")
+        g_t = g_scaled
+    if not live:
+        return g_t
+    # (2)+(3) account monitor + liquidation distance (live only; fresh fetch INSIDE the lock).
+    from convexity.paper.gateway import GatewayError, account_snapshot
+    try:
+        snap = account_snapshot()
+    except GatewayError as e:
+        j.append("margin_monitor_error", d_iso, error=str(e)[:200])
+        return g_t
+    ratio = (snap.maint_margin / snap.equity) if snap.equity > 0 else 0.0
+    j.append("margin_ratio", d_iso, maint_margin=round(snap.maint_margin, 4),
+             initial_margin=round(snap.initial_margin, 4), account_equity=round(snap.equity, 2),
+             ratio=round(ratio, 6))
+    if ratio >= MARGIN_DERISK_RATIO:
+        j.append("directive", d_iso, action="DERISK",
+                 reason=f"account maint-margin ratio {ratio:.1%} >= {MARGIN_DERISK_RATIO:.0%} "
+                        f"(priority: equity flattens first — runbook)")
+        print(f"[margin:{spec.name}] DERISK: ratio {ratio:.1%} >= {MARGIN_DERISK_RATIO:.0%}")
+        if spec.name == "equity":
+            _flatten_book_live(spec, j, reason=f"margin DERISK at ratio {ratio:.1%}")
+            return 0.0
+    elif ratio >= MARGIN_ALERT_RATIO:
+        j.append("directive", d_iso, action="MARGIN_ALERT",
+                 reason=f"account maint-margin ratio {ratio:.1%} >= {MARGIN_ALERT_RATIO:.0%}")
+        print(f"[margin:{spec.name}] ALERT: ratio {ratio:.1%}")
+    # liquidation distance: equity buffer over maintenance, as a fraction of account equity,
+    # must exceed LIQ_DISTANCE_MIN_MULTIPLE x the worst historical one-day move.
+    buffer_frac = (snap.equity - snap.maint_margin) / snap.equity if snap.equity > 0 else 0.0
+    floor = LIQ_DISTANCE_MIN_MULTIPLE * WORST_HISTORICAL_DAY
+    j.append("liq_distance", d_iso, buffer_frac=round(buffer_frac, 6),
+             floor=round(floor, 4), ok=bool(buffer_frac > floor))
+    if buffer_frac <= floor:
+        j.append("directive", d_iso, action="LIQ_DISTANCE_BREACH",
+                 reason=f"buffer {buffer_frac:.1%} <= {floor:.1%} floor")
+        print(f"[margin:{spec.name}] LIQ-DISTANCE BREACH: buffer {buffer_frac:.1%}")
+    return g_t
+
+
+def _boot_leverage_dial(spec: BookSpec, j: Journal, d_iso: str,
+                        intents: list[OrderIntent]) -> None:
+    """Integer exchange-leverage boot (docs/EQUITY_BOOK_DESIGN.md §2): set the configured dial
+    once per session for this book's traded symbols. Idempotent on the venue; errors (e.g.
+    'cannot change with open position') are journaled, never fatal — the dial is a cap, not the
+    sizing mechanism."""
+    from convexity.paper.fleetconfig import LEVERAGE_DIAL
+
+    dial = LEVERAGE_DIAL.get(spec.name)
+    if dial is None:
+        return
+    from convexity.paper.gateway import GatewayError, set_leverage
+    ok, failed = 0, []
+    for sym in sorted({it.symbol for it in intents}):
+        try:
+            set_leverage(sym, dial)
+            ok += 1
+        except GatewayError as e:
+            failed.append(sym)
+            j.append("leverage_set_error", d_iso, symbol=sym, error=str(e)[:200])
+    j.append("leverage_set", d_iso, dial=dial, n_ok=ok, n_failed=len(failed), failed=failed)
+    print(f"[leverage:{spec.name}] dial={dial}x set on {ok} symbols"
+          + (f" ({len(failed)} failed, journaled)" if failed else ""))
 
 
 def cmd_rebalance(args: argparse.Namespace) -> None:
@@ -304,85 +528,100 @@ def cmd_rebalance(args: argparse.Namespace) -> None:
 
     alloc_mode = _allocation_mode(j)
     domain = book_domain(spec)
-    if args.live:
-        if alloc_mode:
-            positions, upnl, acct_eq, assets, unowned = _venue_book_state(domain)
-            if unowned:
-                j.append("unowned_positions", d_iso, symbols=sorted(unowned))
-                print(f"[live:{spec.name}] WARNING: positions outside every book's domain "
-                      f"(never swept): {sorted(unowned)}")
-            nav = _book_equity(j, spec)
-            j.append("book_recon", d_iso, book_equity=round(nav, 2),
-                     account_equity=round(acct_eq, 2), unrealized_book=round(upnl, 4),
-                     n_positions=len(positions))
-            nav_note = f"allocation-mode NAV (account={acct_eq:.2f} is shared context only)"
-            used_assets: tuple[str, ...] = ("ALLOC",)
+    # THE ACCOUNT LOCK (design §4): everything venue-facing — state read, margin checks,
+    # submissions, orphan sweep — runs in ONE critical section so no other book can interleave.
+    # Signal computation stayed outside. Dry-run touches only this book's journal: no lock.
+    lock_cm = account_lock(spec.name) if args.live else contextlib.nullcontext()
+    with lock_cm:
+        if _check_kill(spec, j, live=args.live):
+            return
+        if args.live:
+            if alloc_mode:
+                positions, upnl, acct_eq, assets, unowned = _venue_book_state(domain)
+                if unowned:
+                    j.append("unowned_positions", d_iso, symbols=sorted(unowned))
+                    print(f"[live:{spec.name}] WARNING: positions outside every book's domain "
+                          f"(never swept): {sorted(unowned)}")
+                nav = _book_equity(j, spec)
+                j.append("book_recon", d_iso, book_equity=round(nav, 2),
+                         account_equity=round(acct_eq, 2), unrealized_book=round(upnl, 4),
+                         n_positions=len(positions))
+                nav_note = f"allocation-mode NAV (account={acct_eq:.2f} is shared context only)"
+                used_assets: tuple[str, ...] = ("ALLOC",)
+            else:
+                if spec.name != "crypto":
+                    raise SystemExit(
+                        f"[{spec.name}] live requires an allocation: run "
+                        f"`python -m convexity.paper allocate --book {spec.name} --amount "
+                        f"<USDT>` first — the shared account's equity belongs to multiple books "
+                        f"(PAPER.md §11)")
+                from convexity.paper.gateway import account_assets, account_snapshot
+                assets = account_assets()
+                snap = account_snapshot()
+                positions = {s: q for s, q in snap.positions.items() if s in domain}
+                est_margin = g_t * sum(assets.get(a, 0.0) for a in ("USDT",)) / 10.0
+                nav_dec = sizing_nav(assets, est_initial_margin=est_margin)
+                nav = nav_dec.nav
+                nav_note = nav_dec.note
+                used_assets = nav_dec.used_assets
         else:
-            if spec.name != "crypto":
-                raise SystemExit(
-                    f"[{spec.name}] live requires an allocation: run "
-                    f"`python -m convexity.paper allocate --book {spec.name} --amount <USDT>` "
-                    f"first — the shared account's equity belongs to multiple books "
-                    f"(PAPER.md §11)")
-            from convexity.paper.gateway import account_assets, account_snapshot
-            assets = account_assets()
-            snap = account_snapshot()
-            positions = {s: q for s, q in snap.positions.items() if s in domain}
-            est_margin = g_t * sum(assets.get(a, 0.0) for a in ("USDT",)) / 10.0
-            nav_dec = sizing_nav(assets, est_initial_margin=est_margin)
-            nav = nav_dec.nav
-            nav_note = nav_dec.note
-            used_assets = nav_dec.used_assets
-    else:
-        positions = {}
-        nav = _book_equity(j, spec, fallback=args.nav)
-        nav_note = "dry-run journal equity"
-        used_assets = ("DRY",)
-    print(f"[size:{spec.name}] G_t={g_t:.4f} binding={binding} | NAV={nav:.2f} "
-          f"({'+'.join(used_assets)}) | {nav_note}")
+            positions = {}
+            nav = _book_equity(j, spec, fallback=args.nav)
+            nav_note = "dry-run journal equity"
+            used_assets = ("DRY",)
+        # Cross-margin guardrails (design §3): budget check both modes; monitor + liq-distance
+        # live only. May scale g_t down (or flatten equity on DERISK, returning g_t=0).
+        g_t = _margin_guardrails(spec, j, d_iso, nav, g_t, live=args.live)
+        print(f"[size:{spec.name}] G_t={g_t:.4f} binding={binding} | NAV={nav:.2f} "
+              f"({'+'.join(used_assets)}) | {nav_note}")
 
-    w_scaled = w_target * g_t
-    prices = panel.close[d]
-    if args.live:
-        # LIVE: the carried book is ALWAYS the venue's actual positions (an empty account is a
-        # flat book — never the journal heuristic, which a crashed run's record would poison;
-        # learned in the first supervised session 2026-07-03). Scoped to THIS book's panel.
-        w_carried = np.array([
-            positions.get(sym, 0.0) * (prices[i] if np.isfinite(prices[i]) else 0.0) / nav
-            for i, sym in enumerate(panel.symbols)])
-    else:
-        prev = j.last("targets")
-        if prev is not None:
-            # dry-run carried book = the prior week's SCALED targets (the band's carried input;
-            # drift is second-order for the plan and exact in the settle, which re-drifts itself).
-            w_carried = _aligned_weights(prev, panel) * float(prev["g_t"])
+        w_scaled = w_target * g_t
+        prices = panel.close[d]
+        if args.live:
+            # LIVE: the carried book is ALWAYS the venue's actual positions (an empty account is
+            # a flat book — never the journal heuristic, which a crashed run's record would
+            # poison; learned in the first supervised session 2026-07-03). Scoped to THIS book's
+            # panel.
+            w_carried = np.array([
+                positions.get(sym, 0.0) * (prices[i] if np.isfinite(prices[i]) else 0.0) / nav
+                for i, sym in enumerate(panel.symbols)])
         else:
-            w_carried = np.zeros(panel.n_symbols)
-    vols = realized_vol(panel, d, window=28)
-    plan = build_plan(w_scaled, w_carried, vols,
-                      half_spread=PLAN_HALF_SPREAD[spec.name])
-    intents = order_intents(plan, panel.symbols, prices, nav, w_target=w_scaled,
-                            filters=book_filters(spec))
-    turn = plan.turnover_live
-    print(f"[plan:{spec.name}] turnover_live={turn:.4f} (backtest {plan.turnover_backtest:.4f}); "
-          f"{len(intents)} order intents, {int((plan.trade == 0).sum())} names band-skipped/flat")
+            prev = j.last("targets")
+            if prev is not None:
+                # dry-run carried book = the prior week's SCALED targets (the band's carried
+                # input; drift is second-order for the plan and exact in the settle, which
+                # re-drifts itself).
+                w_carried = _aligned_weights(prev, panel) * float(prev["g_t"])
+            else:
+                w_carried = np.zeros(panel.n_symbols)
+        vols = realized_vol(panel, d, window=28)
+        plan = build_plan(w_scaled, w_carried, vols,
+                          half_spread=PLAN_HALF_SPREAD[spec.name])
+        intents = order_intents(plan, panel.symbols, prices, nav, w_target=w_scaled,
+                                filters=book_filters(spec))
+        turn = plan.turnover_live
+        print(f"[plan:{spec.name}] turnover_live={turn:.4f} "
+              f"(backtest {plan.turnover_backtest:.4f}); "
+              f"{len(intents)} order intents, {int((plan.trade == 0).sum())} names "
+              f"band-skipped/flat")
 
-    j.append("targets", d_iso, weights=[round(float(x), 10) for x in w_target],
-             symbols=list(panel.symbols),
-             g_t=round(g_t, 6), nav=round(nav, 2), mode="live" if args.live else "dry",
-             book=spec.name, nav_assets=list(used_assets))
-    j.append("orders", d_iso, intents=[i.to_dict() for i in intents],
-             mode="live" if args.live else "dry")
+        j.append("targets", d_iso, weights=[round(float(x), 10) for x in w_target],
+                 symbols=list(panel.symbols),
+                 g_t=round(g_t, 6), nav=round(nav, 2), mode="live" if args.live else "dry",
+                 book=spec.name, nav_assets=list(used_assets))
+        j.append("orders", d_iso, intents=[i.to_dict() for i in intents],
+                 mode="live" if args.live else "dry")
 
-    if args.live:
-        _submit_live(j, spec, d_iso, intents, positions, w_scaled, panel)
-    else:
-        for it in intents[:12]:
-            sgn = "+" if it.qty > 0 else "-"
-            print(f"[dry:{spec.name}] {it.symbol:>14} qty={sgn}{it.qty_str} {it.tactic} "
-                  f"@ {it.price_str}")
-        if len(intents) > 12:
-            print(f"[dry:{spec.name}] ... +{len(intents) - 12} more (journaled)")
+        if args.live:
+            _boot_leverage_dial(spec, j, d_iso, intents)
+            _submit_live(j, spec, d_iso, intents, positions, w_scaled, panel)
+        else:
+            for it in intents[:12]:
+                sgn = "+" if it.qty > 0 else "-"
+                print(f"[dry:{spec.name}] {it.symbol:>14} qty={sgn}{it.qty_str} {it.tactic} "
+                      f"@ {it.price_str}")
+            if len(intents) > 12:
+                print(f"[dry:{spec.name}] ... +{len(intents) - 12} more (journaled)")
 
 
 def _submit_live(j: Journal, spec: BookSpec, d_iso: str, intents: list[OrderIntent],
@@ -518,37 +757,41 @@ def cmd_finalize(args: argparse.Namespace) -> None:
     from convexity.paper.policy import fmt_step
     from convexity.paper.topup import fetch_live_filters
 
-    syms = {it["symbol"] for it in orders["intents"]}
-    for s in sorted(syms):
-        cancel_open_orders(s)
-    snap = account_snapshot()
-    crossed = 0
-    live_f = fetch_live_filters()
-    failed = 0
-    for it in orders["intents"]:
-        want = float(it["qty"])
-        have = snap.positions.get(it["symbol"], 0.0)  # net position vs intended delta: v1 heuristic
-        remainder = want if abs(have) < 1e-12 else 0.0
-        if remainder != 0.0:
-            lf = live_f.get(it["symbol"])
-            if lf:
-                _tick, lot, min_qty, _mn = lf
-                remainder = quantize_qty(remainder, lot_size=lot, min_qty=min_qty)
-                if remainder == 0.0:
-                    continue
-            try:
-                submit_intent(OrderIntent(symbol=it["symbol"], qty=remainder, tactic="MARKET",
-                                          ref_price=it["ref_price"], slice_idx=0, n_slices=1,
-                                          reduce_only=bool(it.get("reduce_only", False)),
-                                          qty_str=fmt_step(abs(remainder), lf[1]) if lf else ""))
-                crossed += 1
-            except GatewayError as e:
-                failed += 1
-                j.append("order_error", orders["asof"], symbol=it["symbol"],
-                         error=f"finalize: {str(e)[:280]}")
-                print(f"[finalize:{spec.name}] {it['symbol']} FAILED (isolated): {e}")
-    j.append("finalized", orders["asof"], crossed=crossed, failed=failed)
-    print(f"[finalize:{spec.name}] crossed {crossed} remainders ({failed} failed, journaled)")
+    with account_lock(spec.name):
+        if _check_kill(spec, j, live=True):
+            return
+        syms = {it["symbol"] for it in orders["intents"]}
+        for s in sorted(syms):
+            cancel_open_orders(s)
+        snap = account_snapshot()
+        crossed = 0
+        live_f = fetch_live_filters()
+        failed = 0
+        for it in orders["intents"]:
+            want = float(it["qty"])
+            have = snap.positions.get(it["symbol"], 0.0)  # net vs intended delta: v1 heuristic
+            remainder = want if abs(have) < 1e-12 else 0.0
+            if remainder != 0.0:
+                lf = live_f.get(it["symbol"])
+                if lf:
+                    _tick, lot, min_qty, _mn = lf
+                    remainder = quantize_qty(remainder, lot_size=lot, min_qty=min_qty)
+                    if remainder == 0.0:
+                        continue
+                try:
+                    submit_intent(OrderIntent(
+                        symbol=it["symbol"], qty=remainder, tactic="MARKET",
+                        ref_price=it["ref_price"], slice_idx=0, n_slices=1,
+                        reduce_only=bool(it.get("reduce_only", False)),
+                        qty_str=fmt_step(abs(remainder), lf[1]) if lf else ""))
+                    crossed += 1
+                except GatewayError as e:
+                    failed += 1
+                    j.append("order_error", orders["asof"], symbol=it["symbol"],
+                             error=f"finalize: {str(e)[:280]}")
+                    print(f"[finalize:{spec.name}] {it['symbol']} FAILED (isolated): {e}")
+        j.append("finalized", orders["asof"], crossed=crossed, failed=failed)
+        print(f"[finalize:{spec.name}] crossed {crossed} remainders ({failed} failed, journaled)")
 
 
 def cmd_recon(args: argparse.Namespace) -> None:
@@ -566,42 +809,48 @@ def cmd_recon(args: argparse.Namespace) -> None:
             f"[{spec.name}] live recon requires an allocation: run "
             f"`python -m convexity.paper allocate --book {spec.name} --amount <USDT>` first")
     domain = book_domain(spec)
-    positions, upnl, acct_eq, assets, unowned = _venue_book_state(domain)
-    if unowned:
-        # hygiene backstop: a position OUTSIDE EVERY book's domain belongs to nobody — the
-        # domain-scoped sweeps will never close it, so it must at least be visible (journal+log)
-        j.append("unowned_positions", "recon", symbols=sorted(unowned))
-        print(f"[recon:{spec.name}] WARNING: venue positions outside every book's domain "
-              f"(no sweep will ever close these): {sorted(unowned)}")
-    if alloc_mode:
-        eq = _book_equity(j, spec)
-        # allocation mode: the daily mark is the BOOK's model equity; account equity + the
-        # book's venue unrealized are journaled as recon context (drift is measured, PAPER.md §11)
-        j.append("book_recon", "recon", book_equity=round(eq, 2),
-                 account_equity=round(acct_eq, 2), unrealized_book=round(upnl, 4),
-                 n_positions=len(positions))
-    else:
-        eq = float(assets.get("USDT", 0.0)) + float(assets.get("USDC", 0.0))
-        j.append("equity_mark", "recon", equity=eq)
-    t = j.last("targets")
-    n_tgt = int(np.count_nonzero(np.asarray(t["weights"]))) if t else 0
-    j.append("recon", t["asof"] if t else "none", n_positions=len(positions), n_targets=n_tgt,
-             equity=round(eq, 2), account_equity=round(acct_eq, 2),
-             excluded_btc=float(assets.get("BTC", 0.0)))
-    print(f"[recon:{spec.name}] book_equity={eq:.2f} account={acct_eq:.2f} "
-          f"(BTC excluded: {assets.get('BTC', 0.0)}) positions={len(positions)} targets={n_tgt}")
+    with account_lock(spec.name):
+        if _check_kill(spec, j, live=True):
+            return
+        positions, upnl, acct_eq, assets, unowned = _venue_book_state(domain)
+        if unowned:
+            # hygiene backstop: a position OUTSIDE EVERY book's domain belongs to nobody — the
+            # domain-scoped sweeps will never close it, so it must at least be visible
+            j.append("unowned_positions", "recon", symbols=sorted(unowned))
+            print(f"[recon:{spec.name}] WARNING: venue positions outside every book's domain "
+                  f"(no sweep will ever close these): {sorted(unowned)}")
+        if alloc_mode:
+            eq = _book_equity(j, spec)
+            # allocation mode: the daily mark is the BOOK's model equity; account equity + the
+            # book's venue unrealized are journaled as recon context (drift measured, PAPER.md
+            # §11)
+            j.append("book_recon", "recon", book_equity=round(eq, 2),
+                     account_equity=round(acct_eq, 2), unrealized_book=round(upnl, 4),
+                     n_positions=len(positions))
+        else:
+            eq = float(assets.get("USDT", 0.0)) + float(assets.get("USDC", 0.0))
+            j.append("equity_mark", "recon", equity=eq)
+        # daily margin monitor (design §3): the recon is the fleet's fastest guardrail cadence.
+        _margin_guardrails(spec, j, "recon", nav=eq, g_t=0.0, live=True)
+        t = j.last("targets")
+        n_tgt = int(np.count_nonzero(np.asarray(t["weights"]))) if t else 0
+        j.append("recon", t["asof"] if t else "none", n_positions=len(positions),
+                 n_targets=n_tgt, equity=round(eq, 2), account_equity=round(acct_eq, 2),
+                 excluded_btc=float(assets.get("BTC", 0.0)))
+        print(f"[recon:{spec.name}] book_equity={eq:.2f} account={acct_eq:.2f} "
+              f"(BTC excluded: {assets.get('BTC', 0.0)}) positions={len(positions)} "
+              f"targets={n_tgt}")
 
 
-def cmd_flow(args: argparse.Namespace) -> None:
-    spec = _book(args)
+def _flow_one(spec: BookSpec, amount: float, equity_before: float | None = None) -> None:
     j = _journal(spec)
     mark = j.last("equity_mark")
-    eq_before = args.equity_before if args.equity_before is not None else (
+    eq_before = equity_before if equity_before is not None else (
         float(mark["equity"]) if mark else spec.default_nav)
     now64 = np.datetime64("now")
     asof = str(now64.astype("datetime64[D]"))
     ev = FlowEvent(ts=int(now64.astype("datetime64[ms]").astype(np.int64)),
-                   amount=args.amount, equity_before=eq_before)
+                   amount=amount, equity_before=eq_before)
     directive = flow_risk_check(ev, OpsDefaults())
     j.append("flow", asof, amount=ev.amount, equity_before=ev.equity_before, ts_ms=ev.ts)
     j.append("directive", asof, action=directive.action, reason=directive.reason,
@@ -610,23 +859,89 @@ def cmd_flow(args: argparse.Namespace) -> None:
           f"{directive.reason}")
 
 
+def cmd_flow(args: argparse.Namespace) -> None:
+    spec = _book(args)
+    # serialized: a flow record landing mid-rebalance must not change NAV under a sizing session
+    # (design §4 — the rebalance reads NAV once inside its own lock hold).
+    with account_lock(f"flow:{spec.name}"):
+        _flow_one(spec, args.amount, args.equity_before)
+
+
+def _allocate_one(spec: BookSpec, amount: float) -> None:
+    j = _journal(spec)
+    if not (amount > 0):
+        raise SystemExit(f"[allocate:{spec.name}] amount must be positive, got {amount}")
+    now64 = np.datetime64("now")
+    asof = str(now64.astype("datetime64[D]"))
+    j.append("allocate", asof, amount=float(amount), book=spec.name)
+    j.append("equity_mark", asof, equity=float(amount))
+    other = [b for b in BOOKS.values() if b.name != spec.name]
+    others = {b.name: Journal(b.journal_path).last("allocate") for b in other}
+    total = float(amount) + sum(float(a["amount"]) for a in others.values() if a)
+    print(f"[allocate:{spec.name}] {amount:.2f} journaled; all-book allocations sum to "
+          f"{total:.2f} — verify this stays within the account's USDT+USDC (runbook)")
+
+
 def cmd_allocate(args: argparse.Namespace) -> None:
     """Set the book's virtual capital (PAPER.md §11). The operator splits the ONE demo account
     into per-book NAVs; each book's equity then evolves by its own settles. Re-allocating is a
     new record (append-only) — treat a mid-life re-allocation as a flow event for the TWR."""
     spec = _book(args)
+    with account_lock(f"allocate:{spec.name}"):
+        _allocate_one(spec, args.amount)
+
+
+def cmd_allocate_split(args: argparse.Namespace) -> None:
+    """Split a TOTAL account allocation across all three books per the fleet ratios
+    (docs/EQUITY_BOOK_DESIGN.md §7: 400/350/250 per 1000), atomically under the account lock —
+    requirement 4's 'proportional re-allocation exactly like the other two'."""
+    from convexity.paper.fleetconfig import ALLOC_UNITS, ALLOC_TOTAL
+
+    if not (args.total > 0):
+        raise SystemExit(f"[allocate-split] total must be positive, got {args.total}")
+    with account_lock("allocate-split"):
+        for name, units in ALLOC_UNITS.items():
+            _allocate_one(BOOKS[name], args.total * units / ALLOC_TOTAL)
+    print(f"[allocate-split] {args.total:.2f} split "
+          f"{'/'.join(f'{n}:{u}' for n, u in ALLOC_UNITS.items())} per {ALLOC_TOTAL}")
+
+
+def cmd_flow_split(args: argparse.Namespace) -> None:
+    """Journal an account-level deposit/withdrawal proportionally into all three books, under
+    the account lock (requirement 4)."""
+    from convexity.paper.fleetconfig import ALLOC_UNITS, ALLOC_TOTAL
+
+    with account_lock("flow-split"):
+        for name, units in ALLOC_UNITS.items():
+            _flow_one(BOOKS[name], args.amount * units / ALLOC_TOTAL)
+    print(f"[flow-split] {args.amount:+.2f} split "
+          f"{'/'.join(f'{n}:{u}' for n, u in ALLOC_UNITS.items())} per {ALLOC_TOTAL}")
+
+
+def cmd_kill(args: argparse.Namespace) -> None:
+    """Per-book kill switch (docs/EQUITY_BOOK_DESIGN.md §6). ``kill``: creates the control file —
+    the NEXT venue-facing session (or this command with --now under the lock, live) flattens the
+    book and halts. ``--resume``: removes the file. Independent per book by construction."""
+    spec = _book(args)
     j = _journal(spec)
-    if not (args.amount > 0):
-        raise SystemExit(f"[allocate:{spec.name}] amount must be positive, got {args.amount}")
+    kp = _kill_path(spec)
     now64 = np.datetime64("now")
     asof = str(now64.astype("datetime64[D]"))
-    j.append("allocate", asof, amount=float(args.amount), book=spec.name)
-    j.append("equity_mark", asof, equity=float(args.amount))
-    other = [b for b in BOOKS.values() if b.name != spec.name]
-    others = {b.name: Journal(b.journal_path).last("allocate") for b in other}
-    total = float(args.amount) + sum(float(a["amount"]) for a in others.values() if a)
-    print(f"[allocate:{spec.name}] {args.amount:.2f} journaled; all-book allocations sum to "
-          f"{total:.2f} — verify this stays within the account's USDT+USDC (runbook)")
+    if args.resume:
+        if kp.exists():
+            kp.unlink()
+            j.append("directive", asof, action="RESUME", reason="operator resumed the book")
+            print(f"[kill:{spec.name}] KILL file removed — book resumes at its next session")
+        else:
+            print(f"[kill:{spec.name}] no KILL file present — nothing to resume")
+        return
+    kp.parent.mkdir(parents=True, exist_ok=True)
+    kp.write_text(json.dumps({"ts": str(now64), "reason": args.reason or "operator kill"}))
+    j.append("directive", asof, action="KILL", reason=args.reason or "operator kill")
+    print(f"[kill:{spec.name}] KILL file created ({kp})")
+    if args.now:
+        with account_lock(f"kill:{spec.name}"):
+            _flatten_book_live(spec, j, reason=args.reason or "operator kill --now")
 
 
 def cmd_status(args: argparse.Namespace) -> None:
@@ -673,6 +988,19 @@ def main() -> None:
     add_book(al)
     al.add_argument("--amount", type=float, required=True)
     al.set_defaults(fn=cmd_allocate)
+    als = sub.add_parser("allocate-split")
+    als.add_argument("--total", type=float, required=True)
+    als.set_defaults(fn=cmd_allocate_split)
+    fls = sub.add_parser("flow-split")
+    fls.add_argument("--amount", type=float, required=True)
+    fls.set_defaults(fn=cmd_flow_split)
+    k = sub.add_parser("kill")
+    add_book(k)
+    k.add_argument("--resume", action="store_true")
+    k.add_argument("--now", action="store_true",
+                   help="flatten immediately (live) instead of at the next session")
+    k.add_argument("--reason", default=None)
+    k.set_defaults(fn=cmd_kill)
     s = sub.add_parser("status")
     add_book(s)
     s.set_defaults(fn=cmd_status)

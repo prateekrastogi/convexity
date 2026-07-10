@@ -1,0 +1,8 @@
+# Daily, staggered after the crypto (00:25) and commodity (00:45) recons.
+[Unit]
+Description=convexity equity paper daily recon
+[Timer]
+OnCalendar=*-*-* 01:05:00 UTC
+Persistent=true
+[Install]
+WantedBy=timers.target
