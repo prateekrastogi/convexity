@@ -171,6 +171,26 @@ def _book_equity(j: Journal, spec: BookSpec, fallback: float | None = None) -> f
     return spec.default_nav
 
 
+def _manual_autosync(j: Journal, spec: BookSpec, label: str) -> None:
+    """Adopt the operator's app/manual fills into the reserve ledger (PAPER.md §12.5) BEFORE
+    any venue-position read — inside the account lock at every venue-facing entry point.
+    Attribution is by clientOrderId: the gateway stamps everything it submits ``cvx-``; any
+    other terminal fill is the operator's and moves the reserve by its signed quantity.
+    Venue failure propagates: trading unsynced could absorb an unadopted manual fill."""
+    import time as _time
+
+    from convexity.paper.gateway import account_snapshot, fetch_recent_orders
+    from convexity.paper.manual import auto_sync
+
+    snap = account_snapshot()
+    adopted, notes = auto_sync(fetch_recent_orders, snap.positions,
+                               now_ms=int(_time.time() * 1000))
+    if adopted:
+        j.append("manual_autoreserve", label, adopted=adopted)
+    for line in notes:
+        print(f"[manual:{spec.name}] {line}")
+
+
 def _venue_book_state(domain: frozenset[str]):
     """(positions, unrealized_sum, account_equity, assets, unowned, manual_notes) — positions
     scoped to the book's domain AND net of the operator's manual reserve (PAPER.md §12.5): the
@@ -384,6 +404,12 @@ def _flatten_book_live(spec: BookSpec, j: Journal, reason: str) -> None:
     from convexity.paper.topup import fetch_live_filters
 
     domain = book_domain(spec)
+    try:
+        _manual_autosync(j, spec, f"kill:{reason[:24]}")
+    except Exception as e:  # a KILL must flatten even if attribution is unreachable —
+        # the LAST synced reserve is still netted below, so operator positions stay protected
+        print(f"[kill:{spec.name}] manual auto-sync failed ({e}) — flattening with last "
+              f"synced reserve")
     positions, _upnl, _eq, _assets, _unowned, manual_notes = _venue_book_state(domain)
     for note in manual_notes:
         print(f"[kill:{spec.name}] manual carve-out (reserve NOT flattened): {note}")
@@ -546,6 +572,7 @@ def cmd_rebalance(args: argparse.Namespace) -> None:
         if _check_kill(spec, j, live=args.live):
             return
         if args.live:
+            _manual_autosync(j, spec, d_iso)
             if alloc_mode:
                 positions, upnl, acct_eq, assets, unowned, manual_notes = \
                     _venue_book_state(domain)
@@ -782,6 +809,7 @@ def cmd_finalize(args: argparse.Namespace) -> None:
     with account_lock(spec.name):
         if _check_kill(spec, j, live=True):
             return
+        _manual_autosync(j, spec, orders["asof"])
         syms = {it["symbol"] for it in orders["intents"]}
         for s in sorted(syms):
             cancel_open_orders(s)
@@ -838,6 +866,7 @@ def cmd_recon(args: argparse.Namespace) -> None:
     with account_lock(spec.name):
         if _check_kill(spec, j, live=True):
             return
+        _manual_autosync(j, spec, "recon")
         positions, upnl, acct_eq, assets, unowned, manual_notes = _venue_book_state(domain)
         if manual_notes:
             j.append("manual_reserve", "recon", notes=manual_notes)
@@ -988,38 +1017,33 @@ def cmd_status(args: argparse.Namespace) -> None:
 
 
 def cmd_manual(args: argparse.Namespace) -> None:
-    """Operator's manual-position ledger (PAPER.md §12.5): reserve quantities the books must
-    never touch. Edits run under the account lock so no live session reads a half-written
-    ledger; --list is read-only."""
-    from convexity.paper.manual import MANUAL_RESERVE_PATH, load_reserve, save_reserve
+    """Read-only view of the operator carve-out (PAPER.md §12.5). The ledger is maintained
+    AUTOMATICALLY: fills without the gateway's cvx- stamp are adopted at every recon/rebalance/
+    finalize/kill sync. To correct a wrong adoption, hand-edit data/paper/manual_reserve.json
+    (books read it fresh each session)."""
+    import time as _time
 
-    if not args.reserve and not args.release:
-        res = load_reserve()
-        if not res:
-            print(f"[manual] no reserves ({MANUAL_RESERVE_PATH})")
-        for sym, qty in sorted(res.items()):
-            print(f"[manual] {sym:>14} reserved {qty:+g}")
-        return
-    with account_lock("manual"):
-        res = load_reserve()
-        if args.reserve:
-            sym = args.reserve[0].upper()
-            qty = float(args.reserve[1])
-            if abs(qty) <= 1e-12:
-                res.pop(sym, None)
-                print(f"[manual] {sym} reserve cleared (zero qty)")
-            else:
-                res[sym] = qty
-                print(f"[manual] {sym} reserved {qty:+g} — every book now nets this out of "
-                      f"sizing, sweeps, kills and recon")
-        if args.release:
-            sym = args.release.upper()
-            if res.pop(sym, None) is None:
-                print(f"[manual] {sym} had no reserve")
-            else:
-                print(f"[manual] {sym} reserve released — the owning book manages the full "
-                      f"venue quantity again")
-        save_reserve(res)
+    from convexity.paper.manual import (
+        MANUAL_RESERVE_PATH,
+        load_reserve,
+        load_sync_state,
+    )
+
+    now_ms = int(_time.time() * 1000)
+    res = load_reserve()
+    if not res:
+        print(f"[manual] no operator reserves ({MANUAL_RESERVE_PATH}) — auto-adopted from "
+              f"non-cvx fills at every sync")
+    for sym, qty in sorted(res.items()):
+        print(f"[manual] {sym:>14} reserved {qty:+g}")
+    state = load_sync_state(now_ms)
+    marks = [int(s.get("watermark", 0)) for s in state.get("symbols", {}).values()]
+    if marks:
+        age_h = (now_ms - max(marks)) / 3.6e6
+        print(f"[manual] attribution watermark: {age_h:.1f}h ago "
+              f"({len(marks)} symbols tracked)")
+    else:
+        print("[manual] no syncs recorded yet (first live session will anchor deploy_ms)")
 
 
 def main() -> None:
@@ -1066,10 +1090,7 @@ def main() -> None:
                    help="flatten immediately (live) instead of at the next session")
     k.add_argument("--reason", default=None)
     k.set_defaults(fn=cmd_kill)
-    mn = sub.add_parser("manual")
-    mn.add_argument("--reserve", nargs=2, metavar=("SYMBOL", "QTY"),
-                    help="mark QTY of SYMBOL as operator-owned (signed; overwrites)")
-    mn.add_argument("--release", metavar="SYMBOL", help="remove SYMBOL's reserve")
+    mn = sub.add_parser("manual")  # read-only: the ledger is auto-maintained (§12.5)
     mn.set_defaults(fn=cmd_manual)
     s = sub.add_parser("status")
     add_book(s)

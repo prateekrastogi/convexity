@@ -145,8 +145,15 @@ def submit_intent(intent: OrderIntent) -> dict:
         BinanceTimeInForce,
     )
 
+    import uuid
+
+    from convexity.paper.manual import OUR_ORDER_PREFIX
+
     _client, api, _clock = _build_api()
     side = BinanceOrderSide.BUY if intent.qty > 0 else BinanceOrderSide.SELL
+    # fleet stamp (PAPER.md §12.5): everything the gateway submits carries this prefix, so any
+    # fill WITHOUT it is the operator's manual order by construction (auto-reserve attribution)
+    cid = f"{OUR_ORDER_PREFIX}{uuid.uuid4().hex[:20]}"
 
     async def go() -> dict:
         if intent.tactic == "POST_ONLY_MAKER":
@@ -155,14 +162,16 @@ def submit_intent(intent: OrderIntent) -> dict:
                 time_in_force=BinanceTimeInForce.GTX,  # post-only: cancels if it would cross
                 reduce_only=("true" if intent.reduce_only else None),
                 quantity=intent.qty_str or str(abs(intent.qty)),
-                price=intent.price_str or str(intent.ref_price))
+                price=intent.price_str or str(intent.ref_price),
+                new_client_order_id=cid)
         else:
             resp = await api.new_order(
                 symbol=intent.symbol, side=side, order_type=BinanceOrderType.MARKET,
                 reduce_only=("true" if intent.reduce_only else None),
-                quantity=intent.qty_str or str(abs(intent.qty)))
+                quantity=intent.qty_str or str(abs(intent.qty)),
+                new_client_order_id=cid)
         return {"symbol": intent.symbol, "orderId": getattr(resp, "orderId", None),
-                "status": str(getattr(resp, "status", ""))}
+                "status": str(getattr(resp, "status", "")), "clientOrderId": cid}
 
     return _run(go())
 
@@ -175,6 +184,30 @@ def cancel_open_orders(symbol: str) -> None:
         await api.cancel_all_open_orders(symbol=symbol)
 
     _run(go())
+
+
+def fetch_recent_orders(symbol: str, start_ms: int) -> list[dict]:
+    """All of ``symbol``'s orders placed after ``start_ms`` (SIGNED ``/fapi/v1/allOrders``) —
+    the manual-fill attribution surface (PAPER.md §12.5). limit=1000 dwarfs any realistic
+    inter-sync order count; auto_sync's 14-day lookback covers orders that rested before
+    going terminal (allOrders filters by placement time)."""
+    import json as _json
+
+    from nautilus_trader.core.nautilus_pyo3 import HttpMethod
+
+    client, _api, clock = _build_api()
+
+    async def go() -> list[dict]:
+        resp = await client.sign_request(
+            http_method=HttpMethod.GET,
+            url_path="/fapi/v1/allOrders",
+            payload={"symbol": symbol, "startTime": str(int(start_ms)), "limit": "1000",
+                     "timestamp": str(clock.timestamp_ms()), "recvWindow": "5000"},
+        )
+        body = resp.body if hasattr(resp, "body") else resp
+        return _json.loads(body)
+
+    return _run(go())
 
 
 def sign_tradfi_agreement() -> str:

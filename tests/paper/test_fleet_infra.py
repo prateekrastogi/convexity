@@ -342,3 +342,73 @@ def test_manual_ledger_roundtrip(tmp_path):
     with pytest.raises(RuntimeError, match="unreadable"):
         load_reserve(p)
 
+def test_manual_autosync(tmp_path):
+    """PAPER.md §12.5 v2: non-cvx terminal fills are adopted signed; cvx fills and resting
+    orders are not; re-runs are idempotent; a full manual close auto-releases the reserve."""
+    from convexity.paper.manual import auto_sync, load_reserve, load_sync_state
+
+    lp = tmp_path / "reserve.json"
+    sp = tmp_path / "sync.json"
+    T0 = 1_800_000_000_000
+    book_fill = {"orderId": 1, "clientOrderId": "cvx-abc123", "status": "FILLED",
+                 "side": "BUY", "executedQty": "5", "updateTime": T0 + 1000, "avgPrice": "10"}
+    app_buy = {"orderId": 2, "clientOrderId": "android_xyz", "status": "FILLED",
+               "side": "BUY", "executedQty": "4", "updateTime": T0 + 2000, "avgPrice": "11"}
+    resting = {"orderId": 3, "clientOrderId": "web_r1", "status": "NEW",
+               "side": "BUY", "executedQty": "0", "updateTime": T0 + 3000}
+    cancelled_dry = {"orderId": 4, "clientOrderId": "web_c", "status": "CANCELED",
+                     "side": "SELL", "executedQty": "0", "updateTime": T0 + 3500}
+    board = {"NVDAUSDT": [book_fill, app_buy, resting, cancelled_dry]}
+    calls = []
+
+    def fetch(sym, start):
+        calls.append((sym, start))
+        return list(board.get(sym, []))
+
+    adopted, notes = auto_sync(fetch, {"NVDAUSDT": 9.0}, now_ms=T0,
+                               ledger_path=lp, state_path=sp)
+    assert load_reserve(lp) == {"NVDAUSDT": 4.0}   # only the app buy
+    assert [a["orderId"] for a in adopted] == ["2"]
+    assert calls == [("NVDAUSDT", T0)]             # deploy anchor: scan starts at first-run now
+
+    # idempotent re-run: nothing new adopted, reserve unchanged
+    adopted, _ = auto_sync(fetch, {"NVDAUSDT": 9.0}, now_ms=T0 + 4000,
+                           ledger_path=lp, state_path=sp)
+    assert adopted == [] and load_reserve(lp) == {"NVDAUSDT": 4.0}
+
+    # the resting order fills later -> caught once terminal
+    board["NVDAUSDT"][2] = dict(resting, status="FILLED", executedQty="2",
+                                updateTime=T0 + 9000, avgPrice="12")
+    adopted, _ = auto_sync(fetch, {"NVDAUSDT": 11.0}, now_ms=T0 + 10_000,
+                           ledger_path=lp, state_path=sp)
+    assert load_reserve(lp) == {"NVDAUSDT": 6.0}
+
+    # operator closes the whole manual position in the app -> reserve auto-releases
+    board["NVDAUSDT"].append({"orderId": 5, "clientOrderId": "ios_q", "status": "FILLED",
+                              "side": "SELL", "executedQty": "6", "updateTime": T0 + 20_000,
+                              "avgPrice": "13"})
+    adopted, _ = auto_sync(fetch, {"NVDAUSDT": 5.0}, now_ms=T0 + 21_000,
+                           ledger_path=lp, state_path=sp)
+    assert load_reserve(lp) == {}                  # fully released
+    assert adopted[0]["qty"] == -6.0
+
+    state = load_sync_state(T0 + 22_000, sp)
+    assert state["deploy_ms"] == T0                # anchor never moves
+
+
+def test_manual_autosync_first_run_anchor(tmp_path):
+    """Fresh state anchors deploy_ms=now: pre-feature history (unstamped, ours included) is
+    never scanned, so it can never be misclassified as manual."""
+    from convexity.paper.manual import auto_sync
+
+    T_LATE = 1_900_000_000_000
+    seen = []
+
+    def fetch(sym, start):
+        seen.append(start)
+        return []
+
+    auto_sync(fetch, {"BTCUSDT": 1.0}, now_ms=T_LATE,
+              ledger_path=tmp_path / "r.json", state_path=tmp_path / "s.json")
+    assert seen == [T_LATE]
+

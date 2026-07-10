@@ -302,10 +302,17 @@ OTHERS, but not from the operator: a discretionary position in an in-domain symb
 absorbed into that book's carried state, traded toward its target, orphan-swept, or
 kill-flattened. The carve-out:
 
-- **Ledger**: `data/paper/manual_reserve.json` — symbol → signed operator-owned qty. Maintained
-  ONLY via `python -m convexity.paper manual --reserve SYM QTY | --release SYM | (no args =
-  list)`; edits run under the account lock. Never auto-populated — explicit ownership beats
-  silent adoption.
+- **Attribution (automatic)**: the gateway stamps every order it submits with
+  `clientOrderId = cvx-…`. Any terminal fill WITHOUT that stamp is the operator's by
+  construction (app/web/other-API). At every venue-facing entry point (recon, rebalance,
+  finalize, kill/DERISK — inside the account lock, before any position read) the auto-sync
+  scans recent orders per held/reserved symbol and signed-accumulates manual executed qty into
+  `data/paper/manual_reserve.json`; manual sells decrement, a full manual close auto-releases.
+  Adoptions are journaled (`manual_autoreserve`); sync state (`data/paper/manual_sync.json`)
+  carries per-symbol watermarks + a 14-day terminal lookback, and its `deploy_ms` first-run
+  anchor keeps all pre-feature (unstamped) history out of attribution. Wrong adoptions are
+  corrected by hand-editing the ledger JSON; `python -m convexity.paper manual` is a read-only
+  view.
 - **Netting**: every venue-position read a book performs (carried book, orphan sweep, kill/DERISK
   flatten, finalize remainder check, recon counts, book-share unrealized) first subtracts the
   reserve: `book_qty = venue_qty − reserved_qty`. The book manages only its share; carve-outs are
@@ -318,7 +325,9 @@ kill-flattened. The carve-out:
 - **Margin**: cross mode means manual positions share collateral. Guardrails deliberately read
   WHOLE-ACCOUNT margin (a large manual position tightens the books' budget — conservative), but
   DERISK/kill only ever close book shares, never the reserve.
-- **Operator contract**: reserve BEFORE or promptly after opening a manual position in an
-  in-domain symbol (worst case before the next timer fire: recon daily ~01:05 UTC, rebalance Sat);
-  release when you close it. Out-of-domain symbols are safe even unreserved (unowned warning
-  only). `manual` with no args lists the ledger.
+- **Operator contract**: none — trade freely from the app. Fills are adopted at the next sync
+  (daily recons are the floor; every trading session syncs first). Residual edge: a manual fill
+  landing DURING a Saturday session after its sync could be seen by that session's snapshot —
+  finalize re-syncs before crossing, and the clamp contains the worst case. Manual LIMIT orders
+  resting >14 days before filling escape the lookback (app orders are effectively immediate);
+  the discrepancy notes surface any residue.

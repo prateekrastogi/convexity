@@ -91,14 +91,14 @@ flags at `data/universe/equity_flags.json` (clear a flag by setting `"cleared": 
 
 ## Manual positions (operator carve-out, PAPER.md §12.5)
 
-Trading the account by hand? Reserve the quantity so the books never touch it:
+Trade freely from the Binance app — attribution is automatic. Every gateway order is
+stamped `cvx-…`; any other fill is adopted into `data/paper/manual_reserve.json` at the next
+sync (every recon/rebalance/finalize/kill, inside the account lock). Books net the reserve out
+of sizing, orphan sweeps, kills and finalize; manual closes auto-release.
 
 ```bash
-python -m convexity.paper manual --reserve NVDAUSDT 4      # 4 NVDA are mine
-python -m convexity.paper manual                            # list reserves
-python -m convexity.paper manual --release NVDAUSDT         # after you close it
+python -m convexity.paper manual   # read-only: reserves + attribution watermark age
 ```
 
-Reserve before the next timer fire (daily recons ~00:25/00:45/01:05 UTC only observe; Saturday
-rebalances trade). Books net reserves out of sizing, orphan sweeps, kills and finalize; a reserve
-larger than the venue position clamps the book share to 0 and journals the discrepancy.
+Wrong adoption? Hand-edit the ledger JSON. A reserve exceeding the venue position clamps the
+book share to 0 and journals the discrepancy (never inverts).
