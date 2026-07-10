@@ -77,6 +77,9 @@ KNOWN_SPLITS: dict[str, list[tuple[str, int]]] = {
                                        # Missed by the detector for the same drift-outside-
                                        # SPLIT_TOL reason; live-caught 2026-07 as a fake -74.12%
                                        # single-day return poisoning trend signals (D1v2 fix).
+    "CRWDDBN": [("2026-07-02", 4)],    # CrowdStrike 4-for-1 eff 2026-07-02 — split-watch live
+                                       # catch 2026-07-10 (fake -74.8% day); a PERP-ERA split:
+                                       # handled by the combined-series pass in stitch_one.
 }
 
 # Explicit REJECTIONS: (symbol, date) pairs where the ratio+persistence check finds a clean-ish
@@ -261,6 +264,19 @@ def stitch_one(inst: dict) -> dict:
         return {"symbol": sym, "sleeve": sleeve, "rows": 0, "note": "NO DATA"}
 
     out = out.sort_values("open_time").drop_duplicates("open_time", keep="last").reset_index(drop=True)
+    # PERP-ERA SPLITS (live-caught 2026-07-10: CRWD 4:1 on 2026-07-02): the pass above adjusts
+    # only the duka frame, but a split AFTER the perp lists re-bases the PERP price too --
+    # back-adjust the COMBINED series for splits dated inside the perp era. Proxy-era splits
+    # are excluded (already applied to duka; re-applying would double-adjust). Equities only:
+    # crypto has no corporate actions and a crash near a clean factor must never be "adjusted".
+    if sleeve == "equities" and not perp.empty:
+        perp_start = pd.to_datetime(int(perp["open_time"].min()),
+                                    unit="ms", utc=True).strftime("%Y-%m-%d")
+        perp_splits = [(d, f) for (d, f) in _detect_splits(perp, code) if d >= perp_start]
+        if perp_splits:
+            out = _split_adjust(out, perp_splits)
+            splits = sorted(set(splits) | set(perp_splits))
+            note += f"perp-era splits applied: {perp_splits}; "
     out["gap_before"] = _gap_flag(out)
     OUT.mkdir(parents=True, exist_ok=True)
     out[CORE + ["source", "gap_before"]].to_parquet(OUT / f"{sym}.parquet", index=False)
