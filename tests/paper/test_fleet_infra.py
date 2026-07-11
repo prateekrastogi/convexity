@@ -529,3 +529,31 @@ def test_venue_lock_isolation(tmp_path, monkeypatch):
             assert os.path.exists("data/paper/account.lock")
             assert os.path.exists("data/prod/account.lock")
 
+
+def test_finalize_ids_accumulation(tmp_path):
+    """finalize_ids accumulation (PAPER.md §12.6): a rerun counts prior crossing fills, so an
+    already-crossed remainder computes to ~0 and is never re-crossed."""
+    from convexity.paper.journal import Journal
+
+    j = Journal(tmp_path / "j.jsonl")
+    j.append("submission_ids", "2026-07-10",
+             orders=[{"symbol": "TTWOUSDT", "orderId": 1, "qty": 0.05}])
+    j.append("finalize_ids", "2026-07-10",
+             orders=[{"symbol": "TTWOUSDT", "orderId": 2, "qty": 0.05}])
+    j.append("finalize_ids", "2026-07-09",  # different asof: must NOT count
+             orders=[{"symbol": "TTWOUSDT", "orderId": 9, "qty": 0.05}])
+
+    by_sym = {}
+    sub_rec = j.last("submission_ids")
+    for o in sub_rec["orders"]:
+        by_sym.setdefault(o["symbol"], []).append(o)
+    for fr in j.read("finalize_ids"):
+        if fr.get("asof") == "2026-07-10":
+            for o in fr.get("orders", ()):
+                by_sym.setdefault(o["symbol"], []).append(o)
+
+    fills = {1: 0.0, 2: 0.05}  # maker expired unfilled; crossing filled fully
+    executed = sum(fills[o["orderId"]] * (1 if o["qty"] > 0 else -1)
+                   for o in by_sym["TTWOUSDT"])
+    assert abs(0.05 - executed) < 1e-12  # remainder == 0 -> no re-cross
+

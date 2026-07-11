@@ -892,6 +892,7 @@ def cmd_finalize(args: argparse.Namespace) -> None:
         live_f = fetch_live_filters()
         failed = 0
         skipped_blind = 0
+        crossings: list[dict] = []
         # v2 remainder accounting (audit P1-4, PAPER.md §12.6): exact fills via our own
         # journaled orderIds — an unfilled RESIZE maker is crossed too, not only the
         # opens-from-flat the v1 zero-share heuristic could see. v1 remains the fallback for
@@ -906,6 +907,14 @@ def cmd_finalize(args: argparse.Namespace) -> None:
             for o in sub_rec["orders"]:
                 if o.get("orderId") is not None:
                     by_sym.setdefault(o["symbol"], []).append(o)
+            # RERUN IDEMPOTENCY (prod live catch 2026-07-11): prior finalize passes journaled
+            # their OWN crossing orderIds (finalize_ids) — count those fills too, or a rerun
+            # (manual or OnFailure-retry) re-crosses every already-filled remainder.
+            for fr in j.read("finalize_ids"):
+                if fr.get("asof") == orders["asof"]:
+                    for o in fr.get("orders", ()):
+                        if o.get("orderId") is not None:
+                            by_sym.setdefault(o["symbol"], []).append(o)
         for it in orders["intents"]:
             want = float(it["qty"])
             if use_ids:
@@ -939,21 +948,31 @@ def cmd_finalize(args: argparse.Namespace) -> None:
                     if remainder == 0.0:
                         continue
                 try:
-                    submit_intent(OrderIntent(
+                    cross_resp = submit_intent(OrderIntent(
                         symbol=it["symbol"], qty=remainder, tactic="MARKET",
                         ref_price=it["ref_price"], slice_idx=0, n_slices=1,
                         reduce_only=bool(it.get("reduce_only", False)),
                         qty_str=fmt_step(abs(remainder), lf[1]) if lf else ""))
+                    crossings.append({"symbol": it["symbol"],
+                                      "orderId": cross_resp.get("orderId"),
+                                      "qty": remainder})
                     crossed += 1
                 except GatewayError as e:
                     failed += 1
                     j.append("order_error", orders["asof"], symbol=it["symbol"],
                              error=f"finalize: {str(e)[:280]}")
                     print(f"[finalize:{spec.name}] {it['symbol']} FAILED (isolated): {e}")
+        if crossings:
+            j.append("finalize_ids", orders["asof"], orders=crossings)
         j.append("finalized", orders["asof"], crossed=crossed, failed=failed,
                  skipped_blind=skipped_blind, mode="ids" if use_ids else "v1")
         print(f"[finalize:{spec.name}] crossed {crossed} remainders ({failed} failed, "
               f"{skipped_blind} skipped-blind; mode={'ids' if use_ids else 'v1'})")
+        if failed or skipped_blind:
+            # fail LOUD so OnFailure alert+retry fire — reruns are idempotent now (finalize_ids)
+            raise SystemExit(
+                f"[finalize:{spec.name}] {failed} failed / {skipped_blind} blind — rerun is "
+                f"safe and crosses only true remainders")
 
 
 def cmd_recon(args: argparse.Namespace) -> None:
