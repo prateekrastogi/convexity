@@ -15,12 +15,14 @@ import time
 
 from convexity.paper.fleetconfig import (
     AUTHED_CALL_MIN_INTERVAL_S,
+    ORDER_CALL_MIN_INTERVAL_S,
     PUBLIC_CALL_MIN_INTERVAL_S,
 )
 
-_LOCKS = {"authed": threading.Lock(), "public": threading.Lock()}
-_LAST = {"authed": 0.0, "public": 0.0}
-_INTERVAL = {"authed": AUTHED_CALL_MIN_INTERVAL_S, "public": PUBLIC_CALL_MIN_INTERVAL_S}
+_LOCKS = {"authed": threading.Lock(), "public": threading.Lock(), "order": threading.Lock()}
+_LAST = {"authed": 0.0, "public": 0.0, "order": 0.0}
+_INTERVAL = {"authed": AUTHED_CALL_MIN_INTERVAL_S, "public": PUBLIC_CALL_MIN_INTERVAL_S,
+             "order": ORDER_CALL_MIN_INTERVAL_S}
 
 
 def pace(kind: str = "authed") -> None:

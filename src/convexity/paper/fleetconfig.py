@@ -64,3 +64,7 @@ ACCOUNT_LOCK_TIMEOUT_S = 300.0
 # --- Shared API pacing (PAPER.md §12.2) ------------------------------------------
 AUTHED_CALL_MIN_INTERVAL_S = 0.12
 PUBLIC_CALL_MIN_INTERVAL_S = 0.06
+# ORDER placements have their OWN venue cap, discovered live at prod cutover 2026-07-11:
+# -1015 "Too many new orders; current limit is 20 orders per TEN_SECONDS" (account tier).
+# 0.55s floor => <=18 orders / 10s, inside the cap with margin; demo tolerates it trivially.
+ORDER_CALL_MIN_INTERVAL_S = 0.55

@@ -154,7 +154,12 @@ def submit_intent(intent: OrderIntent) -> dict:
 
     from convexity.paper.manual import OUR_ORDER_PREFIX
 
+    from convexity.paper.ratelimit import pace
+
     _client, api, _clock = _build_api()
+    # order-placement cap (PAPER.md §12.6, prod -1015 live catch 2026-07-11): orders pace on
+    # their OWN class (20/10s account cap) on top of the general authed floor in _run
+    pace("order")
     side = BinanceOrderSide.BUY if intent.qty > 0 else BinanceOrderSide.SELL
     # fleet stamp (PAPER.md §12.5): everything the gateway submits carries this prefix, so any
     # fill WITHOUT it is the operator's manual order by construction (auto-reserve attribution)
