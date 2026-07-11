@@ -42,7 +42,10 @@ EQUITY_FLAGS_PATH = "data/universe/equity_flags.json"
 # caps accidental over-leverage at 3x NAV. crypto/commodity: not set by this program (venue
 # default stands; observed dial journaled at equity boot for fleet visibility — normalizing them
 # is an owner cutover option, not an autonomous change).
-LEVERAGE_DIAL: dict[str, int] = {"equity": 3}
+LEVERAGE_DIAL: dict[str, int] = {"equity": 3, "crypto": 5, "commodity": 5}
+# crypto/commodity normalized from the 20x venue default (owner decision 2026-07-11):
+# the dial is a hard venue-side cap, defense-in-depth over software sizing; 5x >> any
+# realistic book gross (~2x) and RAISES per-tier max position (the -2027 class shrinks).
 
 # --- Cross-margin software guardrails (PAPER.md §12.2) --------------------------
 # Account maintenance-margin-ratio thresholds. Justification: equity book worst historical day
