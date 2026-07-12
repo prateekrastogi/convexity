@@ -1,0 +1,23 @@
+/home/speculation/convexity/.venv/lib/python3.12/site-packages/pandas/core/arraylike.py:402: RuntimeWarning: invalid value encountered in log
+  result = getattr(ufunc, method)(*inputs, **kwargs)
+/home/speculation/convexity/research/entry_exit/study/p7_pipeline.py:87: RuntimeWarning: Mean of empty slice
+  z = np.nanmean(np.column_stack([rv.roll_z(s, w) for w in rv.ZWINS]), axis=1)
+/home/speculation/convexity/research/entry_exit/study/rv_pipeline.py:106: RuntimeWarning: divide by zero encountered in divide
+  sc = np.where(np.isfinite(tv) & (tv > 0), 1.0 / tv, 0.0)
+S0 repro: 0.732 dd 18.5 (expect 0.732/18.5)
+WF k1: Sh=0.505 dd=32.1 cagr=6.47 relDD=-0.74 relCAGR=0.27 cpcv=0.79 -> accepted=False
+WF k2: Sh=0.575 dd=21.5 cagr=6.71 relDD=-0.16 relCAGR=0.25 cpcv=0.96 -> accepted=False
+WF k3: Sh=0.72 dd=14.8 cagr=4.8 relDD=0.20 relCAGR=0.46 cpcv=1.0 -> accepted=False
+WF k4: Sh=0.683 dd=17.5 cagr=7.15 relDD=0.05 relCAGR=0.20 cpcv=1.0 -> accepted=False
+WF k5: Sh=0.682 dd=19.6 cagr=6.85 relDD=-0.06 relCAGR=0.23 cpcv=1.0 -> accepted=False
+WF k6: Sh=0.741 dd=17.1 cagr=8.37 relDD=0.08 relCAGR=0.06 cpcv=0.96 -> accepted=False
+/home/speculation/convexity/research/entry_exit/study/rv_pipeline.py:106: RuntimeWarning: divide by zero encountered in divide
+  sc = np.where(np.isfinite(tv) & (tv > 0), 1.0 / tv, 0.0)
+WF k7: Sh=0.634 dd=17.4 cagr=7.43 relDD=0.06 relCAGR=0.17 cpcv=1.0 -> accepted=False
+/home/speculation/convexity/research/entry_exit/study/p7_pipeline.py:87: RuntimeWarning: Mean of empty slice
+  z = np.nanmean(np.column_stack([rv.roll_z(s, w) for w in rv.ZWINS]), axis=1)
+FINAL: {'sharpe_ann': 0.732, 'cagr_pct': 8.9, 'maxdd_pct': 18.5, 'drop5_sharpe': 0.566, 'cpcv_frac_pos': 1.0} DSR= 0.7507
+GATES: {'sharpe_ge_0.70': True, 'ratio_at_dd25_ge_0.60': False, 'cpcv_ge_0.90': True, 'drop5_pos': True, 'rt24_ge_0.45': True, 'dsr_ge_0.80': False, 'pbo_le_0.35': False}
+at DD~25 sizing: {'point': {'k': 1.25, 'cagr_pct': 10.96, 'maxdd_pct': 22.9, 'sharpe_ann': 0.732}, 'ratio': 0.479}
+PBO: 0.6
+P7 DONE -> /home/speculation/convexity/research/entry_exit/study/results_p7.json
