@@ -1,0 +1,43 @@
+/home/speculation/convexity/.venv/lib/python3.12/site-packages/pandas/core/arraylike.py:402: RuntimeWarning: invalid value encountered in log
+  result = getattr(ufunc, method)(*inputs, **kwargs)
+/home/speculation/convexity/research/entry_exit/study/p5_pipeline.py:58: RuntimeWarning: Mean of empty slice
+  z = np.nanmean(np.column_stack([rv.roll_z(s, w) for w in rv.ZWINS]), axis=1)
+/home/speculation/convexity/research/entry_exit/study/rv_pipeline.py:106: RuntimeWarning: divide by zero encountered in divide
+  sc = np.where(np.isfinite(tv) & (tv > 0), 1.0 / tv, 0.0)
+S0 repro: 0.732 dd 18.5 (RV report: 0.732 / 18.5)
+/home/speculation/convexity/research/entry_exit/study/p5_pipeline.py:58: RuntimeWarning: Mean of empty slice
+  z = np.nanmean(np.column_stack([rv.roll_z(s, w) for w in rv.ZWINS]), axis=1)
+solo HG-CL: Sh=0.074 DD=58.1
+solo HG-PL: Sh=0.709 DD=32.8
+solo GC-HG: Sh=0.112 DD=35.2
+/home/speculation/convexity/research/entry_exit/study/rv_pipeline.py:106: RuntimeWarning: divide by zero encountered in divide
+  sc = np.where(np.isfinite(tv) & (tv > 0), 1.0 / tv, 0.0)
+U1: Sh=0.732 dd=18.5 dr5=0.556 -> accepted=False
+/home/speculation/convexity/research/entry_exit/study/p5_pipeline.py:58: RuntimeWarning: Mean of empty slice
+  z = np.nanmean(np.column_stack([rv.roll_z(s, w) for w in rv.ZWINS]), axis=1)
+/home/speculation/convexity/research/entry_exit/study/rv_pipeline.py:106: RuntimeWarning: divide by zero encountered in divide
+  sc = np.where(np.isfinite(tv) & (tv > 0), 1.0 / tv, 0.0)
+WF b1: Sh=0.655 dd=14.8 cagr=6.13 relDD=0.20 relCAGR=0.31 cpcv=1.0 -> accepted=False
+/home/speculation/convexity/research/entry_exit/study/p5_pipeline.py:58: RuntimeWarning: Mean of empty slice
+  z = np.nanmean(np.column_stack([rv.roll_z(s, w) for w in rv.ZWINS]), axis=1)
+/home/speculation/convexity/research/entry_exit/study/rv_pipeline.py:106: RuntimeWarning: divide by zero encountered in divide
+  sc = np.where(np.isfinite(tv) & (tv > 0), 1.0 / tv, 0.0)
+WF b2: Sh=0.726 dd=15.5 cagr=7.8 relDD=0.16 relCAGR=0.12 cpcv=1.0 -> accepted=False
+/home/speculation/convexity/research/entry_exit/study/p5_pipeline.py:58: RuntimeWarning: Mean of empty slice
+  z = np.nanmean(np.column_stack([rv.roll_z(s, w) for w in rv.ZWINS]), axis=1)
+/home/speculation/convexity/research/entry_exit/study/rv_pipeline.py:106: RuntimeWarning: divide by zero encountered in divide
+  sc = np.where(np.isfinite(tv) & (tv > 0), 1.0 / tv, 0.0)
+WF b3: Sh=0.746 dd=18.5 cagr=9.1 relDD=0.00 relCAGR=-0.02 cpcv=1.0 -> accepted=False
+/home/speculation/convexity/research/entry_exit/study/p5_pipeline.py:58: RuntimeWarning: Mean of empty slice
+  z = np.nanmean(np.column_stack([rv.roll_z(s, w) for w in rv.ZWINS]), axis=1)
+/home/speculation/convexity/research/entry_exit/study/rv_pipeline.py:106: RuntimeWarning: divide by zero encountered in divide
+  sc = np.where(np.isfinite(tv) & (tv > 0), 1.0 / tv, 0.0)
+FINAL: {'sharpe_ann': 0.732, 'cagr_pct': 8.9, 'maxdd_pct': 18.5, 'drop5_sharpe': 0.566, 'cpcv_frac_pos': 1.0} DSR= 0.8117
+/home/speculation/convexity/research/entry_exit/study/p5_pipeline.py:58: RuntimeWarning: Mean of empty slice
+  z = np.nanmean(np.column_stack([rv.roll_z(s, w) for w in rv.ZWINS]), axis=1)
+/home/speculation/convexity/research/entry_exit/study/rv_pipeline.py:106: RuntimeWarning: divide by zero encountered in divide
+  sc = np.where(np.isfinite(tv) & (tv > 0), 1.0 / tv, 0.0)
+GATES: {'sharpe_ge_0.75': False, 'cpcv': True, 'dsr_ge_0.9': False, 'pbo_le_0.25': False, 'drop5_pos': True, 'rt24_ge_0.5': True, 'ratio_ge_0.8': False}
+FRONTIER 1:1 point: {'k': 0.5, 'cagr_pct': 4.57, 'maxdd_pct': 9.5, 'sharpe_ann': 0.732} kelly: {'full': 5.74, 'half': 2.87, 'quarter': 1.43}
+PBO: 0.629
+P5 DONE -> /home/speculation/convexity/research/entry_exit/study/results_p5.json
