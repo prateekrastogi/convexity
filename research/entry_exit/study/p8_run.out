@@ -1,0 +1,13 @@
+/home/speculation/convexity/research/entry_exit/study/p8_pipeline.py:42: Pandas4Warning: Sorting by default when concatenating all DatetimeIndex is deprecated.  In the future, pandas will respect the default of `sort=False`. Specify `sort=True` or `sort=False` to silence this message. If you see this warnings when not directly calling concat, report a bug to pandas.
+  CLO = pd.concat({s: weekly_close(s) for s in SYMS}, axis=1)
+/home/speculation/convexity/research/entry_exit/study/p8_pipeline.py:88: RuntimeWarning: Mean of empty slice
+  z = np.nanmean(np.column_stack([rv.roll_z(s, w) for w in zw]), axis=1)
+XLE-CL: Sh=0.217 DD=25.4 CAGR=2.04 dr5=-0.223 cpcv=0.77 | ungated Sh=0.34
+MSTR-BTC: Sh=-0.181 DD=68.3 CAGR=-4.5 dr5=-0.444 cpcv=0.28 | ungated Sh=-0.367
+/home/speculation/convexity/research/entry_exit/study/p8_pipeline.py:106: RuntimeWarning: divide by zero encountered in divide
+  sc = np.where(np.isfinite(tv) & (tv > 0), 1.0 / tv, 0.0)
+BOOK: {'sharpe_ann': 0.041, 'cagr_pct': -0.58, 'maxdd_pct': 44.6, 'drop5_sharpe': -0.314, 'cpcv_frac_pos': 0.32, 'sharpe_rt24': -0.057} DSR= 0.1253
+CANARY (must be hugely positive): {'sharpe_ann': -2.221, 'cagr_pct': -31.8}
+GATES: {'book_sharpe_ge_0.60': False, 'cpcv_ge_0.75': False, 'drop5_pos': False, 'rt24_ge_0.40': False, 'dsr_ge_0.70': False, 'pbo_le_0.35': False, 'solo_dd_le_60': False, 'canary_huge': False}
+PBO: 0.371
+P8 DONE -> /home/speculation/convexity/research/entry_exit/study/results_p8.json
