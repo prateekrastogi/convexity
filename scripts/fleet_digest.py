@@ -38,9 +38,9 @@ def book_line(name, spec, snap):
     pnl = eq + upnl - a_amt - folded
     base = a_amt + folded
     wk = float(settles[-1]["r_twr"]) if settles else None
-    wk_s = f"{wk * 100:+.1f}%" if wk is not None else "n/a"
+    wk_s = f"{wk * 100:+.2f}%" if wk is not None else "n/a"
     short = {"crypto": "cry", "commodity": "com", "equity": "eqt"}.get(name, name[:3])
-    return (f" {short} {eq + upnl:8.2f} {pnl:+6.1f} {pnl / base * 100:+5.2f}% {wk_s:>5}"), pnl
+    return (f" {short}  {eq + upnl:9.2f}  {pnl:+7.1f}  {pnl / base * 100:+6.2f}%  {wk_s:>6}"), pnl
 
 
 def main() -> None:
@@ -54,15 +54,15 @@ def main() -> None:
             lines.append(f"-- {venue.upper()}: snapshot failed: {str(e)[:80]}")
             continue
         tot = 0.0
-        lines.append(f"{venue.upper()} {snap.equity:.2f} | "
-                     f"maint {snap.maint_margin / max(snap.equity, 1e-9) * 100:.1f}% | "
+        lines.append(f"{venue.upper()}  {snap.equity:.2f} | "
+                     f"margin {snap.maint_margin / max(snap.equity, 1e-9) * 100:.1f}% | "
                      f"{len(snap.positions)} pos")
-        lines.append(" bk        eq   P&L      %  week")
+        lines.append(" bk         eq     P&L        %    week")
         for name, spec in BOOKS.items():
             line, pnl = book_line(name, spec, snap)
             lines.append(line)
             tot += pnl or 0.0
-        lines.append(f" TOT          {tot:+7.1f}")
+        lines.append(f" TOT             {tot:+7.1f}")
     text = "\n".join(lines)
     print(text)
 
