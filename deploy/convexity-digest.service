@@ -1,0 +1,11 @@
+# Weekly fleet performance digest -> Telegram (PAPER.md §12.6). Read-only + one message.
+[Unit]
+Description=convexity weekly performance digest
+OnFailure=convexity-alert@%n.service
+[Service]
+Type=oneshot
+User=ubuntu
+WorkingDirectory=/home/speculation/convexity
+EnvironmentFile=/home/speculation/convexity/.env
+Environment=PYTHONPATH=/home/speculation/convexity
+ExecStart=/home/speculation/convexity/.venv/bin/python scripts/fleet_digest.py
