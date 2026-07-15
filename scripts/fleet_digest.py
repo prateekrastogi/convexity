@@ -38,15 +38,14 @@ def book_line(name, spec, snap):
     pnl = eq + upnl - a_amt - folded
     base = a_amt + folded
     wk = float(settles[-1]["r_twr"]) if settles else None
-    wk_s = f"{wk:+.2%}" if wk is not None else "  n/a "
-    return (f"{name:>9} {pnl:+9.2f} {pnl / base * 100:+6.2f}%  wk:{wk_s}  "
-            f"eq {eq + upnl:9.2f}"), pnl
+    wk_s = f"{wk * 100:+.1f}%" if wk is not None else " n/a"
+    short = {"crypto": "cry", "commodity": "com", "equity": "eqt"}.get(name, name[:3])
+    return f" {short} {pnl:+8.2f} {pnl / base * 100:+6.2f}% wk{wk_s}", pnl
 
 
 def main() -> None:
     now = dt.datetime.now(dt.timezone.utc)
-    lines = [f"convexity weekly digest — {now:%Y-%m-%d %H:%M} UTC",
-             f"{'book':>9} {'liveP&L':>9} {'%':>7}  {'last wk':>9}  {'mark+uPnL':>10}"]
+    lines = [f"convexity — {now:%Y-%m-%d}"]
     for venue in ("demo", "prod"):
         os.environ["CONVEXITY_VENUE"] = venue
         try:
@@ -55,14 +54,14 @@ def main() -> None:
             lines.append(f"-- {venue.upper()}: snapshot failed: {str(e)[:80]}")
             continue
         tot = 0.0
-        lines.append(f"-- {venue.upper()} -- account {snap.equity:.2f} | maint "
-                     f"{snap.maint_margin / max(snap.equity, 1e-9):.2%} | "
-                     f"{len(snap.positions)} pos")
+        lines.append(f"{venue.upper():<4} {snap.equity:8.2f} | "
+                     f"m{snap.maint_margin / max(snap.equity, 1e-9) * 100:.1f}% | "
+                     f"{len(snap.positions)}p")
         for name, spec in BOOKS.items():
             line, pnl = book_line(name, spec, snap)
             lines.append(line)
             tot += pnl or 0.0
-        lines.append(f"{'TOTAL':>9} {tot:+9.2f}")
+        lines.append(f" TOT {tot:+8.2f}")
     text = "\n".join(lines)
     print(text)
 
