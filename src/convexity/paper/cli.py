@@ -115,7 +115,10 @@ def _load_panel(spec: BookSpec, topup: bool) -> Panel:
     panel = build_panel(syms)
     if panel.n_days == 0:
         raise SystemExit(f"[{spec.name}] empty panel — is the lake present under data/?")
-    if spec.name == "commodity":
+    if spec.name in ("commodity", "equity"):
+        # equity added 2026-07-15 (live catch): venue funding on the equity book runs ~5bp/wk
+        # of notional (~2%/yr at current leverage) — real cost the synthetic-underlying panel
+        # (funding=0) was silently omitting from the model settle (PAPER.md §12.1 note).
         panel = _overlay_native_funding(panel)
     if topup:
         last_ms = int(panel.dates[-1].value // 1_000_000)
