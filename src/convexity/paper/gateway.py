@@ -67,6 +67,26 @@ def _build_api():
     return client, api, clock
 
 
+def _run_read(make_coro, attempts: int = 4, backoff: float = 2.0):
+    """Retry wrapper for READ-ONLY (GET) venue calls — live catch 2026-07-27: demo-fapi
+    returned nginx 502 across a >40min window and failed three daily recons.
+
+    ONLY safe for reads. Order submission is NEVER retried here: a re-sent POST whose first
+    attempt actually landed would double-fill. ``make_coro`` is a factory because a coroutine
+    can only be awaited once."""
+    import time as _t
+
+    last = None
+    for i in range(attempts):
+        try:
+            return _run(make_coro())
+        except GatewayError as e:
+            last = e
+            if i < attempts - 1:
+                _t.sleep(backoff * (2 ** i))
+    raise last
+
+
 def _run(coro):
     from convexity.paper.ratelimit import pace
 
@@ -117,7 +137,7 @@ def account_snapshot() -> AccountSnapshot:
                                initial_margin=float(
                                    getattr(info, "totalInitialMargin", 0.0) or 0.0))
 
-    return _run(go())
+    return _run_read(go)
 
 
 def set_leverage(symbol: str, leverage: int) -> dict:
@@ -228,7 +248,7 @@ def fetch_recent_orders(symbol: str, start_ms: int) -> list[dict]:
             cursor = int(batch[-1]["orderId"]) + 1
         return out
 
-    return _run(go())
+    return _run_read(go)
 
 
 def fetch_order(symbol: str, order_id: int) -> dict:
@@ -251,7 +271,7 @@ def fetch_order(symbol: str, order_id: int) -> dict:
         body = resp.body if hasattr(resp, "body") else resp
         return _json.loads(body)
 
-    return _run(go())
+    return _run_read(go)
 
 
 def sign_tradfi_agreement() -> str:
@@ -298,4 +318,4 @@ def account_assets() -> dict[str, float]:
                 out[str(a.asset)] = bal
         return out
 
-    return _run(go())
+    return _run_read(go)

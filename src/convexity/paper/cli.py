@@ -997,8 +997,25 @@ def cmd_recon(args: argparse.Namespace) -> None:
         if _check_kill(spec, j, live=True):
             return
         _journal_venue(j, "recon")
-        _manual_autosync(j, spec, "recon")
-        positions, upnl, acct_eq, assets, unowned, manual_notes = _venue_book_state(domain)
+        # Recon is READ-ONLY observability: a transient venue outage is not actionable at
+        # 00:25 UTC and must not page (live catch 2026-07-27: demo-fapi 502 -> 3 alerts for
+        # one Binance-side blip). Reads already retry (gateway._run_read); if they still fail
+        # we journal and exit 0 — UNLESS the previous recon failed the same way, which means
+        # persistent unreachability and DOES page. Trading sessions stay fail-closed.
+        from convexity.paper.gateway import GatewayError as _GwErr
+        try:
+            _manual_autosync(j, spec, "recon")
+            positions, upnl, acct_eq, assets, unowned, manual_notes = _venue_book_state(domain)
+        except _GwErr as e:
+            import time as _t
+            prev = j.last("venue_unreachable")
+            j.append("venue_unreachable", "recon", error=str(e)[:200])
+            recent = prev is not None and (_t.time() * 1000 - int(prev["ts"])) < 36 * 3600 * 1000
+            msg = f"[recon:{spec.name}] venue unreachable: {str(e)[:160]}"
+            if recent:
+                raise SystemExit(msg + " — SECOND consecutive failure, escalating (alert fires)")
+            print(msg + " — transient, skipping this recon (no page; next run retries)")
+            return
         if manual_notes:
             j.append("manual_reserve", "recon", notes=manual_notes)
             for note in manual_notes:
