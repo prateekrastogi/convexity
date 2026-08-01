@@ -425,10 +425,20 @@ def _equity_targets(panel: Panel, d: int, j: Journal, *, live: bool = False):
 
     # The book's own equity chain for the brake: settled marks in journal order, then the latest
     # live recon context (model equity + venue unrealized) as the freshest observation.
-    chain = [float(r["equity"]) for r in j.read("equity_mark")]
+    # FLOW-NEUTRAL by construction (live catch 2026-08-01): the brake must measure PERFORMANCE
+    # drawdown, never capital movements. Raw equity_mark values include deposits/withdrawals, so
+    # the demo book's journaled -51% withdrawal (2026-07-11) read as a 51.4% drawdown, pinned
+    # m_brake to 0 and flattened the book for two cycles while true performance DD was 0.0%.
+    # Compounding the settles' TWR returns is immune to flows and matches the backtest, whose
+    # equity curve is a pure return series with no flows at all (Invariant EQUITY-PARITY).
+    chain = [1.0]
+    for r in j.read("settle"):
+        chain.append(chain[-1] * (1.0 + float(r["r_twr"])))
     br = j.last("book_recon")
     if br is not None:
-        chain.append(float(br["book_equity"]) + float(br.get("unrealized_book", 0.0)))
+        be = float(br["book_equity"])
+        if be > 0:  # freshest intra-week observation, as a RETURN on the index
+            chain.append(chain[-1] * (1.0 + float(br.get("unrealized_book", 0.0)) / be))
     dec = live_decision(closes, np.asarray(chain, dtype=float), flagged=_equity_flags())
 
     by_sym = dict(zip(dec["symbols"], dec["w_unit"], strict=True))
@@ -761,6 +771,11 @@ def _submit_live(j: Journal, spec: BookSpec, d_iso: str, intents: list[OrderInte
     #     — the candidates.md snapshot drifts and draws -4014.
     book = fetch_book_tickers()
     live_f = fetch_live_filters()
+    # venue status gate (live catch 2026-08-01: NFPUSDT went SETTLING -> -4140 every cycle).
+    # Applies to EVERY book at the single execution choke point. reduce_only intents pass
+    # through: a delisting symbol can still be CLOSED, and stranding a position would be worse.
+    from convexity.paper.topup import fetch_execution_venue_tradeable
+    tradeable = fetch_execution_venue_tradeable()
     ok = failed = 0
     submitted: list[dict] = []
     import httpx as _httpx
@@ -768,6 +783,12 @@ def _submit_live(j: Journal, spec: BookSpec, d_iso: str, intents: list[OrderInte
     from convexity.paper.venue import execution_base
 
     for it in intents:
+        if it.symbol not in tradeable and not it.reduce_only:
+            j.append("order_skip", d_iso, symbol=it.symbol,
+                     reason="symbol not TRADING on the execution venue (delisting/settlement) "
+                            "— opens blocked, closes still allowed")
+            print(f"[live:{spec.name}] {it.symbol} SKIPPED: not TRADING on venue")
+            continue
         live_it = it
         # refresh THIS symbol's quote at submission time — the batch snapshot goes stale
         # over a ~60s sequential loop and stale pegs draw -5022 (learned 2026-07-03).
@@ -918,8 +939,15 @@ def cmd_finalize(args: argparse.Namespace) -> None:
                     for o in fr.get("orders", ()):
                         if o.get("orderId") is not None:
                             by_sym.setdefault(o["symbol"], []).append(o)
+        from convexity.paper.topup import fetch_execution_venue_tradeable
+        _tradeable = fetch_execution_venue_tradeable()
         for it in orders["intents"]:
             want = float(it["qty"])
+            if it["symbol"] not in _tradeable and not bool(it.get("reduce_only", False)):
+                j.append("order_skip", orders["asof"], symbol=it["symbol"],
+                         reason="not TRADING on venue — finalize open skipped (not a failure)")
+                print(f"[finalize:{spec.name}] {it['symbol']} SKIPPED: not TRADING on venue")
+                continue
             if use_ids:
                 try:
                     executed = 0.0
