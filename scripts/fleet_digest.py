@@ -104,9 +104,14 @@ def main() -> None:
             cov = [r.get("coverage_pct") for _, r in tcas if r.get("coverage_pct") is not None]
             sf = [r.get("shortfall_bp") for _, r in tcas if r.get("shortfall_bp") is not None]
             mk = [r.get("maker_pct") for _, r in tcas if r.get("maker_pct") is not None]
+            # demo is Binance's SIMULATOR: it reported 0% maker on 1476 USDT of fills while
+            # prod reported 97-100% through the identical code path (2026-08-06). Its fill
+            # classification and prices are synthetic, so tag them — coverage is still real
+            # (it comes from our own positions vs targets, not from venue fill reporting).
+            sim = " (sim)" if venue == "demo" else ""
             lines.append(f" exec cov {min(cov):.0f}-{max(cov):.0f}% | maker "
                          f"{min(mk):.0f}-{max(mk):.0f}% | shortfall "
-                         f"{min(sf):+.0f}..{max(sf):+.0f}bp")
+                         f"{min(sf):+.0f}..{max(sf):+.0f}bp{sim}")
         # PENDING flows (journaled, not yet folded by a settle) already sit in the venue
         # balance while absent from every nav mark — without this the drift line reads as a
         # huge loss for a week after any deposit (caught 2026-08-06 after the +479).
