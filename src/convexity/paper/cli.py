@@ -1185,6 +1185,81 @@ def cmd_reprice(args: argparse.Namespace) -> None:
               f"({n_done} already complete, {n_skip} skipped, {n_fail} failed)")
 
 
+def cmd_tca(args: argparse.Namespace) -> None:
+    """Post-cycle execution audit (PAPER.md §12.7). Journals, for the last live cycle:
+
+      shortfall_bp — notional-weighted implementation shortfall of REAL fills vs the MODEL's own
+                     reference price (the panel close in orders[].ref_price, pre-peg). Positive
+                     = we did worse than the model assumed. Measured 2026-08-06 over 12 cycles:
+                     +0.0 bp, i.e. two-sided noise, NOT a systematic basis.
+      maker_pct    — fill-weighted maker share (the honest one; order counts flatter it).
+      coverage_pct — held notional / target notional. THIS is what actually drives model-vs-venue
+                     drift: prod holds only the min-notional-clearing subset of each book.
+
+    Read-only against the venue; one journal record. Run after the finalize window."""
+    spec = _book(args)
+    j = _journal(spec)
+    orders = j.last("orders")
+    if orders is None or orders.get("mode") != "live":
+        print(f"[tca:{spec.name}] no live cycle to audit")
+        return
+    if not args.live:
+        print(f"[tca:{spec.name}] dry-run: would audit {orders['asof']}")
+        return
+    from convexity.paper.gateway import GatewayError, account_snapshot, fetch_user_trades
+    from convexity.paper.topup import fetch_ticker_prices
+
+    t0 = int(orders["ts"]) - 60_000
+    t1 = t0 + 8 * 3600_000
+    refs = {it["symbol"]: (float(it["ref_price"]), float(it["qty"]))
+            for it in orders["intents"] if float(it["ref_price"]) > 0}
+    notl = cost = fills = maker = 0.0
+    worst: list[list] = []
+    for sym, (rp, _q) in refs.items():
+        try:
+            tr = fetch_user_trades(sym, t0, t1)
+        except GatewayError:
+            continue
+        s_notl = s_cost = 0.0
+        for t in tr:
+            px, q = float(t["price"]), abs(float(t["qty"]))
+            sgn = 1.0 if t["side"] == "BUY" else -1.0
+            s_cost += sgn * (px - rp) * q
+            s_notl += px * q
+            fills += 1
+            maker += 1 if t.get("maker") else 0
+        notl += s_notl
+        cost += s_cost
+        if s_notl > 0:
+            worst.append([sym, round(s_cost / s_notl * 1e4, 1)])
+    # coverage: held vs target notional at current prices
+    try:
+        px_now = fetch_ticker_prices()
+        snap = account_snapshot()
+        dom = book_domain(spec)
+        # TARGET notional is the whole book (weights x g_t x nav), NOT just this week's
+        # trades — comparing against traded notional gave a nonsense >100% reading.
+        trec = j.last("targets")
+        tgt = 0.0
+        if trec is not None:
+            g, nav = float(trec.get("g_t", 1.0)), float(trec.get("nav", 0.0))
+            tgt = sum(abs(float(w)) for w in trec["weights"]) * g * nav
+        held = sum(abs(q) * float(px_now.get(s, 0.0))
+                   for s, q in snap.positions.items() if s in dom)
+        cov = held / tgt * 100 if tgt > 0 else 0.0
+    except GatewayError:
+        cov = float("nan")
+    worst.sort(key=lambda x: -abs(x[1]))
+    rec = {"shortfall_bp": round(cost / notl * 1e4, 2) if notl > 0 else None,
+           "shortfall_usdt": round(cost, 4), "traded_notional": round(notl, 2),
+           "n_fills": int(fills), "maker_pct": round(maker / fills * 100, 1) if fills else None,
+           "coverage_pct": round(cov, 1), "worst_symbols": worst[:5]}
+    j.append("tca", orders["asof"], **rec)
+    print(f"[tca:{spec.name}] {orders['asof']}: shortfall {rec['shortfall_bp']} bp on "
+          f"{rec['traded_notional']} traded | maker {rec['maker_pct']}% | "
+          f"coverage {rec['coverage_pct']}% | worst {rec['worst_symbols'][:3]}")
+
+
 def cmd_recon(args: argparse.Namespace) -> None:
     spec = _book(args)
     j = _journal(spec)
@@ -1450,6 +1525,10 @@ def main() -> None:
     add_book(f)
     f.add_argument("--live", action="store_true")
     f.set_defaults(fn=cmd_finalize)
+    tc = sub.add_parser("tca")
+    add_book(tc)
+    tc.add_argument("--live", action="store_true")
+    tc.set_defaults(fn=cmd_tca)
     rp = sub.add_parser("reprice")
     add_book(rp)
     rp.add_argument("--live", action="store_true")

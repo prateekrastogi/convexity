@@ -95,11 +95,30 @@ def main() -> None:
             lines.append(f" {short} {nav:9.2f} {vpnl:+8.2f} {wk:>7}")
             t_nav += nav
             t_pnl += vpnl
-        flows = sum(sum(float(f["amount"]) for f in Journal(book_journal_path(s)).read("flow"))
-                    for s in BOOKS.values())
         lines.append(f" TOT {t_nav:9.2f} {t_pnl:+8.2f}")
-        lines.append(f" model drift {t_nav - (snap.equity - flows) - flows:+.1f}"
-                     if False else f" drift model-venue {t_nav - snap.equity:+.1f}")
+        # execution quality of the last cycle (PAPER.md §12.7): coverage is what drives
+        # model-vs-venue drift; shortfall/maker show whether execution is behaving.
+        tcas = [(n, Journal(book_journal_path(s)).last("tca")) for n, s in BOOKS.items()]
+        tcas = [(n, r) for n, r in tcas if r]
+        if tcas:
+            cov = [r.get("coverage_pct") for _, r in tcas if r.get("coverage_pct") is not None]
+            sf = [r.get("shortfall_bp") for _, r in tcas if r.get("shortfall_bp") is not None]
+            mk = [r.get("maker_pct") for _, r in tcas if r.get("maker_pct") is not None]
+            lines.append(f" exec cov {min(cov):.0f}-{max(cov):.0f}% | maker "
+                         f"{min(mk):.0f}-{max(mk):.0f}% | shortfall "
+                         f"{min(sf):+.0f}..{max(sf):+.0f}bp")
+        # PENDING flows (journaled, not yet folded by a settle) already sit in the venue
+        # balance while absent from every nav mark — without this the drift line reads as a
+        # huge loss for a week after any deposit (caught 2026-08-06 after the +479).
+        pending = 0.0
+        for s in BOOKS.values():
+            jj = Journal(book_journal_path(s))
+            st = jj.last("settle")
+            cut = st["asof"] if st else "0000-00-00"
+            pending += sum(float(f["amount"]) for f in jj.read("flow") if f["asof"] > cut)
+        drift = t_nav + pending - snap.equity
+        lines.append(f" drift model-venue {drift:+.1f}"
+                     + (f" ({pending:+.0f} pending fold)" if abs(pending) > 0.5 else ""))
     text = "\n".join(lines)
     print(text)
 

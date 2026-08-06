@@ -315,6 +315,27 @@ def fetch_order(symbol: str, order_id: int) -> dict:
     return _run_read(go)
 
 
+def fetch_user_trades(symbol: str, start_ms: int, end_ms: int) -> list[dict]:
+    """Our executed trades for ``symbol`` in a window (SIGNED ``/fapi/v1/userTrades``) — the TCA
+    surface: price, qty, commission, and the maker flag per fill."""
+    import json as _json
+
+    from nautilus_trader.core.nautilus_pyo3 import HttpMethod
+
+    client, _api, clock = _build_api()
+
+    async def go() -> list[dict]:
+        resp = await client.sign_request(
+            http_method=HttpMethod.GET, url_path="/fapi/v1/userTrades",
+            payload={"symbol": symbol, "startTime": str(int(start_ms)),
+                     "endTime": str(int(end_ms)), "limit": "1000",
+                     "timestamp": str(clock.timestamp_ms()), "recvWindow": "5000"})
+        body = resp.body if hasattr(resp, "body") else resp
+        return _json.loads(body)
+
+    return _run_read(go)
+
+
 def sign_tradfi_agreement() -> str:
     """Sign the venue's TradFi-Perps agreement for this account (one-time; PAPER.md §11.5).
 
