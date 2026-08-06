@@ -459,6 +459,69 @@ TARGETS_BY_BOOK = {"crypto": _crypto_targets, "commodity": _commodity_targets,
                    "equity": _equity_targets}
 
 
+def _our_order_ids(j: Journal, asof: str) -> dict[str, list[dict]]:
+    """Every order WE placed for this cycle, across ALL journaled batches: the rebalance's
+    submission_ids, each reprice pass's submission_ids, and finalize_ids crossings. Finalize
+    MUST aggregate all of them — reading only the last batch would under-count fills and
+    re-cross positions we already hold (PAPER.md §12.7)."""
+    by_sym: dict[str, list[dict]] = {}
+    for kind in ("submission_ids", "finalize_ids"):
+        for rec in j.read(kind):
+            if rec.get("asof") != asof:
+                continue
+            for o in rec.get("orders", ()):
+                if o.get("orderId") is not None:
+                    by_sym.setdefault(o["symbol"], []).append(o)
+    return by_sym
+
+
+def _executed_signed(by_sym: dict[str, list[dict]], symbol: str) -> float:
+    """Signed executed quantity for ``symbol`` across our orders (venue truth per orderId)."""
+    from convexity.paper.gateway import fetch_order
+
+    tot = 0.0
+    for o in by_sym.get(symbol, ()):
+        od = fetch_order(symbol, int(o["orderId"]))
+        ex = float(od.get("executedQty", 0.0) or 0.0)
+        tot += ex if float(o["qty"]) > 0 else -ex
+    return tot
+
+
+def _maker_peg(bid: float, ask: float, side: int) -> float:
+    """Post-only peg AT the passive touch — buy joins the best bid, sell the best ask.
+
+    Previously one tick INSIDE the touch (2026-07-03, to dodge -5022 during submit latency).
+    That forfeits queue priority and on thin TradFi books simply never fills: the fill-weighted
+    maker share measured 2026-08-06 was 7% (equity) and 0% (commodity), i.e. the books were
+    effectively taker-only and paid the full spread at finalize while the model assumes a
+    1-3bp half-spread. At the touch we sit IN the queue; GTX still refuses to cross, and a
+    -5022 rejection places nothing (the caller retries one tick inside)."""
+    return bid if side == 1 else ask
+
+
+def _submit_maker(j: Journal, spec: BookSpec, d_iso: str, it: OrderIntent, tick: float):
+    """Submit a post-only maker order; on -5022 (touch moved during latency) retry ONCE one
+    tick inside the touch. Returns the venue response or raises GatewayError."""
+    from convexity.execution.execution import quantize_price
+    from convexity.paper.gateway import GatewayError, submit_intent
+    from convexity.paper.policy import fmt_step
+
+    try:
+        return submit_intent(it)
+    except GatewayError as e:
+        if "5022" not in str(e) or it.tactic != "POST_ONLY_MAKER":
+            raise
+        side = 1 if it.qty > 0 else -1
+        back = it.ref_price - tick if side == 1 else it.ref_price + tick
+        ref = quantize_price(back, tick, side=side)
+        j.append("order_repeg", d_iso, symbol=it.symbol,
+                 reason=f"-5022 at touch {it.ref_price} -> retry one tick inside {ref}")
+        return submit_intent(OrderIntent(
+            symbol=it.symbol, qty=it.qty, tactic=it.tactic, ref_price=ref,
+            slice_idx=it.slice_idx, n_slices=it.n_slices, reduce_only=it.reduce_only,
+            qty_str=it.qty_str, price_str=fmt_step(ref, tick)))
+
+
 def _kill_path(spec: BookSpec) -> pathlib.Path:
     from convexity.paper.venue import state_root
 
@@ -812,11 +875,7 @@ def _submit_live(j: Journal, spec: BookSpec, d_iso: str, intents: list[OrderInte
                 print(f"[live:{spec.name}] {it.symbol} SKIPPED: degenerate book "
                       f"bid={bid} ask={ask}")
                 continue
-            # one tick INSIDE the passive touch: joining the exact best bid/ask still
-            # crosses when the market ticks through during submit latency (-5022 cluster,
-            # learned 2026-07-03); one tick of queue-priority sacrifice buys post-only safety.
-            peg = (bid - tick) if side == 1 else (ask + tick)
-            ref = quantize_price(peg, tick, side=side)
+            ref = quantize_price(_maker_peg(bid, ask, side), tick, side=side)
             qty = quantize_qty(it.qty, lot_size=lot, min_qty=min_qty)
             if qty == 0.0 or abs(qty) * ref < min_notional:
                 j.append("order_skip", d_iso, symbol=it.symbol,
@@ -828,7 +887,8 @@ def _submit_live(j: Journal, spec: BookSpec, d_iso: str, intents: list[OrderInte
                                   qty_str=fmt_step(abs(qty), lot),
                                   price_str=fmt_step(ref, tick))
         try:
-            resp = submit_intent(live_it)
+            resp = _submit_maker(j, spec, d_iso, live_it,
+                                 live_f[live_it.symbol][0] if live_it.symbol in live_f else 0.0)
             ok += 1
             submitted.append({"symbol": live_it.symbol, "orderId": resp.get("orderId"),
                               "clientOrderId": resp.get("clientOrderId"),
@@ -924,21 +984,10 @@ def cmd_finalize(args: argparse.Namespace) -> None:
         from convexity.paper.gateway import fetch_order
         from convexity.paper.manual import book_share_qty, load_reserve
         _reserve = load_reserve()
-        sub_rec = j.last("submission_ids")
-        use_ids = sub_rec is not None and sub_rec.get("asof") == orders["asof"]
-        by_sym: dict[str, list[dict]] = {}
-        if use_ids:
-            for o in sub_rec["orders"]:
-                if o.get("orderId") is not None:
-                    by_sym.setdefault(o["symbol"], []).append(o)
-            # RERUN IDEMPOTENCY (prod live catch 2026-07-11): prior finalize passes journaled
-            # their OWN crossing orderIds (finalize_ids) — count those fills too, or a rerun
-            # (manual or OnFailure-retry) re-crosses every already-filled remainder.
-            for fr in j.read("finalize_ids"):
-                if fr.get("asof") == orders["asof"]:
-                    for o in fr.get("orders", ()):
-                        if o.get("orderId") is not None:
-                            by_sym.setdefault(o["symbol"], []).append(o)
+        # ALL our batches for this cycle: rebalance submissions + every reprice pass +
+        # prior finalize crossings (rerun idempotency, prod catch 2026-07-11).
+        by_sym = _our_order_ids(j, orders["asof"])
+        use_ids = bool(by_sym)
         from convexity.paper.topup import fetch_execution_venue_tradeable
         _tradeable = fetch_execution_venue_tradeable()
         for it in orders["intents"]:
@@ -950,12 +999,7 @@ def cmd_finalize(args: argparse.Namespace) -> None:
                 continue
             if use_ids:
                 try:
-                    executed = 0.0
-                    for o in by_sym.get(it["symbol"], ()):
-                        od = fetch_order(it["symbol"], int(o["orderId"]))
-                        ex = float(od.get("executedQty", 0.0) or 0.0)
-                        executed += ex if float(o["qty"]) > 0 else -ex
-                    remainder = want - executed
+                    remainder = want - _executed_signed(by_sym, it["symbol"])
                 except GatewayError as e:
                     # NEVER cross blind (audit P1-4): unreadable fill state could double-trade;
                     # skip loudly — the next rebalance recomputes from venue truth anyway
@@ -1004,6 +1048,99 @@ def cmd_finalize(args: argparse.Namespace) -> None:
             raise SystemExit(
                 f"[finalize:{spec.name}] {failed} failed / {skipped_blind} blind — rerun is "
                 f"safe and crosses only true remainders")
+
+
+def cmd_reprice(args: argparse.Namespace) -> None:
+    """Mid-window maker RE-PEG (PAPER.md §12.7). Cancels this cycle's resting post-only orders
+    and re-posts the UNFILLED remainder at the CURRENT touch, so a stale peg cannot sit through
+    the whole window while the market walks away. Live catch 2026-08-06: with a single static
+    peg the fill-weighted maker share was 7% (equity) / 0% (commodity) — the books paid the
+    full spread at finalize. Idempotent: the remainder is computed from OUR orderIds across all
+    journaled batches, so repeated passes converge and never double-trade."""
+    spec = _book(args)
+    j = _journal(spec)
+    orders = j.last("orders")
+    if orders is None or orders.get("mode") != "live":
+        print(f"[reprice:{spec.name}] no live orders record — nothing to reprice")
+        return
+    if not args.live:
+        print(f"[reprice:{spec.name}] dry-run: would re-peg "
+              f"{len(orders['intents'])} intents for {orders['asof']}")
+        return
+    from convexity.execution.execution import quantize_price, quantize_qty
+    from convexity.paper.gateway import GatewayError, cancel_open_orders
+    from convexity.paper.policy import fmt_step
+    from convexity.paper.topup import (
+        fetch_book_tickers,
+        fetch_execution_venue_tradeable,
+        fetch_live_filters,
+    )
+
+    with account_lock(spec.name):
+        if _check_kill(spec, j, live=True):
+            return
+        _journal_venue(j, orders["asof"])
+        by_sym = _our_order_ids(j, orders["asof"])
+        if not by_sym:
+            print(f"[reprice:{spec.name}] no journaled orderIds — skipping (v1 journal)")
+            return
+        book = fetch_book_tickers()
+        live_f = fetch_live_filters()
+        tradeable = fetch_execution_venue_tradeable()
+        for s in sorted({it["symbol"] for it in orders["intents"]}):
+            try:
+                cancel_open_orders(s)
+            except GatewayError:
+                pass
+        posted: list[dict] = []
+        n_done = n_skip = n_fail = 0
+        for it in orders["intents"]:
+            sym = it["symbol"]
+            want = float(it["qty"])
+            ro = bool(it.get("reduce_only", False))
+            if sym not in tradeable and not ro:
+                n_skip += 1
+                continue
+            try:
+                remainder = want - _executed_signed(by_sym, sym)
+            except GatewayError as e:
+                n_fail += 1
+                j.append("order_error", orders["asof"], symbol=sym,
+                         error=f"reprice fill-state unreadable: {str(e)[:180]}")
+                continue
+            lf, ba = live_f.get(sym), book.get(sym)
+            if lf is None or ba is None:
+                n_skip += 1
+                continue
+            tick, lot, min_qty, min_notional = lf
+            bid, ask = ba
+            if bid <= 0.0 or ask <= 0.0 or ask <= bid:
+                n_skip += 1
+                continue
+            side = 1 if remainder > 0 else -1
+            qty = quantize_qty(remainder, lot_size=lot, min_qty=min_qty)
+            ref = quantize_price(_maker_peg(bid, ask, side), tick, side=side)
+            if qty == 0.0 or (abs(qty) * ref < min_notional and not ro):
+                n_done += 1  # filled, or the residue is below the venue floor: nothing to do
+                continue
+            live_it = OrderIntent(symbol=sym, qty=qty, tactic="POST_ONLY_MAKER", ref_price=ref,
+                                  slice_idx=0, n_slices=1, reduce_only=ro,
+                                  qty_str=fmt_step(abs(qty), lot),
+                                  price_str=fmt_step(ref, tick))
+            try:
+                resp = _submit_maker(j, spec, orders["asof"], live_it, tick)
+                posted.append({"symbol": sym, "orderId": resp.get("orderId"),
+                               "clientOrderId": resp.get("clientOrderId"), "qty": qty})
+            except GatewayError as e:
+                n_fail += 1
+                j.append("order_error", orders["asof"], symbol=sym,
+                         error=f"reprice: {str(e)[:200]}")
+        if posted:
+            j.append("submission_ids", orders["asof"], orders=posted)
+        j.append("repriced", orders["asof"], n_posted=len(posted), n_complete=n_done,
+                 n_skipped=n_skip, n_failed=n_fail)
+        print(f"[reprice:{spec.name}] re-pegged {len(posted)} at touch "
+              f"({n_done} already complete, {n_skip} skipped, {n_fail} failed)")
 
 
 def cmd_recon(args: argparse.Namespace) -> None:
@@ -1271,6 +1408,10 @@ def main() -> None:
     add_book(f)
     f.add_argument("--live", action="store_true")
     f.set_defaults(fn=cmd_finalize)
+    rp = sub.add_parser("reprice")
+    add_book(rp)
+    rp.add_argument("--live", action="store_true")
+    rp.set_defaults(fn=cmd_reprice)
     c = sub.add_parser("recon")
     add_book(c)
     c.add_argument("--live", action="store_true")

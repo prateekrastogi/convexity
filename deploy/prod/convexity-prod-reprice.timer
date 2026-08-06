@@ -1,0 +1,9 @@
+[Unit]
+Description=convexity maker reprice passes inside the maker window (PROD)
+[Timer]
+OnCalendar=Sat *-*-* 01:35:00 UTC
+OnCalendar=Sat *-*-* 02:15:00 UTC
+OnCalendar=Sat *-*-* 02:55:00 UTC
+Persistent=false
+[Install]
+WantedBy=timers.target

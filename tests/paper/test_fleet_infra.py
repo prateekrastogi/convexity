@@ -557,3 +557,26 @@ def test_finalize_ids_accumulation(tmp_path):
                    for o in by_sym["TTWOUSDT"])
     assert abs(0.05 - executed) < 1e-12  # remainder == 0 -> no re-cross
 
+
+def test_maker_peg_and_batch_aggregation(tmp_path):
+    """PAPER.md §12.7: peg sits AT the touch, and finalize must aggregate EVERY order batch
+    (rebalance + each reprice pass + prior crossings) or it re-crosses filled positions."""
+    from convexity.paper.cli import _maker_peg, _our_order_ids
+    from convexity.paper.journal import Journal
+
+    assert _maker_peg(100.0, 100.5, 1) == 100.0    # buy joins best bid
+    assert _maker_peg(100.0, 100.5, -1) == 100.5   # sell joins best ask
+
+    j = Journal(tmp_path / "j.jsonl")
+    j.append("submission_ids", "2026-08-08",
+             orders=[{"symbol": "AUSDT", "orderId": 1, "qty": 1.0}])
+    j.append("submission_ids", "2026-08-08",           # reprice pass
+             orders=[{"symbol": "AUSDT", "orderId": 2, "qty": 0.6}])
+    j.append("finalize_ids", "2026-08-08",
+             orders=[{"symbol": "AUSDT", "orderId": 3, "qty": 0.2}])
+    j.append("submission_ids", "2026-08-01",           # PRIOR cycle: must NOT leak in
+             orders=[{"symbol": "AUSDT", "orderId": 9, "qty": 5.0}])
+    by = _our_order_ids(j, "2026-08-08")
+    assert [o["orderId"] for o in by["AUSDT"]] == [1, 2, 3]
+    assert _our_order_ids(j, "2026-07-25") == {}
+
