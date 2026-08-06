@@ -206,6 +206,47 @@ def submit_intent(intent: OrderIntent) -> dict:
     return _run(go())
 
 
+def submit_bbo(symbol: str, qty: float, qty_str: str, price_match: str,
+               tif: str = "GTX", reduce_only: bool = False) -> dict:
+    """LIMIT order priced SERVER-SIDE from the venue's own book (Binance BBO/``priceMatch``).
+
+    ``price_match``: QUEUE / QUEUE_5|10|20 (own side, maker) or OPPONENT / OPPONENT_5|10|20
+    (across the spread, taker). No ``price`` is sent — the venue reads its own book at
+    placement, which removes the fetch->submit latency race that made -5022 rejections a
+    problem and previously forced the peg one tick behind the touch (verified accepted with GTX
+    on crypto, equity and commodity perps, 2026-08-06). Not retried on failure (POST)."""
+    import uuid
+
+    from nautilus_trader.core.nautilus_pyo3 import HttpMethod
+
+    from convexity.paper.manual import OUR_ORDER_PREFIX
+
+    client, _api, clock = _build_api()
+    cid = f"{OUR_ORDER_PREFIX}{uuid.uuid4().hex[:20]}"
+    payload = {
+        "symbol": symbol, "side": "BUY" if qty > 0 else "SELL", "type": "LIMIT",
+        "timeInForce": tif, "quantity": qty_str, "priceMatch": price_match,
+        "newClientOrderId": cid, "timestamp": str(clock.timestamp_ms()), "recvWindow": "5000",
+    }
+    if reduce_only:
+        payload["reduceOnly"] = "true"
+
+    async def go() -> dict:
+        import json as _json
+
+        from convexity.paper.ratelimit import pace
+
+        pace("order")
+        resp = await client.sign_request(http_method=HttpMethod.POST,
+                                        url_path="/fapi/v1/order", payload=payload)
+        body = resp.body if hasattr(resp, "body") else resp
+        d = _json.loads(body) if body else {}
+        return {"symbol": symbol, "orderId": d.get("orderId"), "status": str(d.get("status", "")),
+                "clientOrderId": cid, "price": d.get("price")}
+
+    return _run(go())
+
+
 def cancel_open_orders(symbol: str) -> None:
     """Cancel all open orders for ``symbol`` (the finalize pass, EXPERIMENTAL)."""
     _client, api, _clock = _build_api()

@@ -500,12 +500,25 @@ def _maker_peg(bid: float, ask: float, side: int) -> float:
 
 
 def _submit_maker(j: Journal, spec: BookSpec, d_iso: str, it: OrderIntent, tick: float):
-    """Submit a post-only maker order; on -5022 (touch moved during latency) retry ONCE one
-    tick inside the touch. Returns the venue response or raises GatewayError."""
+    """Submit a post-only maker order.
+
+    PRIMARY: Binance BBO — LIMIT + ``priceMatch=QUEUE`` + GTX, i.e. the venue prices us AT the
+    touch from its own book at placement. No local quote is involved, so the fetch->submit
+    latency race (the whole reason the peg used to sit a tick behind) cannot happen.
+    FALLBACK: the locally-priced peg, then one tick inside on -5022 — kept so a venue that
+    rejects priceMatch still trades exactly as before."""
     from convexity.execution.execution import quantize_price
-    from convexity.paper.gateway import GatewayError, submit_intent
+    from convexity.paper.gateway import GatewayError, submit_bbo, submit_intent
     from convexity.paper.policy import fmt_step
 
+    if it.tactic == "POST_ONLY_MAKER":
+        try:
+            r = submit_bbo(it.symbol, it.qty, it.qty_str, "QUEUE", tif="GTX",
+                           reduce_only=it.reduce_only)
+            if r.get("orderId") is not None:
+                return r
+        except GatewayError as e:
+            j.append("bbo_fallback", d_iso, symbol=it.symbol, error=str(e)[:180])
     try:
         return submit_intent(it)
     except GatewayError as e:
@@ -958,6 +971,7 @@ def cmd_finalize(args: argparse.Namespace) -> None:
         GatewayError,
         account_snapshot,
         cancel_open_orders,
+        submit_bbo,
         submit_intent,
     )
     from convexity.paper.policy import fmt_step
@@ -1023,11 +1037,39 @@ def cmd_finalize(args: argparse.Namespace) -> None:
                     if remainder == 0.0:
                         continue
                 try:
-                    cross_resp = submit_intent(OrderIntent(
-                        symbol=it["symbol"], qty=remainder, tactic="MARKET",
-                        ref_price=it["ref_price"], slice_idx=0, n_slices=1,
-                        reduce_only=bool(it.get("reduce_only", False)),
-                        qty_str=fmt_step(abs(remainder), lf[1]) if lf else ""))
+                    # BOUNDED CROSS FIRST (BBO, verified 2026-08-06): LIMIT priceMatch=
+                    # OPPONENT_5 + IOC takes at most 5 levels of the opposing book, so a thin
+                    # TradFi perp with an air pocket cannot fill us at an arbitrary price the
+                    # way a plain MARKET order can. Any residue then crosses at MARKET, so the
+                    # book still completes — we simply take the cheap liquidity first.
+                    ro = bool(it.get("reduce_only", False))
+                    qstr = fmt_step(abs(remainder), lf[1]) if lf else ""
+                    cross_resp = None
+                    try:
+                        b = submit_bbo(it["symbol"], remainder, qstr, "OPPONENT_5",
+                                       tif="IOC", reduce_only=ro)
+                        if b.get("orderId") is not None:
+                            filled = _executed_signed({it["symbol"]: [
+                                {"orderId": b["orderId"], "qty": remainder}]}, it["symbol"])
+                            j.append("bounded_cross", orders["asof"], symbol=it["symbol"],
+                                     sought=remainder, filled=filled, price=b.get("price"))
+                            cross_resp = b
+                            residue = remainder - filled
+                            if abs(residue) > 1e-12 and lf:
+                                rq = quantize_qty(residue, lot_size=lf[1], min_qty=lf[2])
+                                if rq != 0.0:
+                                    cross_resp = submit_intent(OrderIntent(
+                                        symbol=it["symbol"], qty=rq, tactic="MARKET",
+                                        ref_price=it["ref_price"], slice_idx=0, n_slices=1,
+                                        reduce_only=ro, qty_str=fmt_step(abs(rq), lf[1])))
+                    except GatewayError as e:
+                        j.append("bbo_fallback", orders["asof"], symbol=it["symbol"],
+                                 error=f"bounded cross: {str(e)[:160]}")
+                    if cross_resp is None:
+                        cross_resp = submit_intent(OrderIntent(
+                            symbol=it["symbol"], qty=remainder, tactic="MARKET",
+                            ref_price=it["ref_price"], slice_idx=0, n_slices=1,
+                            reduce_only=ro, qty_str=qstr))
                     crossings.append({"symbol": it["symbol"],
                                       "orderId": cross_resp.get("orderId"),
                                       "qty": remainder})
