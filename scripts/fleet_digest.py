@@ -108,8 +108,20 @@ def main() -> None:
             # classification and prices are synthetic, so tag them — coverage is still real
             # (it comes from our own positions vs targets, not from venue fill reporting).
             sim = " (sim)" if venue == "demo" else ""
-            lines.append(f" cov {min(cov):.0f}-{max(cov):.0f}%")
-            lines.append(f" shortfall {min(sf):+.0f}..{max(sf):+.0f}bp{sim}")
+            # per-book values after the range, so a single bad book is visible rather than
+            # hidden inside a min..max span (owner request 2026-08-10)
+            by = {n: r for n, r in tcas}
+            def _cell(key, fmt):
+                out = []
+                for short, n in (("cry", "crypto"), ("com", "commodity"), ("eqt", "equity")):
+                    v = by.get(n, {}).get(key)
+                    out.append(f"{short} {v:{fmt}}" if v is not None else f"{short} -")
+                return " ".join(out)
+            avg_cov = sum(cov) / len(cov)
+            lines.append(f" cov {min(cov):.0f}-{max(cov):.0f}% avg {avg_cov:.0f}% | "
+                         + _cell("coverage_pct", ".0f"))
+            lines.append(f" shortfall {min(sf):+.0f}..{max(sf):+.0f}bp{sim} | "
+                         + _cell("shortfall_bp", "+.0f"))
         # PENDING flows (journaled, not yet folded by a settle) already sit in the venue
         # balance while absent from every nav mark — without this the drift line reads as a
         # huge loss for a week after any deposit (caught 2026-08-06 after the +479).
