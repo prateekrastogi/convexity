@@ -108,8 +108,8 @@ def main() -> None:
             # classification and prices are synthetic, so tag them — coverage is still real
             # (it comes from our own positions vs targets, not from venue fill reporting).
             sim = " (sim)" if venue == "demo" else ""
-            lines.append(f" exec cov {min(cov):.0f}-{max(cov):.0f}% | shortfall "
-                         f"{min(sf):+.0f}..{max(sf):+.0f}bp{sim}")
+            lines.append(f" cov {min(cov):.0f}-{max(cov):.0f}%")
+            lines.append(f" shortfall {min(sf):+.0f}..{max(sf):+.0f}bp{sim}")
         # PENDING flows (journaled, not yet folded by a settle) already sit in the venue
         # balance while absent from every nav mark — without this the drift line reads as a
         # huge loss for a week after any deposit (caught 2026-08-06 after the +479).
