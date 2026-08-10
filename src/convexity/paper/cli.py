@@ -1124,6 +1124,21 @@ def cmd_catchup(args: argparse.Namespace) -> None:
         fetch_ticker_prices,
     )
 
+    if getattr(args, "if_flow", False):
+        # FLOW-TRIGGERED ONLY (the automatic path). catchup bypasses the no-trade band, which is
+        # part of the validated construction's turnover control — so it must fire on CAPITAL
+        # EVENTS, never on a schedule. Equity coverage cannot reach 95% at this account size, so
+        # a weekly catchup would trade the band-suppressed deltas every cycle and push turnover
+        # above what the backtest validated.
+        last_cu = j.last("catchup")
+        since = int(last_cu["ts"]) if last_cu else 0
+        new_flows = [f for f in j.read("flow") if int(f["ts"]) > since]
+        if not new_flows:
+            print(f"[catchup:{spec.name}] --if-flow: no capital event since the last catchup "
+                  f"— skipping (band preserved)")
+            return
+        print(f"[catchup:{spec.name}] --if-flow: {len(new_flows)} new flow(s) totalling "
+              f"{sum(float(f['amount']) for f in new_flows):+.2f} — deploying")
     g, nav = float(t["g_t"]), float(t["nav"])
     lock_cm = account_lock(spec.name) if args.live else contextlib.nullcontext()
     with lock_cm:
@@ -1653,6 +1668,9 @@ def main() -> None:
                     help="cap added notional at this fraction of NAV (default 0.5)")
     cu.add_argument("--target-cov", type=float, default=95.0,
                     help="skip if coverage already >= this pct (default 95)")
+    cu.add_argument("--if-flow", action="store_true",
+                    help="only act when a flow was journaled since the last catchup (the "
+                         "automatic, band-preserving trigger)")
     cu.set_defaults(fn=cmd_catchup)
     tc = sub.add_parser("tca")
     add_book(tc)

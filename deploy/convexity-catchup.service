@@ -1,0 +1,20 @@
+# FLOW-TRIGGERED capital deployment (PAPER.md §12.7). Runs right after the last rebalance so the
+# scheduled reprice passes and finalize complete its maker orders. --if-flow means it does
+# NOTHING unless capital was journaled since the previous catchup: the command bypasses the
+# no-trade band, which is part of the validated construction's turnover control, so it must fire
+# on capital events and never on a schedule.
+[Unit]
+Description=convexity flow-triggered catchup
+Wants=network-online.target
+After=network-online.target
+OnFailure=convexity-alert@%n.service
+[Service]
+Type=oneshot
+User=ubuntu
+WorkingDirectory=/home/speculation/convexity
+EnvironmentFile=/home/speculation/convexity/.env
+Environment=PYTHONPATH=/home/speculation/convexity
+ExecStart=/home/speculation/convexity/.venv/bin/python -m convexity.paper catchup --live --if-flow --book crypto
+ExecStart=/home/speculation/convexity/.venv/bin/python -m convexity.paper catchup --live --if-flow --book commodity
+ExecStart=/home/speculation/convexity/.venv/bin/python -m convexity.paper catchup --live --if-flow --book equity
+TimeoutStartSec=1800

@@ -1,0 +1,7 @@
+[Unit]
+Description=convexity flow-triggered catchup (after the last rebalance)
+[Timer]
+OnCalendar=Sat *-*-* 01:20:00 UTC
+Persistent=true
+[Install]
+WantedBy=timers.target
