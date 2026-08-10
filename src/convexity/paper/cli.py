@@ -1146,6 +1146,27 @@ def cmd_catchup(args: argparse.Namespace) -> None:
             return
         if args.live:
             _journal_venue(j, t["asof"])
+        # CANCEL FIRST (fix 2026-08-10): without this, a re-run while orders rest posts a
+        # SECOND set for the same gap and both filling overshoots the target. Cancelling makes
+        # catchup idempotent, so re-running it also acts as its own chaser at the new touch.
+        if args.live:
+            from convexity.paper.gateway import cancel_open_orders, fetch_open_orders
+            try:
+                resting = {o["symbol"] for o in fetch_open_orders()
+                           if o["symbol"] in book_domain(spec)
+                           and str(o.get("clientOrderId", "")).startswith("cvx-")}
+                for s in sorted(resting):
+                    try:
+                        cancel_open_orders(s)
+                    except GatewayError:
+                        pass
+                if resting:
+                    print(f"[catchup:{spec.name}] cancelled resting orders on "
+                          f"{len(resting)} symbols before re-planning")
+            except GatewayError as e:
+                print(f"[catchup:{spec.name}] could not list open orders ({e}) — ABORT "
+                      f"rather than risk double-posting")
+                return
         px = fetch_ticker_prices()
         lf = fetch_live_filters()
         tradeable = fetch_execution_venue_tradeable()
@@ -1222,6 +1243,28 @@ def cmd_catchup(args: argparse.Namespace) -> None:
                          error=f"catchup: {str(e)[:200]}")
         if posted:
             j.append("submission_ids", t["asof"], orders=posted)
+            # Fold catchup's orders INTO the cycle's intent list so the scheduled reprice and
+            # finalize passes chase/cross them (they key off j.last("orders")). Merged PER
+            # SYMBOL — duplicate entries would break finalize's want-vs-executed arithmetic,
+            # since executions are summed per symbol. Fix 2026-08-10: catchup orders were
+            # placed for band-suppressed names absent from the rebalance's intents, so nothing
+            # in the pipeline was chasing them and they rested indefinitely.
+            prev = j.last("orders")
+            merged: dict[str, dict] = {}
+            if prev is not None and prev.get("asof") == t["asof"]:
+                for it0 in prev["intents"]:
+                    merged[it0["symbol"]] = dict(it0)
+            for sym, qty, p, lot, tick in plan:
+                if sym in merged:
+                    merged[sym]["qty"] = float(merged[sym]["qty"]) + qty
+                    merged[sym]["qty_str"] = fmt_step(abs(float(merged[sym]["qty"])), lot)
+                else:
+                    merged[sym] = {"symbol": sym, "qty": qty, "tactic": "POST_ONLY_MAKER",
+                                   "ref_price": p, "slice_idx": 0, "n_slices": 1,
+                                   "reduce_only": False,
+                                   "qty_str": fmt_step(abs(qty), lot), "price_str": ""}
+            j.append("orders", t["asof"], intents=list(merged.values()), mode="live",
+                     source="catchup_merged")
         j.append("catchup", t["asof"], coverage_before=round(cov, 1), n_posted=ok,
                  n_failed=failed, notional=round(add_n, 2), max_frac=args.max_frac)
         print(f"[catchup:{spec.name}] posted {ok} maker orders ({failed} failed); "

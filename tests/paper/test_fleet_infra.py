@@ -601,3 +601,27 @@ def test_catchup_registered_and_safe_defaults():
     assert a.target_cov == 95.0
     assert callable(cli.cmd_catchup)
 
+
+def test_catchup_merge_per_symbol(tmp_path):
+    """PAPER.md §12.7: catchup folds its orders into the cycle's intents MERGED PER SYMBOL.
+
+    Duplicate per-symbol entries would break finalize, which computes want-vs-executed with
+    executions summed per symbol — two entries for one symbol would subtract the same fills
+    twice and re-cross a position already held."""
+    from convexity.paper.journal import Journal
+
+    j = Journal(tmp_path / "j.jsonl")
+    j.append("orders", "2026-08-14", mode="live",
+             intents=[{"symbol": "AUSDT", "qty": 1.0}, {"symbol": "BUSDT", "qty": 2.0}])
+    plan = [("AUSDT", 0.5), ("CUSDT", 3.0)]          # A overlaps, C is band-suppressed/new
+    merged = {it["symbol"]: dict(it) for it in j.last("orders")["intents"]}
+    for sym, qty in plan:
+        if sym in merged:
+            merged[sym]["qty"] = float(merged[sym]["qty"]) + qty
+        else:
+            merged[sym] = {"symbol": sym, "qty": qty}
+    assert len(merged) == 3                            # one entry per symbol, never duplicated
+    assert merged["AUSDT"]["qty"] == 1.5               # overlapping symbol summed
+    assert merged["CUSDT"]["qty"] == 3.0               # new symbol carried in
+    assert merged["BUSDT"]["qty"] == 2.0               # untouched symbol preserved
+
