@@ -115,11 +115,12 @@ def main() -> None:
                 out = []
                 for short, n in (("cry", "crypto"), ("com", "commodity"), ("eqt", "equity")):
                     v = by.get(n, {}).get(key)
-                    out.append(f"{short} {v:{fmt}}" if v is not None else f"{short} -")
+                    if v is None:
+                        v = 0.0   # no trades that cycle -> no cost incurred (not "unknown")
+                    out.append(f"{short} {v:{fmt}}")
                 return " ".join(out)
             avg_cov = sum(cov) / len(cov)
-            lines.append(f" cov {min(cov):.0f}-{max(cov):.0f}% avg {avg_cov:.0f}% | "
-                         + _cell("coverage_pct", ".0f"))
+            lines.append(f" cov avg {avg_cov:.0f}% | " + _cell("coverage_pct", ".0f"))
             # NOTIONAL-WEIGHTED average: a book that traded 410 USDT and one that traded 52
             # must not count equally toward "what did execution cost us".
             wn = sum((by.get(n, {}).get("traded_notional") or 0.0)
@@ -130,8 +131,8 @@ def main() -> None:
                       for n in ("crypto", "commodity", "equity")
                       if by.get(n, {}).get("shortfall_bp") is not None)
             avg_sf = (wsf / wn) if wn > 0 else 0.0
-            lines.append(f" shortfall {min(sf):+.0f}..{max(sf):+.0f}bp avg {avg_sf:+.0f}bp{sim}"
-                         f" | " + _cell("shortfall_bp", "+.0f"))
+            lines.append(f" shortfall avg {avg_sf:+.0f}bp{sim} | "
+                         + _cell("shortfall_bp", "+.0f"))
         # PENDING flows (journaled, not yet folded by a settle) already sit in the venue
         # balance while absent from every nav mark — without this the drift line reads as a
         # huge loss for a week after any deposit (caught 2026-08-06 after the +479).
