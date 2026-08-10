@@ -1092,6 +1092,127 @@ def cmd_finalize(args: argparse.Namespace) -> None:
                 f"safe and crosses only true remainders")
 
 
+def cmd_catchup(args: argparse.Namespace) -> None:
+    """Deploy a CAPITAL EVENT that the weekly rebalance cannot reach (PAPER.md §12.7).
+
+    A deposit raises target notional instantly, but the book closes the gap only through trades
+    that must clear BOTH the venue's min-notional and the no-trade band. Measured 2026-08-10
+    after the +479: equity coverage FELL 69%->53% because 45 of 68 names needed an increment
+    under $5 and the band suppressed most of the rest. The equity trend book is worst affected
+    precisely because it is long-horizon and barely trades.
+
+    This is the deposit mirror of the withdrawal INTERIM_RESIZE: move each held position toward
+    its CURRENT target, bypassing the no-trade band — the trigger is a known capital event, not
+    signal noise, so band suppression (which exists to avoid churning on noise) does not apply.
+    Relative weights, and therefore the validated construction, are untouched.
+
+    SAFETY: trades only toward the journaled target (never beyond it, never a new direction);
+    caps total added notional at --max-frac of NAV; maker-first via the same BBO path; skips
+    non-tradeable symbols; refuses if the book is already at/above --target-cov coverage."""
+    spec = _book(args)
+    j = _journal(spec)
+    t = j.last("targets")
+    if t is None or t.get("mode") != "live":
+        print(f"[catchup:{spec.name}] no live targets — nothing to deploy")
+        return
+    from convexity.execution.execution import quantize_qty
+    from convexity.paper.gateway import GatewayError, account_snapshot
+    from convexity.paper.policy import fmt_step
+    from convexity.paper.topup import (
+        fetch_execution_venue_tradeable,
+        fetch_live_filters,
+        fetch_ticker_prices,
+    )
+
+    g, nav = float(t["g_t"]), float(t["nav"])
+    lock_cm = account_lock(spec.name) if args.live else contextlib.nullcontext()
+    with lock_cm:
+        if args.live and _check_kill(spec, j, live=True):
+            return
+        if args.live:
+            _journal_venue(j, t["asof"])
+        px = fetch_ticker_prices()
+        lf = fetch_live_filters()
+        tradeable = fetch_execution_venue_tradeable()
+        snap = account_snapshot()
+        dom = book_domain(spec)
+        held_map = {s: q for s, q in snap.positions.items() if s in dom}
+        plan = []
+        tgt_tot = held_tot = 0.0
+        for w, sym in zip(t["weights"], t["symbols"]):
+            w = float(w)
+            p = float(px.get(sym, 0.0))
+            if p <= 0:
+                continue
+            tgt_n = w * g * nav
+            held_n = held_map.get(sym, 0.0) * p
+            tgt_tot += abs(tgt_n)
+            held_tot += abs(held_n)
+            if abs(w) < 1e-9 or sym not in tradeable:
+                continue
+            gap_n = tgt_n - held_n
+            # only CLOSE the gap toward target, and only in the target's own direction
+            if gap_n * tgt_n <= 0:
+                continue
+            f = lf.get(sym)
+            if f is None:
+                continue
+            tick, lot, min_qty, min_not = f
+            qty = quantize_qty(gap_n / p, lot_size=lot, min_qty=min_qty)
+            if qty == 0.0 or abs(qty) * p < max(min_not, 5.0):
+                continue
+            plan.append((sym, qty, p, lot, tick))
+        cov = held_tot / tgt_tot * 100 if tgt_tot > 0 else 0.0
+        add_n = sum(abs(q) * p for _s, q, p, _l, _t in plan)
+        cap = args.max_frac * nav
+        print(f"[catchup:{spec.name}] coverage {cov:.1f}% (held {held_tot:.0f} / target "
+              f"{tgt_tot:.0f}) | {len(plan)} names deployable for {add_n:.2f} USDT "
+              f"(cap {cap:.2f})")
+        if cov >= args.target_cov:
+            print(f"[catchup:{spec.name}] already at/above target coverage "
+                  f"{args.target_cov}% — nothing to do")
+            return
+        if add_n > cap:
+            plan.sort(key=lambda r: -abs(r[1] * r[2]))
+            keep, run = [], 0.0
+            for r in plan:
+                n = abs(r[1] * r[2])
+                if run + n > cap:
+                    continue
+                keep.append(r)
+                run += n
+            print(f"[catchup:{spec.name}] capped at {args.max_frac:.0%} of NAV: "
+                  f"{len(keep)}/{len(plan)} names, {run:.2f} USDT")
+            plan = keep
+        if not args.live:
+            for sym, qty, p, _l, _t in plan[:10]:
+                print(f"[dry:{spec.name}] {sym:>14} {qty:+g} @ ~{p} = {abs(qty * p):.2f}")
+            if len(plan) > 10:
+                print(f"[dry:{spec.name}] ... +{len(plan) - 10} more")
+            return
+        ok = failed = 0
+        posted = []
+        for sym, qty, _p, lot, tick in plan:
+            it = OrderIntent(symbol=sym, qty=qty, tactic="POST_ONLY_MAKER", ref_price=0.0,
+                             slice_idx=0, n_slices=1, reduce_only=False,
+                             qty_str=fmt_step(abs(qty), lot), price_str="")
+            try:
+                resp = _submit_maker(j, spec, t["asof"], it, tick)
+                posted.append({"symbol": sym, "orderId": resp.get("orderId"),
+                               "clientOrderId": resp.get("clientOrderId"), "qty": qty})
+                ok += 1
+            except GatewayError as e:
+                failed += 1
+                j.append("order_error", t["asof"], symbol=sym,
+                         error=f"catchup: {str(e)[:200]}")
+        if posted:
+            j.append("submission_ids", t["asof"], orders=posted)
+        j.append("catchup", t["asof"], coverage_before=round(cov, 1), n_posted=ok,
+                 n_failed=failed, notional=round(add_n, 2), max_frac=args.max_frac)
+        print(f"[catchup:{spec.name}] posted {ok} maker orders ({failed} failed); "
+              f"reprice/finalize will complete them")
+
+
 def cmd_reprice(args: argparse.Namespace) -> None:
     """Mid-window maker RE-PEG (PAPER.md §12.7). Cancels this cycle's resting post-only orders
     and re-posts the UNFILLED remainder at the CURRENT touch, so a stale peg cannot sit through
@@ -1525,6 +1646,14 @@ def main() -> None:
     add_book(f)
     f.add_argument("--live", action="store_true")
     f.set_defaults(fn=cmd_finalize)
+    cu = sub.add_parser("catchup")
+    add_book(cu)
+    cu.add_argument("--live", action="store_true")
+    cu.add_argument("--max-frac", type=float, default=0.5,
+                    help="cap added notional at this fraction of NAV (default 0.5)")
+    cu.add_argument("--target-cov", type=float, default=95.0,
+                    help="skip if coverage already >= this pct (default 95)")
+    cu.set_defaults(fn=cmd_catchup)
     tc = sub.add_parser("tca")
     add_book(tc)
     tc.add_argument("--live", action="store_true")

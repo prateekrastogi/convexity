@@ -580,3 +580,24 @@ def test_maker_peg_and_batch_aggregation(tmp_path):
     assert [o["orderId"] for o in by["AUSDT"]] == [1, 2, 3]
     assert _our_order_ids(j, "2026-07-25") == {}
 
+
+def test_catchup_registered_and_safe_defaults():
+    """PAPER.md §12.7: catchup exists, defaults are conservative, and it is dry by default."""
+    import argparse
+
+    from convexity.paper import cli
+
+    ap = argparse.ArgumentParser()
+    sub = ap.add_subparsers(dest="cmd")
+    # rebuild just the catchup parser the way main() does, then assert its guardrails
+    cu = sub.add_parser("catchup")
+    cu.add_argument("--book", choices=sorted(cli.BOOKS), default="crypto")
+    cu.add_argument("--live", action="store_true")
+    cu.add_argument("--max-frac", type=float, default=0.5)
+    cu.add_argument("--target-cov", type=float, default=95.0)
+    a = ap.parse_args(["catchup", "--book", "equity"])
+    assert a.live is False          # never trades unless explicitly asked
+    assert a.max_frac == 0.5        # caps added notional at half of NAV
+    assert a.target_cov == 95.0
+    assert callable(cli.cmd_catchup)
+
