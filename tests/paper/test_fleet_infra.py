@@ -636,7 +636,10 @@ def test_renormalize_achievable():
     from convexity.paper.fleetconfig import RENORM_PARTIAL_BOOK
     from convexity.paper.policy import renormalize_achievable
 
-    assert not any(RENORM_PARTIAL_BOOK.values()), "renormalization must ship OFF"
+    # Config PIN: renormalization is ON for all three books by owner decision 2026-08-13.
+    # This test exists so the setting can never flip silently — changing it must be deliberate
+    # and must update this assertion, since it changes live risk (gross returns to target).
+    assert RENORM_PARTIAL_BOOK == {"crypto": True, "commodity": True, "equity": True}
 
     class F:
         def __init__(self, lot, min_qty, min_notional):

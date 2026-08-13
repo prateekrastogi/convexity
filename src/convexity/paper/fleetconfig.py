@@ -46,7 +46,11 @@ EQUITY_FLAGS_PATH = "data/universe/equity_flags.json"
 # Enabling it means deliberately holding survivors ABOVE their per-name target weight, which
 # reverses the standing "never trade more than intended" convention, and it restores risk the
 # book is currently not taking. Owner decision — hence a switch, defaulted off.
-RENORM_PARTIAL_BOOK: dict[str, bool] = {"crypto": False, "commodity": False, "equity": False}
+# ENABLED for all three books by owner decision 2026-08-13: the fleet is small enough that
+# the floor materially under-deploys every book, and matching the validated construction's
+# GROSS is worth more than matching its per-name composition (TE 7.98%/yr -> 4.23%/yr on
+# equity at nav 449; strict no-op once capital is large enough to hold every name).
+RENORM_PARTIAL_BOOK: dict[str, bool] = {"crypto": True, "commodity": True, "equity": True}
 
 # --- Integer exchange leverage dial (per-symbol, set ONCE at book boot; never per-trade) -------
 # Binance USDT-M leverage is an integer per symbol. The dial is a CAP + margin divisor; effective
