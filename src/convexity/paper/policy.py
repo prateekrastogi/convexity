@@ -205,6 +205,62 @@ def order_intents(
     return out
 
 
+def renormalize_achievable(
+    w: np.ndarray,
+    symbols: tuple[str, ...],
+    prices: np.ndarray,
+    nav: float,
+    filters: dict,
+    max_iter: int = 6,
+) -> tuple[np.ndarray, dict]:
+    """Scale the ACHIEVABLE names up to the book's target gross (PAPER.md §12.8).
+
+    A name is achievable when its target notional survives the venue grid: at least one lot, and
+    a quantized notional at or above the min-notional floor. Names that cannot be held are
+    dropped (they already were); the remainder is scaled by k so that the surviving gross equals
+    the ORIGINAL target gross. Iterated to a fixed point because scaling up can itself lift a
+    name over the floor, which enlarges the surviving set and lowers k.
+
+    Returns (weights, diagnostics). Weights are unchanged when every name is achievable, so the
+    function is a no-op on a large book. Never changes signs or the relative ordering within the
+    surviving set — only the common scale."""
+    target_gross = float(np.abs(w).sum())
+    if target_gross <= 0 or nav <= 0:
+        return w, {"applied": False, "reason": "no gross"}
+    k = 1.0
+    keep: list[int] = []
+    for _ in range(max_iter):
+        keep = []
+        for i, s in enumerate(symbols):
+            wi = float(w[i]) * k
+            p = float(prices[i]) if i < len(prices) else 0.0
+            f = filters.get(s)
+            if f is None or not np.isfinite(p) or p <= 0 or abs(wi) < 1e-12:
+                continue
+            lot = float(getattr(f, "lot_size", 0.0) or 0.0)
+            min_qty = float(getattr(f, "min_qty", 0.0) or 0.0)
+            min_not = float(getattr(f, "min_notional", 5.0) or 5.0)
+            if lot <= 0:
+                continue
+            q = quantize_qty(abs(wi) * nav / p, lot_size=lot, min_qty=min_qty)
+            if q != 0.0 and abs(q) * p >= max(min_not, 5.0):
+                keep.append(i)
+        ach = float(np.abs(w[keep]).sum()) if keep else 0.0
+        if ach <= 0:
+            return w, {"applied": False, "reason": "nothing achievable"}
+        k_new = target_gross / ach
+        if abs(k_new - k) < 1e-6:
+            k = k_new
+            break
+        k = k_new
+    out = np.zeros_like(w)
+    out[keep] = w[keep] * k
+    return out, {"applied": True, "k": round(float(k), 4), "n_kept": len(keep),
+                 "n_total": int((np.abs(w) > 1e-12).sum()),
+                 "gross_before_trunc": round(target_gross, 4),
+                 "gross_after": round(float(np.abs(out).sum()), 4)}
+
+
 def orphan_close_intents(
     positions: dict[str, float],
     covered: set[str],

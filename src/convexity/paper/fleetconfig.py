@@ -36,6 +36,18 @@ EQUITY_ETF_EXCLUSIONS: frozenset[str] = frozenset({
 EQUITY_SPLIT_WATCH_THRESHOLD = 0.25
 EQUITY_FLAGS_PATH = "data/universe/equity_flags.json"
 
+# --- Partial-book renormalization (PAPER.md §12.8; owner switch, default OFF) -----------------
+# Under the venue's min-notional/lot floor a fraction of names cannot hold a position at all, so
+# a small book runs BELOW its target gross: measured 2026-08-13 the equity book held 1.122 gross
+# against a 1.386 target, and that EXPOSURE gap — not composition — is the dominant tracking
+# error vs the validated construction (7.98%/yr, falling to 4.23%/yr when the achievable names
+# are scaled back up; correlation is 0.992 either way because ~20 names already capture all the
+# diversification this universe offers).
+# Enabling it means deliberately holding survivors ABOVE their per-name target weight, which
+# reverses the standing "never trade more than intended" convention, and it restores risk the
+# book is currently not taking. Owner decision — hence a switch, defaulted off.
+RENORM_PARTIAL_BOOK: dict[str, bool] = {"crypto": False, "commodity": False, "equity": False}
+
 # --- Integer exchange leverage dial (per-symbol, set ONCE at book boot; never per-trade) -------
 # Binance USDT-M leverage is an integer per symbol. The dial is a CAP + margin divisor; effective
 # book leverage is fractional via notional sizing. equity: 3 covers the 2.33x nominal ceiling and

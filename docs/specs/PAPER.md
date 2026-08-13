@@ -396,3 +396,38 @@ Findings and fixes from the pre-prod adversarial audit; all shipped together.
 (4) one SUPERVISED rebalance+finalize cycle watching the `venue` journal records and finalize
 mode=ids; (5) enable timers; (6) keep the demo fleet running 2-4 weeks as a shadow book and
 compare journals weekly. The first two prod cycles stay supervised.
+
+### 12.8 Partial-book renormalization (owner switch, default OFF)
+
+**The problem, measured 2026-08-13.** Under the venue's min-notional/lot floor a small book
+cannot hold every target name, so it runs BELOW its target gross — the equity book held 1.122
+gross against a 1.386 target. Because the book is ~97.5% explained by a single market factor,
+that EXPOSURE gap dominates tracking error versus the validated construction, far outweighing
+composition error:
+
+| equity NAV | names held | gross (as-is) | TE %/yr | gross (renorm) | TE %/yr |
+|---|---|---|---|---|---|
+| 449 (today) | 36 | 1.122 | **7.98** | 1.386 | **4.23** |
+| 949 | 53 | 1.333 | 2.20 | 1.386 | 1.48 |
+| 1500 | 61 | 1.380 | 0.38 | 1.386 | 0.32 |
+
+Correlation to the full book is 0.992 either way: concentrating into the achievable names costs
+almost nothing, because ~20 names already capture all the diversification this universe offers
+(avg pairwise correlation 0.316, ~7.5 effective bets, systematic floor 56% of single-name vol).
+
+**The mechanism.** `policy.renormalize_achievable` keeps the names whose target survives the
+venue grid (≥1 lot AND quantized notional ≥ min-notional) and scales them by k so the surviving
+gross equals the original target gross. Iterated to a fixed point, since scaling up can itself
+lift a name over the floor. Signs and relative weights within the surviving set are untouched —
+only the common scale changes. On a large book every name is achievable and it is a strict
+no-op.
+
+**Why it ships OFF.** Enabling it (a) deliberately holds survivors ABOVE their per-name target
+weight, reversing the standing "never trade more than intended" convention, and (b) restores
+risk the book is currently not taking — today's drawdowns are ~19% smaller than the validated
+construction's purely by accident of the floor. That is an owner decision, not an optimization.
+
+**Controls.** `RENORM_PARTIAL_BOOK` in fleetconfig (per book, all False) or `--renorm` on
+`rebalance`/`catchup` for a single run. Applies identically in both paths so the weekly cycle
+and capital deployment agree. Every application journals a `renorm` record (k, names kept,
+gross before/after).

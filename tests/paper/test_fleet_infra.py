@@ -625,3 +625,48 @@ def test_catchup_merge_per_symbol(tmp_path):
     assert merged["CUSDT"]["qty"] == 3.0               # new symbol carried in
     assert merged["BUSDT"]["qty"] == 2.0               # untouched symbol preserved
 
+
+def test_renormalize_achievable():
+    """PAPER.md §12.8: scale the venue-achievable names back up to the book's target gross.
+
+    Off by default everywhere; when applied it must preserve gross and signs, drop only what the
+    grid cannot hold, and be a strict no-op when every name is achievable."""
+    import numpy as np
+
+    from convexity.paper.fleetconfig import RENORM_PARTIAL_BOOK
+    from convexity.paper.policy import renormalize_achievable
+
+    assert not any(RENORM_PARTIAL_BOOK.values()), "renormalization must ship OFF"
+
+    class F:
+        def __init__(self, lot, min_qty, min_notional):
+            self.lot_size, self.min_qty, self.min_notional = lot, min_qty, min_notional
+
+    syms = ("BIGUSDT", "MIDUSDT", "TINYUSDT")
+    prices = np.array([100.0, 100.0, 100.0])
+    filters = {s: F(0.01, 0.01, 5.0) for s in syms}
+    w = np.array([0.5, 0.3, 0.02])          # gross 0.82
+    nav = 1000.0                             # TINY target = $20 -> achievable here
+
+    out, d = renormalize_achievable(w, syms, prices, nav, filters)
+    assert d["applied"] and d["n_kept"] == 3
+    assert abs(np.abs(out).sum() - 0.82) < 1e-9        # gross preserved
+    assert np.allclose(out, w)                         # nothing dropped => no-op
+
+    # small NAV: TINY's target ($2) is below the $5 floor -> dropped, others scaled up
+    out2, d2 = renormalize_achievable(w, syms, prices, 100.0, filters)
+    assert d2["applied"] and d2["n_kept"] == 2
+    assert out2[2] == 0.0                               # unachievable name dropped
+    assert abs(np.abs(out2).sum() - 0.82) < 1e-6        # gross RESTORED, not lost
+    assert out2[0] > w[0] and out2[1] > w[1]            # survivors scaled UP
+    assert abs(out2[0] / out2[1] - w[0] / w[1]) < 1e-9  # relative weights untouched
+
+    # signs preserved on a short
+    ws = np.array([0.5, -0.3, 0.02])
+    out3, _ = renormalize_achievable(ws, syms, prices, 100.0, filters)
+    assert out3[0] > 0 and out3[1] < 0
+
+    # degenerate input is safe
+    z, dz = renormalize_achievable(np.zeros(3), syms, prices, 1000.0, filters)
+    assert not dz["applied"] and np.all(z == 0)
+

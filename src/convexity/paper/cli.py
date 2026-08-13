@@ -45,6 +45,7 @@ from convexity.paper.policy import (
     ensemble_target_weights,
     order_intents,
     orphan_close_intents,
+    renormalize_achievable,
     size_gross,
 )
 from convexity.paper.lock import account_lock
@@ -780,6 +781,18 @@ def cmd_rebalance(args: argparse.Namespace) -> None:
 
         w_scaled = w_target * g_t
         prices = panel.close[d]
+        # PARTIAL-BOOK RENORMALIZATION (PAPER.md §12.8, default OFF): restore the target gross
+        # across the names the venue grid actually allows this NAV to hold. Off => byte-identical
+        # behaviour to before.
+        from convexity.paper.fleetconfig import RENORM_PARTIAL_BOOK
+        if getattr(args, "renorm", False) or RENORM_PARTIAL_BOOK.get(spec.name, False):
+            w_scaled, rdiag = renormalize_achievable(
+                w_scaled, panel.symbols, prices, nav, book_filters(spec))
+            j.append("renorm", d_iso, **rdiag)
+            if rdiag.get("applied"):
+                print(f"[renorm:{spec.name}] scaled {rdiag['n_kept']}/{rdiag['n_total']} "
+                      f"achievable names by {rdiag['k']}x to restore gross "
+                      f"{rdiag['gross_after']}")
         if args.live:
             # LIVE: the carried book is ALWAYS the venue's actual positions (an empty account is
             # a flat book — never the journal heuristic, which a crashed run's record would
@@ -1140,6 +1153,8 @@ def cmd_catchup(args: argparse.Namespace) -> None:
         print(f"[catchup:{spec.name}] --if-flow: {len(new_flows)} new flow(s) totalling "
               f"{sum(float(f['amount']) for f in new_flows):+.2f} — deploying")
     g, nav = float(t["g_t"]), float(t["nav"])
+    from convexity.paper.fleetconfig import RENORM_PARTIAL_BOOK
+    use_renorm = getattr(args, "renorm", False) or RENORM_PARTIAL_BOOK.get(spec.name, False)
     lock_cm = account_lock(spec.name) if args.live else contextlib.nullcontext()
     with lock_cm:
         if args.live and _check_kill(spec, j, live=True):
@@ -1173,9 +1188,18 @@ def cmd_catchup(args: argparse.Namespace) -> None:
         snap = account_snapshot()
         dom = book_domain(spec)
         held_map = {s: q for s, q in snap.positions.items() if s in dom}
+        weights = [float(x) * g for x in t["weights"]]
+        if use_renorm:
+            import numpy as _np
+            wv, rdiag = renormalize_achievable(
+                _np.asarray(weights, dtype=float), tuple(t["symbols"]),
+                _np.asarray([float(px.get(s, 0.0)) for s in t["symbols"]]), nav,
+                book_filters(spec))
+            weights = list(wv)
+            print(f"[renorm:{spec.name}] {rdiag}")
         plan = []
         tgt_tot = held_tot = 0.0
-        for w, sym in zip(t["weights"], t["symbols"]):
+        for w, sym in zip([x / g if g else 0.0 for x in weights], t["symbols"]):
             w = float(w)
             p = float(px.get(sym, 0.0))
             if p <= 0:
@@ -1699,6 +1723,8 @@ def main() -> None:
     r.add_argument("--asof", default=None)
     r.add_argument("--nav", type=float, default=None)
     r.add_argument("--no-topup", action="store_true")
+    r.add_argument("--renorm", action="store_true",
+                   help="scale achievable names up to the target gross (PAPER.md §12.8)")
     r.set_defaults(fn=cmd_rebalance)
     f = sub.add_parser("finalize")
     add_book(f)
@@ -1711,6 +1737,8 @@ def main() -> None:
                     help="cap added notional at this fraction of NAV (default 0.5)")
     cu.add_argument("--target-cov", type=float, default=95.0,
                     help="skip if coverage already >= this pct (default 95)")
+    cu.add_argument("--renorm", action="store_true",
+                    help="scale achievable names up to the target gross (PAPER.md §12.8)")
     cu.add_argument("--if-flow", action="store_true",
                     help="only act when a flow was journaled since the last catchup (the "
                          "automatic, band-preserving trigger)")
