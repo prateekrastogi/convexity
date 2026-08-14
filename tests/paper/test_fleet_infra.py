@@ -673,3 +673,45 @@ def test_renormalize_achievable():
     z, dz = renormalize_achievable(np.zeros(3), syms, prices, 1000.0, filters)
     assert not dz["applied"] and np.all(z == 0)
 
+
+def test_band_c_calibrated_and_smaller_than_a_position():
+    """Config PIN + regression guard for the no-trade band constant (research/bandcal/).
+
+    build_plan used to hardcode band_c=0.5 — a number ExecutionDefaults explicitly refuses to
+    invent — which made the band WIDER THAN THE ENTIRE TARGET POSITION of every name in the equity
+    and crypto books. Only REASON_FLIP_FULL trades reached the venue; every resize of a held name
+    froze, which is what produced the stable ~640 USDT demo-crypto position_drift. Offline
+    calibration cost 13 CAGR points at 0.5 (15.21% vs 29.71% at 0.03).
+
+    Pinned so the constant cannot drift silently, and asserted against the property that actually
+    matters: the band must stay well below a typical position, or the book stops rebalancing.
+    """
+    from convexity.execution.execution import band_width
+    from convexity.paper.cli import PLAN_HALF_SPREAD
+    from convexity.paper.fleetconfig import BAND_C
+    from convexity.paper.policy import build_plan
+
+    assert BAND_C == 0.03, "BAND_C changed — re-run research/bandcal/ before moving it"
+
+    # build_plan must not re-invent a default; it takes the fitted constant.
+    import inspect
+
+    assert inspect.signature(build_plan).parameters["band_c"].default == BAND_C
+
+    # The live median |w| per book, measured 2026-08-14 from the live journals. The band must be
+    # a fraction of a position, never a multiple of one.
+    median_w = {"crypto": 0.0141, "commodity": 0.0736, "equity": 0.0168}
+    for book, hs in PLAN_HALF_SPREAD.items():
+        band = band_width(2.0 * (0.0005 + hs), 1.0, c=BAND_C)
+        assert band < 0.5 * median_w[book], (
+            f"{book}: band {band:.4%} is more than half a median position "
+            f"({median_w[book]:.4%}) — the book will freeze instead of rebalancing")
+
+    # The specific failure that shipped: at 0.5 the band exceeded a WHOLE position on the two
+    # many-small-names books. (Commodity escaped it — its 6 RV legs are ~7.4% each, above the
+    # 5.85% band — which is why only commodity kept tracking its targets.)
+    for book in ("crypto", "equity"):
+        band_old = band_width(2.0 * (0.0005 + PLAN_HALF_SPREAD[book]), 1.0, c=0.5)
+        assert band_old > median_w[book], f"{book}: expected the old 0.5 band to swallow a position"
+    assert band_width(2.0 * (0.0005 + PLAN_HALF_SPREAD["commodity"]), 1.0, c=0.5) < median_w[
+        "commodity"]

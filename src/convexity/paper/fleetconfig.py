@@ -87,3 +87,36 @@ PUBLIC_CALL_MIN_INTERVAL_S = 0.06
 # -1015 "Too many new orders; current limit is 20 orders per TEN_SECONDS" (account tier).
 # 0.55s floor => <=18 orders / 10s, inside the cap with margin; demo tolerates it trivially.
 ORDER_CALL_MIN_INTERVAL_S = 0.55
+
+# NO-TRADE BAND CONSTANT (EXECUTION.md §4.2). Band half-width is
+# b = BAND_C * (theta/rho)^(1/3) with theta = 2*(taker + half_spread) — so this ONE constant sets
+# the band for all three books (theta differs per book via cli.PLAN_HALF_SPREAD).
+#
+# FITTED OFFLINE 2026-08-14 (research/bandcal/), which is what §4.2 demands: c is "fitted once
+# offline to sigma_w", and ExecutionDefaults deliberately REFUSES to default it ("refusing to
+# invent a number is the contract"). policy.build_plan had been supplying 0.5 as a Python default
+# — inventing exactly the number the config layer refused to invent. At 0.5 the band is 5.85% of
+# NAV (equity/commodity) and 5.31% (crypto), LARGER THAN THE ENTIRE TARGET POSITION of 100% of
+# names in both the equity and crypto books. Consequence: every resize of a held name was frozen
+# and only REASON_FLIP_FULL trades (open-from-flat / close-to-flat / sign change) reached the
+# venue. That is the mechanism behind the stable ~640 USDT demo-crypto position_drift that recon
+# logged daily for a week without ever correcting.
+#
+# Calibration (research/bandcal/band_calibration.py). FAITHFULNESS GATE: at c=0 the harness
+# reproduces the D1-validated reference BIT-EXACTLY (max diff 0.00e+00), so the rows are trusted:
+#     c=0.50 (was shipped)  CAGR 15.21%  Sharpe 1.015  turnover  1.39x/yr  95.5% decisions skipped
+#     c=0.03 (this)         CAGR 29.71%  Sharpe 1.204  turnover  6.06x/yr  53.0% skipped
+#     c=0.00 (no band)      CAGR 28.26%  Sharpe 1.168  turnover 10.15x/yr  = validated construction
+# A SMALL band genuinely beats no band — it saves ~4x/yr of turnover at 13bp, which is exactly
+# what §4's band is for. 0.5 was simply 15-35x too large.
+#
+# ROBUSTNESS (research/bandcal/band_robust.py): the 0.02-0.05 plateau wins in BOTH history halves
+# (H1 argmax 0.03, H2 0.05) and beats 0.5 in 7/9 years. The choice WITHIN 0.02-0.05 is noise;
+# moving off 0.5 is not. Note 0.5 did post a LOWER maxDD (25.75% vs 30.47%) — a frozen book
+# de-risks passively, which is why it won 2022 — but it costs 13 CAGR points to buy that.
+#
+# FITTED ON THE EQUITY BOOK ONLY — the one book with a reproducible validated backtest. Crypto and
+# commodity inherit it; their bands land at 0.32%/0.35% of NAV = ~23%/~5% of a median position,
+# which is sane, but they are NOT independently calibrated. Recalibrate per book if either grows
+# its own validated backtest.
+BAND_C = 0.03
