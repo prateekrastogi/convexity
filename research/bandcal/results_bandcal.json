@@ -1,0 +1,180 @@
+{
+  "theta": 0.0015999999999999999,
+  "rho": 1.0,
+  "cost_bp": 13.0,
+  "reference": {
+    "cagr": 0.28264240237223026,
+    "maxdd": 0.30023443778215164,
+    "sharpe": 1.1675672380874091
+  },
+  "rows": [
+    {
+      "c": 0.0,
+      "band_pct_nav": 0.0,
+      "cagr": 0.28264240237223026,
+      "maxdd": 0.30023443778215164,
+      "sharpe": 1.1675672380874091,
+      "avg_lev": 1.1103454095396768,
+      "turnover_per_yr": 10.14981800172673,
+      "pct_decisions_band_skipped": 0.0,
+      "pct_decisions_flip_full": 4.3246528589461875,
+      "te_vs_validated_pct_yr": 0.0
+    },
+    {
+      "c": 0.002,
+      "band_pct_nav": 0.02339214190570293,
+      "cagr": 0.28369198040749444,
+      "maxdd": 0.30039741831516226,
+      "sharpe": 1.17091739416215,
+      "avg_lev": 1.1102793840671528,
+      "turnover_per_yr": 9.621211703127573,
+      "pct_decisions_band_skipped": 9.070082752816868,
+      "pct_decisions_flip_full": 4.3246528589461875,
+      "te_vs_validated_pct_yr": 0.09640271540352052
+    },
+    {
+      "c": 0.005,
+      "band_pct_nav": 0.05848035476425733,
+      "cagr": 0.2853959085236313,
+      "maxdd": 0.30074334641788414,
+      "sharpe": 1.1757864859206077,
+      "avg_lev": 1.1106916526965815,
+      "turnover_per_yr": 8.976949316186733,
+      "pct_decisions_band_skipped": 19.467950815839917,
+      "pct_decisions_flip_full": 4.3246528589461875,
+      "te_vs_validated_pct_yr": 0.23264849647819966
+    },
+    {
+      "c": 0.01,
+      "band_pct_nav": 0.11696070952851466,
+      "cagr": 0.2889826431358855,
+      "maxdd": 0.3013290806735815,
+      "sharpe": 1.1853449805488785,
+      "avg_lev": 1.1123479464420754,
+      "turnover_per_yr": 8.141355904285836,
+      "pct_decisions_band_skipped": 30.833606059189304,
+      "pct_decisions_flip_full": 4.3246528589461875,
+      "te_vs_validated_pct_yr": 0.45370649988128253
+    },
+    {
+      "c": 0.015,
+      "band_pct_nav": 0.17544106429277198,
+      "cagr": 0.2920633604510239,
+      "maxdd": 0.30193167716427743,
+      "sharpe": 1.193077844582053,
+      "avg_lev": 1.1136676831164316,
+      "turnover_per_yr": 7.487769413559399,
+      "pct_decisions_band_skipped": 38.60395530412829,
+      "pct_decisions_flip_full": 4.3246528589461875,
+      "te_vs_validated_pct_yr": 0.658259355623034
+    },
+    {
+      "c": 0.02,
+      "band_pct_nav": 0.23392141905702932,
+      "cagr": 0.29449084571790607,
+      "maxdd": 0.30283008364905467,
+      "sharpe": 1.1988922912130346,
+      "avg_lev": 1.114173797419178,
+      "turnover_per_yr": 6.945784428341651,
+      "pct_decisions_band_skipped": 44.28912057599701,
+      "pct_decisions_flip_full": 4.3246528589461875,
+      "te_vs_validated_pct_yr": 0.8567534370017676
+    },
+    {
+      "c": 0.03,
+      "band_pct_nav": 0.35088212858554396,
+      "cagr": 0.2970519802768712,
+      "maxdd": 0.30473673548862396,
+      "sharpe": 1.203954235971729,
+      "avg_lev": 1.1136918640531244,
+      "turnover_per_yr": 6.062390606060369,
+      "pct_decisions_band_skipped": 53.04128290242648,
+      "pct_decisions_flip_full": 4.3246528589461875,
+      "te_vs_validated_pct_yr": 1.2437260727891144
+    },
+    {
+      "c": 0.05,
+      "band_pct_nav": 0.5848035476425734,
+      "cagr": 0.29589606576065597,
+      "maxdd": 0.3069711750415843,
+      "sharpe": 1.200368052150981,
+      "avg_lev": 1.1085730125684516,
+      "turnover_per_yr": 4.793741688256367,
+      "pct_decisions_band_skipped": 65.0381036981626,
+      "pct_decisions_flip_full": 4.3246528589461875,
+      "te_vs_validated_pct_yr": 1.9445436647092438
+    },
+    {
+      "c": 0.075,
+      "band_pct_nav": 0.8772053214638599,
+      "cagr": 0.2786169385141182,
+      "maxdd": 0.307767041882101,
+      "sharpe": 1.1533892893426363,
+      "avg_lev": 1.0914826238290805,
+      "turnover_per_yr": 3.7835077462470146,
+      "pct_decisions_band_skipped": 74.49156108279956,
+      "pct_decisions_flip_full": 4.3246528589461875,
+      "te_vs_validated_pct_yr": 2.7694034765297757
+    },
+    {
+      "c": 0.1,
+      "band_pct_nav": 1.1696070952851467,
+      "cagr": 0.2592428362294541,
+      "maxdd": 0.30660035090644194,
+      "sharpe": 1.1078026191855117,
+      "avg_lev": 1.0633328077581108,
+      "turnover_per_yr": 3.136723751291601,
+      "pct_decisions_band_skipped": 80.60217868998083,
+      "pct_decisions_flip_full": 4.3246528589461875,
+      "te_vs_validated_pct_yr": 3.6473961816861014
+    },
+    {
+      "c": 0.15,
+      "band_pct_nav": 1.7544106429277198,
+      "cagr": 0.21969177942066564,
+      "maxdd": 0.29694132574277193,
+      "sharpe": 1.0324730966104532,
+      "avg_lev": 0.9838523474980212,
+      "turnover_per_yr": 2.400669243007971,
+      "pct_decisions_band_skipped": 87.40474075459348,
+      "pct_decisions_flip_full": 4.3246528589461875,
+      "te_vs_validated_pct_yr": 5.456271521465892
+    },
+    {
+      "c": 0.2,
+      "band_pct_nav": 2.3392141905702935,
+      "cagr": 0.18793813561392336,
+      "maxdd": 0.2850362481024661,
+      "sharpe": 0.9894698228355905,
+      "avg_lev": 0.8785094982662826,
+      "turnover_per_yr": 2.0316903998116707,
+      "pct_decisions_band_skipped": 91.06550095843657,
+      "pct_decisions_flip_full": 4.3246528589461875,
+      "te_vs_validated_pct_yr": 7.441314880261967
+    },
+    {
+      "c": 0.3,
+      "band_pct_nav": 3.5088212858554395,
+      "cagr": 0.16004371915057813,
+      "maxdd": 0.26810872109072287,
+      "sharpe": 0.9885290378077893,
+      "avg_lev": 0.7111734113830157,
+      "turnover_per_yr": 1.6249669538896017,
+      "pct_decisions_band_skipped": 93.70237037729675,
+      "pct_decisions_flip_full": 4.3246528589461875,
+      "te_vs_validated_pct_yr": 10.169706654551295
+    },
+    {
+      "c": 0.5,
+      "band_pct_nav": 5.848035476425733,
+      "cagr": 0.15214135785731386,
+      "maxdd": 0.25746099594199784,
+      "sharpe": 1.015281474237824,
+      "avg_lev": 0.629202746002208,
+      "turnover_per_yr": 1.3904750896740805,
+      "pct_decisions_band_skipped": 95.48833512553182,
+      "pct_decisions_flip_full": 4.3246528589461875,
+      "te_vs_validated_pct_yr": 11.248730818307111
+    }
+  ]
+}

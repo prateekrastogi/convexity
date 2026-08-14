@@ -30,6 +30,7 @@ from convexity.leverage.engine_api import LeverageEngine
 from convexity.leverage.types import CapacityInput
 from convexity.panel.candidates import crypto_filters
 from convexity.panel.panel import Panel
+from convexity.paper.fleetconfig import BAND_C
 from convexity.portfolio.portfolio import quantile_weights, realized_vol
 from convexity.signal.signals import momentum_signal
 
@@ -89,10 +90,16 @@ def build_plan(
     half_spread: float = 1.0e-4,
     impact: float = 0.5e-4,
     rho: float = 1.0,
-    band_c: float = 0.5,
+    band_c: float = BAND_C,
 ) -> RebalancePlan:
     """No-trade band + trajectories via the EXECUTION pillar (defaults = the pipeline's RED picks;
-    sigma converted per-sqrt-hour for the 2h window, the audited X-4 convention)."""
+    sigma converted per-sqrt-hour for the 2h window, the audited X-4 convention).
+
+    ``band_c`` defaults to the OFFLINE-FITTED ``fleetconfig.BAND_C`` (research/bandcal/, 2026-08-14).
+    It previously defaulted to a hardcoded 0.5 — a number ``ExecutionDefaults`` explicitly refuses
+    to invent — which put the band ABOVE the entire target position of every name in the equity and
+    crypto books and froze every non-flip trade. See BAND_C's provenance block for the calibration
+    and its robustness checks."""
     n = w_scaled.shape[0]
     med = float(np.nanmedian(vols_daily[np.isfinite(vols_daily)])) if np.isfinite(
         vols_daily).any() else 0.02
