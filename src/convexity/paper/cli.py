@@ -996,8 +996,22 @@ def cmd_finalize(args: argparse.Namespace) -> None:
         _journal_venue(j, orders["asof"])
         _manual_autosync(j, spec, orders["asof"])
         syms = {it["symbol"] for it in orders["intents"]}
+        # The venue-tradeable gate is fetched HERE, above the cancel loop (fix 2026-08-15). It
+        # used to be fetched only for the crossing pass below, leaving this loop ungated: a
+        # symbol that had left TRADING rejected cancel_all_open_orders with -1122 and the
+        # unhandled raise aborted the whole finalize before ANY remainder was crossed.
+        from convexity.paper.topup import fetch_execution_venue_tradeable
+        _tradeable = fetch_execution_venue_tradeable()
         for s in sorted(syms):
-            cancel_open_orders(s)
+            if s not in _tradeable:
+                j.append("order_skip", orders["asof"], symbol=s,
+                         reason="not TRADING on venue — cancel skipped (not a failure)")
+                print(f"[finalize:{spec.name}] {s} cancel SKIPPED: not TRADING on venue")
+                continue
+            if not cancel_open_orders(s):
+                j.append("order_skip", orders["asof"], symbol=s,
+                         reason="venue refused cancel (-1122) — status changed mid-run")
+                print(f"[finalize:{spec.name}] {s} cancel REFUSED (-1122), continuing")
         snap = account_snapshot()
         crossed = 0
         live_f = fetch_live_filters()
@@ -1015,8 +1029,6 @@ def cmd_finalize(args: argparse.Namespace) -> None:
         # prior finalize crossings (rerun idempotency, prod catch 2026-07-11).
         by_sym = _our_order_ids(j, orders["asof"])
         use_ids = bool(by_sym)
-        from convexity.paper.topup import fetch_execution_venue_tradeable
-        _tradeable = fetch_execution_venue_tradeable()
         for it in orders["intents"]:
             want = float(it["qty"])
             if it["symbol"] not in _tradeable and not bool(it.get("reduce_only", False)):

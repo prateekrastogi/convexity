@@ -247,14 +247,28 @@ def submit_bbo(symbol: str, qty: float, qty_str: str, price_match: str,
     return _run(go())
 
 
-def cancel_open_orders(symbol: str) -> None:
-    """Cancel all open orders for ``symbol`` (the finalize pass, EXPERIMENTAL)."""
+def cancel_open_orders(symbol: str) -> bool:
+    """Cancel all open orders for ``symbol`` (the finalize pass, EXPERIMENTAL).
+
+    Returns ``False`` — never raises — when the venue reports the symbol is not in a cancellable
+    status (-1122 "Invalid symbol status": delisted, halted, or settling). One such symbol must
+    NEVER abort the finalize: the caller cancels in a loop before crossing anything, so a raise
+    here leaves every OTHER name's unfilled maker remainder uncrossed for the week. That is
+    exactly what happened on 2026-08-15 (demo crypto, NFPUSDT — listed on demo, delisted on prod).
+    Every other error still raises: this tolerates a known venue state, not failures in general.
+    """
     _client, api, _clock = _build_api()
 
     async def go() -> None:
         await api.cancel_all_open_orders(symbol=symbol)
 
-    _run(go())
+    try:
+        _run(go())
+    except GatewayError as e:
+        if "-1122" in str(e) or "Invalid symbol status" in str(e):
+            return False
+        raise
+    return True
 
 
 def fetch_recent_orders(symbol: str, start_ms: int) -> list[dict]:
