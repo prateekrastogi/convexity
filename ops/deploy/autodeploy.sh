@@ -67,12 +67,17 @@ deploy() {
     # Gate the in-image suite cannot run: the equity parity test needs the stitched lake, which
     # is a 24 GB bind mount, not build context. It self-skips when absent — so without this step
     # a construction-breaking change would sail through.
-    log "running lake-dependent suite against mounted data"
+    # The FULL suite against the mounted lake — not just the slow marker. This is the only place
+    # the equity parity gate can actually run (it self-skips without data/stitched), and the only
+    # place total coverage is honestly measurable, so it is where the 90% floor is enforced.
+    log "running FULL suite + 90% coverage floor against mounted data"
     if ! docker run --rm --user 1001:1001 \
-            -v "$REPO/data:/app/data" -e PYTHONPATH=/app \
+            -v "$REPO/data:/app/data" -e PYTHONPATH=/app -e COVERAGE_FILE=/tmp/.cov \
             --entrypoint /app/.venv/bin/python "$tag_new" \
-            -m pytest -q -m slow >/tmp/convexity-slow.log 2>&1; then
-        alert "PARITY/SLOW SUITE FAILED at $sha_short — NOT deployed. $(tail -3 /tmp/convexity-slow.log | tr '\n' ' ')"
+            -m pytest -q -p no:cacheprovider \
+            --cov=convexity --cov-report=term --cov-fail-under=90 \
+            >/tmp/convexity-slow.log 2>&1; then
+        alert "FULL SUITE OR COVERAGE FLOOR FAILED at $sha_short — NOT deployed. $(tail -3 /tmp/convexity-slow.log | tr '\n' ' ')"
         docker rmi -f "$tag_new" >/dev/null 2>&1 || true
         return 1
     fi

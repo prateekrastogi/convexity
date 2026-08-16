@@ -22,7 +22,7 @@ restarted once a change is proven.
       equity parity gate needs the 24 GB lake which is not in the build context:
         (a) in-image: full suite minus lake-dependent tests;
         (b) deploy script: parity/slow suite against the mounted data before promoting.
-- [ ] **S4 — write tests to 90%**: target the modules the baseline shows thinnest.
+- [x] **S4 — write tests to 90%** DONE — 90% on the full suite: target the modules the baseline shows thinnest.
 - [x] **S5 — single deploy shell script** DONE + tested (no-change path, wrong-branch guard): polls GitHub origin for new commits, rebuilds
       (tests gate it), redeploys, backgroundable on any VM.
 - [x] **S6 — reorg + stale docs** DONE (README/CLAUDE.md/PAPER.md/ARCHITECTURE.md): README claims TWO strategies, fleet runs THREE
@@ -113,3 +113,25 @@ restarted once a change is proven.
 ### Next
 - S4 remains: 79% -> 90% needs ~700 stmts; cmd_rebalance (most of cli.py's remaining 543) needs
   synthetic panel fixtures, gateway.py (161) needs HTTP-level fakes, 300 stmts still at 0%.
+
+
+## Checkpoint 4 — 90% REACHED
+
+Full suite (with the lake mounted, parity gate running): **90%**, 878 passed, 765/7749 uncovered.
+In-image suite (, no lake in build context): 87.74%, 873 passed.
+
+Both numbers now have floors, at the level each can honestly measure:
+  * Dockerfile  — the in-image regression floor, set below 87.74 so routine work
+    does not trip on noise while a real regression fails the build.
+  * autodeploy runs the FULL suite against mounted data with , and that
+    gates PROMOTION. It is the only place the parity gate can actually run (it self-skips without
+    data/stitched) and the only place total coverage is honestly measurable.
+
+Journey: 71% -> 90%; paper/cli.py 16% -> 76%; paper/gateway.py 15% -> 67%; 686 -> 878 tests;
+modules at 0%: 17 (402 stmts) -> 3 (50 stmts).
+
+### Still open
+- Full autodeploy promotion path (build -> full suite -> recreate) UNEXERCISED end to end. It
+  fires for real on the hardening -> main merge; deliberately not triggered unattended.
+- gateway.py residual is mostly  (real Nautilus client construction) — asserting on
+  client wiring rather than behaviour, low value.

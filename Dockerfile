@@ -70,7 +70,11 @@ ENV PATH="/app/.venv/bin:${PATH}" \
 # stop a correctness fix from shipping because an import was unsorted. Run `ruff check` in
 # development instead — the repo currently has 35 pre-existing findings, tracked in the audit,
 # none of them behavioural.
-ARG COV_MIN=0
+# Regression floor for the IN-IMAGE suite, which runs `-m "not slow"` (the parity gate needs the
+# 24 GB lake and is not in the build context) and measures ~88%. Set below that so routine work
+# does not trip on noise while a real regression still fails the build. The honest 90% is enforced
+# on the FULL suite in ops/deploy/autodeploy.sh, where the lake is mounted.
+ARG COV_MIN=85
 RUN python -m pytest -q -m "not slow" \
         --cov=convexity --cov-report=term-missing:skip-covered \
         --cov-fail-under=${COV_MIN} \
