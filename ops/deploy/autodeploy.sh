@@ -104,6 +104,16 @@ deploy() {
 pass() {
     cd "$REPO" || { log "repo $REPO missing"; return 1; }
 
+    # WHICH branch is checked out matters as much as which SHA. A feature branch that already
+    # contains origin/$BRANCH would make the --ff-only merge below a no-op, and the script would
+    # build and promote THAT branch while reporting it had deployed $BRANCH.
+    local current
+    current=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)
+    if [ "$current" != "$BRANCH" ]; then
+        log "checkout is on '$current', not '$BRANCH' — refusing to deploy (set CONVEXITY_BRANCH to change target)"
+        return 1
+    fi
+
     git fetch -q origin "$BRANCH" 2>/dev/null || { log "fetch failed (network?), will retry"; return 0; }
     local local_sha remote_sha
     local_sha=$(git rev-parse HEAD)

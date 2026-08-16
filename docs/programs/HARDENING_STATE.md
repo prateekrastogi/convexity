@@ -23,9 +23,9 @@ restarted once a change is proven.
         (a) in-image: full suite minus lake-dependent tests;
         (b) deploy script: parity/slow suite against the mounted data before promoting.
 - [ ] **S4 — write tests to 90%**: target the modules the baseline shows thinnest.
-- [~] **S5 — single deploy shell script** written, UNTESTED: polls GitHub origin for new commits, rebuilds
+- [x] **S5 — single deploy shell script** DONE + tested (no-change path, wrong-branch guard): polls GitHub origin for new commits, rebuilds
       (tests gate it), redeploys, backgroundable on any VM.
-- [~] **S6 — reorg + stale docs** layout done, DOCS PENDING: README claims TWO strategies, fleet runs THREE
+- [x] **S6 — reorg + stale docs** DONE (README/CLAUDE.md/PAPER.md/ARCHITECTURE.md): README claims TWO strategies, fleet runs THREE
       (crypto / commodity / equity). `deploy/` layout is off. Sweep stale comments repo-wide.
 - [ ] **S7 — final audit pass** + full suite + commit + verify fleet healthy.
 
@@ -91,3 +91,25 @@ restarted once a change is proven.
   modules sitting at 0% (402 stmts, mostly `*/validate/*` research-support).
 - S5 autodeploy.sh still needs a live `--once` test.
 - README still claims TWO strategies; fleet runs THREE.
+
+
+## Checkpoint 3
+
+- README rewritten: it claimed TWO books, demo-only, 613 tests, deploy/, and a host .venv. Now
+  states three books on real money, 736 tests, ops/, Docker-only — and separates what IS validated
+  for equity (the construction, D1, parity-pinned) from what is NOT (the edge; survivorship-curated
+  universe).
+- CLAUDE.md rules 5/7 corrected (.venv gone; rebalancer is live not eventual) + new rule 8 on the
+  test gate. PAPER.md §11 and ARCHITECTURE.md de-staled.
+- autodeploy.sh tested: no-change path does nothing and builds nothing.
+- **BUG FOUND IN MY OWN autodeploy.sh**: it compared HEAD to origin/ and merged --ff-only
+  WITHOUT checking which branch was checked out. On a feature branch already containing
+  origin/ the merge is a no-op, ff-only succeeds, and it would build and promote the
+  FEATURE branch while logging that it deployed . Now verifies the checked-out branch and
+  refuses otherwise; verified it refuses.
+- Full promotion path (build -> lake suite -> recreate) still UNEXERCISED end to end. It runs for
+  real when hardening merges to main — that is the deliberate moment to watch it.
+
+### Next
+- S4 remains: 79% -> 90% needs ~700 stmts; cmd_rebalance (most of cli.py's remaining 543) needs
+  synthetic panel fixtures, gateway.py (161) needs HTTP-level fakes, 300 stmts still at 0%.
