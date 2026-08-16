@@ -37,6 +37,20 @@ alert() {
     fi
 }
 
+stamp_success() {
+    # Records the last SUCCESSFUL run so catchup_missed.py can tell, at next container start,
+    # whether this job's most recent scheduled fire was missed — the Persistent=true behaviour
+    # cron does not have. One file per job: supercronic runs jobs concurrently and a shared
+    # document would interleave. Written via tmp+mv so a torn file is never observable.
+    # MUST honour the same override catchup_missed.py reads. When these two disagree, job.sh
+    # stamps one directory while the catch-up reads another, so every job looks permanently
+    # missed and is re-run on every single container start. Caught in testing.
+    local dir="${CONVEXITY_LASTRUN_DIR:-/app/data/ops/lastrun}"
+    mkdir -p "$dir" 2>/dev/null || return 0
+    date -u +%FT%T+00:00 > "$dir/.$NAME.tmp" 2>/dev/null \
+        && mv -f "$dir/.$NAME.tmp" "$dir/$NAME" 2>/dev/null || true
+}
+
 cd /app || exit 1
 
 # NOTE: capture $? IMMEDIATELY after the command, never after an `if`. A bash `if` whose
@@ -47,6 +61,7 @@ echo "[job:$NAME] start $(date -u +%FT%TZ) venue=${CONVEXITY_VENUE:-demo}"
 "$@"
 rc=$?
 if [ "$rc" -eq 0 ]; then
+    stamp_success
     echo "[job:$NAME] ok $(date -u +%FT%TZ)"
     exit 0
 fi
@@ -59,6 +74,7 @@ echo "[job:$NAME] retry $(date -u +%FT%TZ)"
 "$@"
 rc=$?
 if [ "$rc" -eq 0 ]; then
+    stamp_success
     echo "[job:$NAME] ok-on-retry $(date -u +%FT%TZ)"
     exit 0
 fi

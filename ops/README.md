@@ -17,8 +17,8 @@ docker compose down               # stop it
 |---|---|
 | `Dockerfile` | repo root. Multi-stage: `uv sync --frozen` into `/app/.venv`, then a slim runtime. |
 | `docker-compose.yml` | repo root. The whole deployment — one service, `restart: unless-stopped`. |
-| `deploy/docker/crontab` | all 34 job lines, transcribed 1:1 from the 31 systemd timers. |
-| `deploy/docker/job.sh` | per-job wrapper: alerting + one 15-minute retry. |
+| `ops/docker/crontab` | all 34 job lines, transcribed 1:1 from the 31 systemd timers. |
+| `ops/docker/job.sh` | per-job wrapper: alerting + one 15-minute retry. |
 
 PID 1 is **supercronic**, not systemd. systemd in a container needs `--privileged` or careful
 cgroup delegation and turns the container into a pet VM; supercronic is built for this — logs to
@@ -47,7 +47,7 @@ The default ENTRYPOINT is the interpreter, so one-offs look like the old venv py
 
 ```bash
 docker compose run --rm --entrypoint /app/.venv/bin/python fleet -m convexity.paper status
-docker exec convexity-fleet /app/deploy/docker/job.sh adhoc-recon python -m convexity.paper recon --live
+docker exec convexity-fleet /app/ops/docker/job.sh adhoc-recon python -m convexity.paper recon --live
 ```
 
 ## Known behavioural difference vs systemd
