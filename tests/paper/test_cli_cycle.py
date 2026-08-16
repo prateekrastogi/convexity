@@ -7,7 +7,6 @@ That keeps them fast and lets each command's contract be stated on its own terms
 
 from __future__ import annotations
 
-import json
 import sys
 
 import pytest

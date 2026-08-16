@@ -73,7 +73,6 @@ def to_lake(raw: pd.DataFrame) -> pd.DataFrame:
     """databento ohlcv-1m raw -> lake bars, RTH-filtered (09:30-16:00 ET, DST-aware)."""
     if raw is None or raw.empty:
         return pd.DataFrame(columns=CORE)
-    import numpy as np
     ts_ns = raw["ts_event"].to_numpy("int64")                  # int ns since epoch UTC
     et = pd.to_datetime(ts_ns, utc=True).tz_convert("America/New_York")
     t = et.time
@@ -107,7 +106,7 @@ def main() -> None:
                 manifest.append({"perp": perp, "code": code, "status": "skip"})
                 continue
             if shutil.disk_usage(DUKA).free / 1e9 < DISK_ABORT_GB:
-                print(f"ABORT: low disk", flush=True)
+                print("ABORT: low disk", flush=True)
                 break
             pulled = [pull(c, venue, tk) for tk in hist_tks]              # META: [META, FB]
             warnings_ = [w for _, w in pulled if w]
