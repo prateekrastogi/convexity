@@ -1,7 +1,0 @@
-[Unit]
-Description=convexity paper daily reconciliation (PROD)
-[Timer]
-OnCalendar=*-*-* 00:30:00 UTC
-Persistent=true
-[Install]
-WantedBy=timers.target

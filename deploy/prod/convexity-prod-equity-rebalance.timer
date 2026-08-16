@@ -1,9 +1,0 @@
-# Friday close = Sat 00:00 UTC; crypto 00:10, commodity 00:40 — equity fires 01:10 so the shared
-# demo account never sees two books submitting at once (plus the account lock).
-[Unit]
-Description=convexity equity paper weekly rebalance (Friday close +70min) (PROD)
-[Timer]
-OnCalendar=Sat *-*-* 01:15:00 UTC
-Persistent=true
-[Install]
-WantedBy=timers.target

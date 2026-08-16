@@ -1,137 +1,77 @@
-# deploy/ — paper-rebalancer systemd units (PAPER.md §6-§8)
+# deploy/ — the convexity fleet runs as ONE self-contained container
 
-Source of truth for the VM's scheduled sessions. Install (copies, not symlinks — updating the
-deployed units is an explicit step, so deploys stay intentional):
+Migrated off host systemd on 2026-08-16. The container carries its own scheduler, so the
+deployment depends on nothing host-side: no systemd units, no `.venv`, no host python. Any host
+with Docker plus this repo, `.env`, and `data/` runs the identical fleet.
 
 ```bash
-sudo cp deploy/convexity-*.{service,timer} /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now convexity-paper-rebalance.timer convexity-paper-finalize.timer \
-                            convexity-paper-recon.timer convexity-lake-refresh.timer
+docker compose up -d --build      # start (or rebuild + restart) the fleet
+docker compose ps                 # is it alive
+docker compose logs -f fleet      # watch it
+docker compose down               # stop it
 ```
 
-Weekly cadence (all UTC): Sat 00:10 rebalance (Friday close +10min, settles the prior week
-first) -> Sat 02:20 finalize (cross unfilled maker remainders) -> Sat 04:00 lake refresh; daily
-00:25 reconciliation. Every session is a oneshot full pure-recompute — no daemon state to
-corrupt; a crashed session is simply re-run (`Persistent=true` catches missed timers after
-downtime).
+## Shape
+
+| piece | what it is |
+|---|---|
+| `Dockerfile` | repo root. Multi-stage: `uv sync --frozen` into `/app/.venv`, then a slim runtime. |
+| `docker-compose.yml` | repo root. The whole deployment — one service, `restart: unless-stopped`. |
+| `deploy/docker/crontab` | all 34 job lines, transcribed 1:1 from the 31 systemd timers. |
+| `deploy/docker/job.sh` | per-job wrapper: alerting + one 15-minute retry. |
+
+PID 1 is **supercronic**, not systemd. systemd in a container needs `--privileged` or careful
+cgroup delegation and turns the container into a pet VM; supercronic is built for this — logs to
+stdout, forwards signals, no setuid.
+
+## What the container mounts, and why
+
+- `./data:/app/data` — 24 GB lake + the journals that ARE the fleet's accounting truth. Never
+  baked into the image. The per-venue flock (`data/<venue>/account.lock`) only serialises
+  correctly when every process shares one inode, which a bind mount guarantees.
+- `.env` via `env_file` — secrets injected at runtime, never layered into an image.
+- `/home/speculation/backups` at the **same absolute path** — `journal_backup.sh` derives its
+  rotation dir and remote branch from the repo path's basename, so `/home/speculation/convexity`
+  exists in the image as a symlink to `/app`. Point it at `/app` and the branch silently becomes
+  `journal-backups-app`, orphaning the backup history.
+- `/home/ubuntu/.ssh:/home/app/.ssh:ro` — the deploy key for that push. The ssh config names the
+  key as `~/.ssh/convexity_deploy` and `~` is `/home/app` inside, so it resolves. Host files are
+  0600 owned by uid 1001, matching the container user — ssh refuses looser permissions.
+
+Runs as uid/gid **1001** to match the host `ubuntu` that owns `data/`, so journals written from
+inside stay readable by host tooling.
+
+## Manual commands
+
+The default ENTRYPOINT is the interpreter, so one-offs look like the old venv python:
+
+```bash
+docker compose run --rm --entrypoint /app/.venv/bin/python fleet -m convexity.paper status
+docker exec convexity-fleet /app/deploy/docker/job.sh adhoc-recon python -m convexity.paper recon --live
+```
+
+## Known behavioural difference vs systemd
+
+The old timers set `Persistent=true`: a job missed while the host was down ran on next boot.
+**cron has no catch-up.** If the container is down at 00:25, that recon is skipped, not run late.
+The Sunday watchdog surfaces a missed weekly cycle; after a longer outage, run the missed command
+by hand with the `docker compose run` form above.
 
 ## Runbook
-- **First --live session is SUPERVISED** (PAPER.md §8): run `PYTHONPATH=. .venv/bin/python -m
-  convexity.paper rebalance --live` manually and watch it before enabling the timers. The
-  gateway is EXPERIMENTAL until this session passes.
-- **Account setup (once, on the demo account)**: keep the futures account in SINGLE-ASSET margin
-  mode so the exchange cannot draft BTC as cross-collateral — the collateral mandate is USDT
-  first, USDC only when USDT is exhausted, **BTC never** (PAPER.md §3.1).
+
+- **Account setup (once, per venue)**: futures account in SINGLE-ASSET margin mode so the exchange
+  cannot draft BTC as cross-collateral — collateral mandate is USDT first, USDC only when USDT is
+  exhausted, **BTC never** (PAPER.md §3.1).
 - **Deposits/withdrawals**: journal them the same day with
-  `python -m convexity.paper flow --amount <signed USDT>` so the TWR chain stays exact
-  (OPS.md §15); a ≥10% withdrawal prints an INTERIM_RESIZE directive — execute it.
+  `... -m convexity.paper flow --amount <signed USDT>` so the TWR chain stays exact (OPS.md §15);
+  a ≥10% withdrawal prints an INTERIM_RESIZE directive — execute it.
 - **HALT**: the kill-switch never auto-re-arms (OPS.md §6). After investigating, re-arm by
   explicit operator action only.
-- **Status / logs**: `python -m convexity.paper status`; `journalctl -u convexity-paper-rebalance
-  -n 100`. Dry-run anything with the same commands minus `--live` (no keys needed).
+- **Venue**: code defaults to demo; prod jobs set `CONVEXITY_VENUE=prod` per crontab line. Both
+  key sets live in the one `.env`.
 
-## Commodity book (PAPER.md §11) — separate units, separate monitoring
+## Rollback
 
-**STATUS: LIVE on the demo since 2026-07-06** (allocations crypto 8000 / commodity 2000; the
-TradFi-Perps agreement was signed via `gateway.sign_tradfi_agreement()` — any new account hits
-`-4411` on every TradFi order until this one-time signed call; the demo venue lists only the
-metal perps, so the CL-NATGAS pair is venue-gated out until Binance adds them, PAPER.md §11.3).
-
-The commodity RV pair book runs beside the crypto book on the SAME demo account but with its own
-journal, symbol domain, targets, timers and logs. Its units are installed by the same `cp` above
-and stagger the crypto book (Sat 00:40 rebalance, 02:50 finalize, daily 00:45 recon, Fri 12:00
-discovery). For a fresh account, the runbook below MUST pass before enabling:
-
-```bash
-sudo systemctl enable --now convexity-commodity-rebalance.timer \
-     convexity-commodity-finalize.timer convexity-commodity-recon.timer \
-     convexity-commodity-discovery.timer
-```
-
-Runbook BEFORE enabling (PAPER.md §11.5):
-1. **Allocate both books** — the shared account's equity belongs to two books now:
-   `python -m convexity.paper allocate --book crypto --amount <M>` and
-   `python -m convexity.paper allocate --book commodity --amount <N>`, N+M ≤ account USDT+USDC.
-   The commodity book REFUSES to trade live without an allocation.
-2. **One supervised session**: `python -m convexity.paper rebalance --live --book commodity` —
-   watch the 5 pairs' legs fill; confirm the orphan sweep logs touch ONLY commodity symbols.
-3. Enable the four timers.
-
-Monitor the commodity book independently: `python -m convexity.paper status --book commodity`;
-`journalctl -u convexity-commodity-rebalance -n 100`; journal at
-`data/paper/commodity/journal.jsonl`, discovery log at `data/paper/commodity/discovery.jsonl`.
-
-## Equity book (PAPER.md §12) — separate units, separate monitoring
-
-**STATUS: MERGED 2026-07-10 (PR #3), TIMERS NOT ENABLED — the §12.4 runbook below must pass
-first.** Timed-beta book (owner decision; the certified research verdict on this universe was
-negative — EDGE.md §(g)); parity-pinned to the validated D1 construction (Invariant
-EQUITY-PARITY, tests/paper/test_equity_parity.py); 300/1000 allocation.
-
-Units (installed by the same `cp` above; staggered after crypto 00:10 and commodity 00:40):
-Sat 01:10 rebalance, Sat 03:20 finalize, daily 01:05 recon, Sat 05:30 data maintenance
-(dukascopy new-symbol backfill + split watch — PAPER.md §12.3).
-
-Runbook BEFORE enabling (PAPER.md §12.4 — supervised, touches live account state):
-1. Verify position-margin mode is CROSSED for traded symbols; asset mode stays SINGLE-ASSET
-   (PAPER.md §3.1 — the BTC mandate; two different axes).
-2. `python -m convexity.paper allocate-split --total <ACCOUNT_USDT>` — re-allocates ALL THREE
-   books 400/300/300 under the account lock.
-3. One supervised session: `python -m convexity.paper rebalance --live --book equity`, then
-   `finalize --live --book equity` ~2h later — watch the 3x leverage dial, maker fills, margin/
-   liq-distance journal records, and that the orphan sweep touches ONLY equity-domain symbols.
-4. `sudo systemctl enable --now convexity-equity-rebalance.timer convexity-equity-finalize.timer
-   convexity-equity-recon.timer convexity-equity-datamaint.timer`
-
-Kill switch (any book, any time): `python -m convexity.paper kill --book equity [--now]`;
-resume with `--resume`. Monitor: `status --book equity`; `journalctl -u
-convexity-equity-rebalance -n 100`; journal at `data/paper/equity/journal.jsonl`; split-watch
-flags at `data/universe/equity_flags.json` (clear a flag by setting `"cleared": true`).
-
-## Manual positions (operator carve-out, PAPER.md §12.5)
-
-Trade freely from the Binance app — attribution is automatic. Every gateway order is
-stamped `cvx-…`; any other fill is adopted into `data/paper/manual_reserve.json` at the next
-sync (every recon/rebalance/finalize/kill, inside the account lock). Books net the reserve out
-of sizing, orphan sweeps, kills and finalize; manual closes auto-release.
-
-```bash
-python -m convexity.paper manual               # read-only: reserves + watermark age
-python -m convexity.paper manual --bootstrap   # PROD CUTOVER, once, BEFORE enabling timers:
-                                               # seeds ledger with all existing venue positions
-                                               # (refuses unless the account is virgin)
-```
-
-Wrong adoption? Hand-edit the ledger JSON. A reserve exceeding the venue position clamps the
-book share to 0 and journals the discrepancy (never inverts).
-
-## Production hardening (PAPER.md §12.6)
-
-- `CONVEXITY_VENUE=demo|prod` in `.env` is the ONLY venue switch (prod also needs
-  `BINANCE_FUTURES_API_KEY/_SECRET`). Every live session journals its venue resolution.
-- Alerts: unit failures append to `data/paper/ALERTS.jsonl` and push via `NTFY_TOPIC` or
-  `TELEGRAM_BOT_TOKEN`+`TELEGRAM_CHAT_ID` if set in `.env`. Rebalance/finalize auto-retry once
-  after 15 min. Watchdog Sun 12:00 UTC verifies the Saturday cycle completed.
-- Backups: nightly 06:10 UTC to `/home/speculation/backups` + the repo's `journal-backups`
-  branch. Restore = untar over `data/paper/`.
-
-## Prod deployment (single checkout, dual venue — PAPER.md §12.6)
-
-Both fleets run from THIS checkout. The one `.env` holds BOTH key sets
-(`BINANCE_FUTURES_DEMO_API_KEY/_SECRET` and `BINANCE_FUTURES_API_KEY/_SECRET`) and must NOT set
-`CONVEXITY_VENUE` (EnvironmentFile= overrides Environment=; code defaults to demo). Prod units
-(`deploy/prod/`, +5 min stagger) pin the venue on ExecStart: `/usr/bin/env CONVEXITY_VENUE=prod`.
-State is venue-namespaced: demo at `data/paper/**` (unchanged), prod at
-`data/prod/<book>/journal.jsonl` + own account.lock/manual ledgers. One backup unit tars both.
-
-```bash
-CONVEXITY_VENUE=prod .venv/bin/python scripts/prod_preflight.py   # gate; exit 0 = ready
-sudo cp deploy/prod/convexity-prod-* /etc/systemd/system/ && sudo systemctl daemon-reload
-```
-
-Cutover (first cycle SUPERVISED, §12.6): preflight green -> `CONVEXITY_VENUE=prod ... manual
---bootstrap` (if you hold positions) -> `CONVEXITY_VENUE=prod ... allocate-split --total <prod
-USDT>` -> one supervised prod rebalance/finalize (watch the `venue` record + `finalized
-mode=ids`) -> `sudo systemctl enable --now convexity-prod-{paper,commodity,equity}-{rebalance,finalize,recon}.timer convexity-prod-watchdog.timer`.
-Manual prod CLI runs always prefix `CONVEXITY_VENUE=prod`; bare commands are demo by default.
+The systemd units are in git history (`deploy/*.service`, `deploy/*.timer`, `deploy/prod/`,
+removed in the Docker migration commit). Recover with `git show <commit>^:deploy/...`, reinstall
+to `/etc/systemd/system/`, recreate `.venv` with `uv sync`, and `docker compose down`.

@@ -1,7 +1,0 @@
-[Unit]
-Description=convexity equity paper finalize (rebalance +2h10m) (PROD)
-[Timer]
-OnCalendar=Sat *-*-* 03:25:00 UTC
-Persistent=true
-[Install]
-WantedBy=timers.target

@@ -1,7 +1,0 @@
-[Unit]
-Description=convexity weekly fleet watchdog (Sunday noon UTC) (PROD)
-[Timer]
-OnCalendar=Sun *-*-* 12:10:00 UTC
-Persistent=true
-[Install]
-WantedBy=timers.target

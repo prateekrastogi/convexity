@@ -1,7 +1,0 @@
-[Unit]
-Description=convexity post-cycle TCA (after the finalize window) (PROD)
-[Timer]
-OnCalendar=Sat *-*-* 03:45:00 UTC
-Persistent=true
-[Install]
-WantedBy=timers.target

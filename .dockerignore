@@ -1,0 +1,18 @@
+# The build context must stay tiny: data/ alone is 24 GB (lake + journals) and is BIND-MOUNTED
+# at runtime, never baked into the image. Secrets are injected at runtime too — never layered.
+#
+# Markdown is deliberately NOT excluded: pyproject sets `readme = "README.md"`, so hatchling
+# needs it in the context to build the project (a `*.md` + `!README.md` pair did not survive
+# buildkit's matcher, and the docs are a few hundred KB — not worth the fragility).
+data/
+.env
+.env.*
+.git/
+.venv/
+**/__pycache__/
+**/*.pyc
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+backups/
+research/**/results_*.json

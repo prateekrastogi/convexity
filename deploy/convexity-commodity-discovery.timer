@@ -1,9 +1,0 @@
-# Fridays 12:00 UTC — hours before the Saturday rebalance, so a newly discovered perp already
-# has data by the weekend session (it still can't trade until research promotes it).
-[Unit]
-Description=convexity commodity perp discovery (weekly)
-[Timer]
-OnCalendar=Fri *-*-* 12:00:00 UTC
-Persistent=true
-[Install]
-WantedBy=timers.target

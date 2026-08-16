@@ -1,7 +1,0 @@
-[Unit]
-Description=convexity equity data maintenance (post lake-refresh)
-[Timer]
-OnCalendar=Sat *-*-* 05:30:00 UTC
-Persistent=true
-[Install]
-WantedBy=timers.target

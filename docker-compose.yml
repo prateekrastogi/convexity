@@ -1,0 +1,59 @@
+# convexity fleet — the entire deployment.
+#
+#   docker compose up -d --build     start (or restart) the fleet
+#   docker compose logs -f fleet     watch it
+#   docker compose ps                is it alive
+#   docker compose run --rm fleet -m convexity.paper status    one-off manual command
+#
+# Portability: nothing here depends on this VM. Any host with Docker + the repo + .env + data/
+# runs the identical fleet. `restart: unless-stopped` covers reboots, so no host init system is
+# involved at all.
+
+services:
+  fleet:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: convexity:latest
+    container_name: convexity-fleet
+    restart: unless-stopped
+    init: true
+
+    # The container carries its own scheduler; the default ENTRYPOINT (python) is overridden so
+    # PID 1 is supercronic reading the fleet crontab.
+    entrypoint: ["/usr/local/bin/supercronic"]
+    command: ["-passthrough-logs", "/app/deploy/docker/crontab"]
+
+    # uid/gid 1001 = the host `ubuntu` that owns data/, so journals stay host-readable.
+    user: "1001:1001"
+
+    env_file:
+      - .env
+    environment:
+      TZ: UTC
+      # Explicit default: the code also defaults to demo, prod jobs set it per-line in the crontab.
+      CONVEXITY_VENUE: demo
+
+    volumes:
+      # State + lake. MUST be a bind mount: 24 GB, and the per-venue flock only serialises
+      # correctly when every process shares one inode.
+      - ./data:/app/data
+      # Nightly tarball rotation, kept on the host so it survives image rebuilds. Mounted at the
+      # SAME absolute path the script already uses, so its rotation and branch naming are
+      # untouched (it derives the branch from the repo path's basename — see the /home/speculation
+      # /convexity -> /app symlink in the Dockerfile).
+      - /home/speculation/backups:/home/speculation/backups
+      # Deploy key for journal_backup.sh's force-push. The ssh config refers to the key as
+      # ~/.ssh/convexity_deploy, and ~ is /home/app in the container, so this lands correctly.
+      # Host files are 0600 owned by uid 1001, which matches the container user — ssh is strict
+      # about key permissions and would refuse otherwise.
+      - /home/ubuntu/.ssh:/home/app/.ssh:ro
+
+    # Journals are the fleet's accounting truth — keep logs bounded but useful.
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+    stop_grace_period: 120s
