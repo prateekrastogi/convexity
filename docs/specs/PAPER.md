@@ -118,12 +118,14 @@ exactness; intent lot/tick/min-notional legality + exact strings; the collateral
 (USDT-first, USDC fold-in, BTC never). Plus the dry-run weekly cycle exercised end-to-end on the
 real lake (two consecutive sessions: settle → target → size → plan → journal).
 
-## 11. Multi-book: the commodity RV pair book beside the crypto book (added 2026-07-05)
+## 11. Multi-book: three books on one account (added 2026-07-05; equity added 2026-07-10)
 
-ONE demo account, N strategies — raw venue state MISLEADS per-strategy book-keeping, so every
-venue-facing surface is scoped by a **book** (`paper/books.py`; `--book {crypto,commodity}` on
-every CLI command; each book = its own systemd units, so `journalctl -u convexity-commodity-*`
-monitors the commodity book independently of crypto).
+ONE account, N strategies — raw venue state MISLEADS per-strategy book-keeping, so every
+venue-facing surface is scoped by a **book** (`paper/books.py`; `--book
+{crypto,commodity,equity}` on every CLI command). Each book has its own journal, symbol
+domain, capital allocation and schedule entry. Since the Docker migration the books no longer
+have their own systemd units — all 34 job lines live in `ops/docker/crontab` and are watched
+with `docker compose logs -f fleet` (filter by the `[job:<name>]` prefix).
 
 ### 11.1 Books, domains, and the scoped orphan sweep
 

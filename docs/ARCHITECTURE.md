@@ -302,7 +302,8 @@ statement of each.
 
 * **Dependency management:** `uv`, pinned via `uv.lock` (committed); `.python-version = 3.12`
   (the cp312 manylinux aarch64 wheel is what makes `uv sync` resolve a binary NautilusTrader
-  wheel when the live rebalancer is eventually built). Run research code with `.venv/bin/python`
+  wheel when the live rebalancer is eventually built). Run research code in the container —
+  there is no host `.venv` since the Docker migration
   or `uv run --no-sync`.
 * **Repo hygiene:** hatchling build backend, ruff line-length 100, pytest. Commit/push only when
   explicitly asked; never commit secrets (`.env` is gitignored).
