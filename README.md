@@ -1,31 +1,39 @@
-# convexity — cross-sectional momentum research + multi-book paper trading
+# convexity — quantitative research + a three-book live trading fleet
 
 > The directional convex-breakout thesis this repo started from is **dead** (proven no gross
-> directional edge — see `docs/EDGE.md`). What survived the investigation is **crypto
-> cross-sectional momentum**: weekly, dollar-neutral, quintile, vol-scaled — now LIVE as the
-> crypto paper book on the Binance demo. A second, independent **commodity RV pair book** (the
-> one surviving commodity candidate, `docs/EDGE.md` §(f)) is built beside it as a separate paper
-> strategy — own journal, symbol domain, sizing and timers (`docs/specs/PAPER.md` §11).
+> directional edge — `docs/EDGE.md`). What survived is three independent books, each with its own
+> journal, symbol domain, capital allocation and schedule: **crypto cross-sectional momentum**,
+> a **commodity RV pair book**, and an **equity trend book**. They run together as one fleet
+> (`docs/specs/PAPER.md` §11–§12).
 
-## The edge (one line)
+**Status (2026-08): LIVE ON REAL MONEY.** The fleet has traded the production Binance USDT-M
+account since 2026-07-11, with the demo account kept running as a parity shadow. Capital is split
+40/30/30 across crypto/commodity/equity. 736 tests. The whole deployment is one Docker container
+(`docker compose up -d`) — see [`ops/README.md`](ops/README.md).
 
-Weekly dollar-neutral quintile momentum on the point-in-time crypto perp panel (~60–75 names,
-12–16d lookback band, vol-scaled): honest **net Sharpe ~0.8–1.0**, CAGR ~20–25% @100% gross,
-maxDD ~25%, ~60% of weeks positive. Passed purged-WF / bootstrap / holdout / per-regime / breadth /
-CPCV-PBO (official record, extended 6.5yr panel @ 3wk embargo: CPCV mean-path **1.13**,
-frac_pos **1.00**, PBO **0.11**; 5yr historical: 0.95/0.93/0.40); **DSR now PASSES**
-(0.9505, n_obs 334 vs MinTRL 331 — marginal, see `docs/EDGE.md` §(d)); Friday phase premium
-persists with all phases positive on the extended panel;
-**DSR fails on track length only** (PSR 0.988 — the ~5yr sample is short of MinTRL; the single
-biggest honesty flag). Full memo: **[`docs/EDGE.md`](docs/EDGE.md)**.
+## The three books
 
-**Status (2026-07):** all 9 pillar specs in `docs/specs/` are IMPLEMENTED and test-covered
-(613 tests), independently math-audited (2 critical + 8 major defects found and fixed — including
-a turnover double-drift that overstated cost in every earlier backtest; baselines re-measured),
-real per-symbol Binance lot/tick filters wired, and the standard equity-momentum enhancement menu
-was pre-registered, tested, and REJECTED (`docs/EDGE.md` §(d)). The crypto paper rebalancer is
-LIVE on the demo (weekly timers since 2026-07-03); the commodity RV book is built and awaiting
-its supervised first session (`docs/specs/PAPER.md` §11.5).
+| book | edge | status |
+|---|---|---|
+| **crypto** | weekly dollar-neutral quintile momentum, vol-scaled, ~60–75 perp names, 12–16d lookback band | the surviving research verdict — net Sharpe ~0.8–1.0 |
+| **commodity** | band-z mean reversion on 5 pre-named RV pairs, half-life gate, pair risk parity, 10% vol target | surviving Program-4 candidate — backtest net 0.73, plan around 0.5–0.6 live |
+| **equity** | S1 three-rule trend ensemble, inverse-vol, breadth-scaled, half-Kelly, drawdown brake | **owner-decision timed beta over a negative research verdict** — read the caveat below |
+
+**Crypto** is the edge the investigation actually produced: weekly, dollar-neutral, quintile,
+vol-scaled on the point-in-time perp panel. CAGR ~20–25% @100% gross, maxDD ~25%, ~60% of weeks
+positive. Passed purged-WF / bootstrap / holdout / per-regime / breadth / CPCV-PBO (extended
+6.5yr panel @ 3wk embargo: CPCV mean-path 1.13, frac_pos 1.00, PBO 0.11). DSR passes at 0.9505
+(n_obs 334 vs MinTRL 331) — **marginal, on track length**, and the single biggest honesty flag.
+
+**Commodity** is the one surviving commodity candidate (`docs/EDGE.md` §(f)). Fifteen separate
+attempts to improve its drawdown profile across programs P5–P8 all failed; the book is deployed as
+validated, not as improved.
+
+**Equity** ships against a negative research verdict and the distinction matters. What IS
+validated (D1, and pinned bit-for-bit by `tests/paper/test_equity_parity.py`) is the
+*construction*: CAGR 28.26%, maxDD 30.02%, Sharpe 1.1676. What is **not** certified is the
+underlying edge — the universe is survivorship-curated, so the book is a deliberate,
+time-boxed owner bet, not a research conclusion. `docs/EDGE.md` §(g).
 
 ## Layout
 
@@ -36,20 +44,26 @@ src/convexity/           THE DEPLOYABLE PACKAGE — nine pillars + a shared pane
   panel/                    shared foundation: point-in-time daily panel, lake access
                             (data.py), asset-class/sleeve detection, candidate universe
   universe/                 UNIVERSE   — eligibility, liquidity ranking, shortability, PIT checks
-  signal/                   SIGNAL     — no-lookahead momentum / carry scores
+  signal/                   SIGNAL     — no-lookahead momentum / carry / RV-pair / equity-trend
   portfolio/                PORTFOLIO  — quantile construction, vol-scaled weights, engine
   leverage/                 LEVERAGE   — Kelly/vol-target sizing, CUSUM ratchet, capacity ceilings
   cost/                     COST       — the ONE fee truth (Binance USDT-M taker), impact/spread/
                             funding accrual, ablation + CPCV cost validation
-  execution/                EXECUTION  — Almgren-Chriss rebalance trajectory, no-trade band
+  execution/                EXECUTION  — Almgren-Chriss trajectory, calibrated no-trade band
   regime/                   REGIME     — CUSUM market-state detector, dispersion overlay
   system/                   SYSTEM     — Deflated Sharpe, purged walk-forward, CPCV/PBO,
                             promotion gate
   ops/                      OPS        — kill-switch, reconciliation, ARL-calibrated brakes
-  paper/                    PAPER      — the multi-book live/paper rebalancer (PAPER.md):
+  paper/                    PAPER      — the three-book live rebalancer (PAPER.md):
                             books.py (disjoint book registry), cli.py (--book sessions),
-                            policy/gateway/journal/capital/topup
+                            policy/gateway/journal/capital/topup/venue
   core/                     shared types (Bars, InstrumentSpec, AssetClass), params, protocols
+
+ops/                     THE DEPLOYMENT (see ops/README.md)
+  docker/                   what runs INSIDE the container: crontab, job wrapper, entrypoint,
+                            missed-job catch-up
+  deploy/                   what deploys the container: autodeploy.sh (poll origin -> build ->
+                            test -> promote)
 
 docs/
   EDGE.md                   the investigation synthesis + the deploy decision — read this first
@@ -58,70 +72,53 @@ docs/
   specs/                    UNIVERSE.md SIGNAL.md PORTFOLIO.md LEVERAGE.md COST.md EXECUTION.md
                             REGIME.md SYSTEM.md OPS.md PAPER.md — the authoritative build contract
                             (exact formulas, invariants, function signatures) for every pillar
-                            above; PAPER.md §11 = the multi-book design
+                            above; PAPER.md §11–§12 = the multi-book fleet design
+  programs/                 in-flight program state records
 
 research/
   entry_exit/               formal entry/exit model package (frozen preregistration discipline)
-  entry_exit/study/         the commodity study record: frozen preregs + reports + results for
-                            the swing-xsec (DEAD), durable-TSMOM/carry (DEAD) and RV-pair
-                            (SURVIVING candidate -> the commodity paper book) programs, plus the
-                            reusable pipelines (swing_pipeline.py = shared data layer)
+  entry_exit/study/         study records: frozen preregs + reports for the swing-xsec (DEAD),
+                            durable-TSMOM/carry (DEAD) and RV-pair (SURVIVING -> the commodity
+                            book) programs, plus reusable pipelines
+  bandcal/                  the offline no-trade-band calibration (band_c 0.5 -> 0.03)
 
-scripts/
-  xsec_full.py              CANONICAL full sweep: momentum/carry grid x DSR x purged-WF x regime
-  xsec_cpcv.py               CPCV / PBO entry
-  xsec_pipeline.py           e2e entry point exercising all 9 pillars together on real data
-  backfill_*_1m.py           self-contained lake backfill (crypto klines, funding, dukascopy, tradfi)
-  stitch_tradfi_1m.py        tradfi-perp proxy stitching
-  discover_tradfi_perps.py   weekly commodity-perp discovery -> universe overlay + backfill
-                             (data/universe only — NEVER auto-traded)
-
-deploy/                   systemd units + runbook: crypto book timers (live) and commodity book
-                          timers (installed, enable only after PAPER.md §11.5 runbook)
-
-tests/                    one directory per pillar (core/ cost/ execution/ leverage/ ops/ regime/
-                          system/ universe/) plus integration/ for the full e2e pipeline
-data/                     137-instrument 1-min lake (gitignored, ~15G — untouched)
+scripts/                  research entry points + lake backfill/maintenance
+tests/                    one directory per pillar, plus integration/ and paper/
+data/                     ~24 GB 1-min lake + the fleet's journals (gitignored)
 ```
 
 ## Run
 
+Everything runs in the container — there is no host `.venv`.
+
 ```bash
-# full cross-sectional sweep (writes JSON + a human table)
-PYTHONPATH=. .venv/bin/python scripts/xsec_full.py --tag xsec_full
-
-# CPCV / PBO
-PYTHONPATH=. .venv/bin/python scripts/xsec_cpcv.py
-
-# e2e pipeline across all 9 pillars
-PYTHONPATH=. .venv/bin/python scripts/xsec_pipeline.py
-
-# tests
-.venv/bin/python -m pytest tests/ -q
+docker compose up -d                 # start the fleet (scheduler included)
+docker compose logs -f fleet         # watch it
+docker compose ps                    # is it alive
 ```
 
-## The paper books
+One-off commands use the image's default entrypoint (the interpreter):
 
-**Crypto (LIVE on demo since 2026-07-03)** — `src/convexity/paper/` (spec: `docs/specs/PAPER.md`;
-units + runbook: `deploy/`): scheduled weekly sessions (settle→target→size→plan→orders→journal),
-targets parity-pinned bit-for-bit to the validated engine, quarter-Kelly gross, USDT→USDC
-collateral waterfall (BTC never — user mandate), maker-first venue-exact orders, TWR flow
-stripping, daily reconciliation + the domain-scoped orphan sweep.
+```bash
+docker compose run --rm --entrypoint /app/.venv/bin/python fleet -m convexity.paper status
+docker compose run --rm --entrypoint /app/.venv/bin/python fleet scripts/fleet_digest.py
+```
 
-**Commodity RV pairs (LIVE on demo since 2026-07-06)** — the surviving Program-4
-candidate (`research/entry_exit/study/RV_REPORT.md`: backtest net 0.73, plan-around 0.5–0.6
-live): 5 pre-named pairs, band-z mean reversion, half-life gate, pair risk parity, 10% vol
-target (`src/convexity/signal/rv_pairs.py`). Runs as a SEPARATE book (PAPER.md §11): own journal,
-own virtual capital (`allocate`), own timers/logs; the shared account is never used to infer a
-book's equity. Every command is book-scoped: `python -m convexity.paper rebalance --book
-commodity` (dry-run needs no keys). Live bootstrap notes: the account must sign the venue's
-TradFi-Perps agreement once (`gateway.sign_tradfi_agreement()`, else every order draws -4411),
-and pairs are gated on what the EXECUTION venue actually lists (the demo carries the metals but
-not CL/NATGAS yet, so the energy pair activates automatically when Binance adds them).
+Tests run as part of the image build and **gate it** — a red suite produces no image:
+
+```bash
+docker build -t convexity:latest .                    # build == test
+docker build --target test -t convexity:test .        # tests only
+```
+
+The equity parity gate needs the 24 GB lake, which is deliberately not in the build context, so it
+self-skips in-image and is run against the mounted data by `ops/deploy/autodeploy.sh` before any
+image is promoted.
 
 ## Discipline (non-negotiable)
 
 Net-of-cost always (fees + signed funding). No-lookahead by construction (point-in-time universe,
 signals strictly before the rebalance stamp). Report winner-robustness (DSR, PBO, drop-top-N) —
-the cross-sectional backtest is trivially easy to fool yourself on. Deploy the lookback **band**,
-not one fitted L. Size quarter-Kelly; scale up only on live confirmation.
+a cross-sectional backtest is trivially easy to fool yourself on. Deploy the lookback **band**,
+not one fitted L. Size quarter-Kelly; scale up only on live confirmation. A negative result is a
+result: the dead programs above are kept in `research/` precisely so they are not re-run.

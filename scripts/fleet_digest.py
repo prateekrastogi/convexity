@@ -102,7 +102,6 @@ def main() -> None:
         tcas = [(n, r) for n, r in tcas if r]
         if tcas:
             cov = [r.get("coverage_pct") for _, r in tcas if r.get("coverage_pct") is not None]
-            sf = [r.get("shortfall_bp") for _, r in tcas if r.get("shortfall_bp") is not None]
             # demo is Binance's SIMULATOR: it reported 0% maker on 1476 USDT of fills while
             # prod reported 97-100% through the identical code path (2026-08-06). Its fill
             # classification and prices are synthetic, so tag them — coverage is still real

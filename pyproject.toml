@@ -12,11 +12,13 @@ dependencies = [
     "scipy>=1.13",                    # closed-form (NOT ML): Ledoit-Wolf shrinkage + Mahalanobis (regime/measures), PSR/DSR + KM/Weibull + CUSUM-ARL (validate/). numpy-adjacent measure/validation math, per ARCHITECTURE §5.8.
     "httpx>=0.27",                    # resumable downloader for data.binance.vision bulk ZIP dumps (klines + fundingRate). PRIMARY historical path.
     "ccxt>=4.4",                      # SECONDARY only: patch the recent unpublished tail + ad-hoc metadata. NEVER multi-year backfill.
+    "croniter>=6.2.4",
 ]
 
 [dependency-groups]
 dev = [
     "pytest>=8.0",
+    "pytest-cov>=7.1.0",
     "ruff>=0.6",
 ]
 

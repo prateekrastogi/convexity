@@ -40,7 +40,10 @@ AMIHUD_MEDIAN = 1.0e-10
 # Real-lake e2e gate: the walk-forward-drift real-universe check only runs where data/stitched exists
 # (it does on arb-vm). Unit-test convention keeps everything else lake-free (conftest synthetic panels);
 # CPCV parity is anchored in scripts/xsec_cpcv.py, not the unit suite (2-core VM constraint).
-_LAKE_DIR = Path(__file__).resolve().parents[4] / "data" / "stitched"
+# repo root is parents[2] from tests/cost/<file> (matches test_invariants.py and
+# test_pipeline_e2e.py). This was parents[4], i.e. two levels ABOVE the repo, so the
+# directory never existed and every lake-backed check here skipped silently.
+_LAKE_DIR = Path(__file__).resolve().parents[2] / "data" / "stitched"
 _HAS_LAKE = _LAKE_DIR.is_dir()
 
 

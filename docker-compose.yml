@@ -19,10 +19,11 @@ services:
     restart: unless-stopped
     init: true
 
-    # The container carries its own scheduler; the default ENTRYPOINT (python) is overridden so
-    # PID 1 is supercronic reading the fleet crontab.
-    entrypoint: ["/usr/local/bin/supercronic"]
-    command: ["-passthrough-logs", "/app/deploy/docker/crontab"]
+    # The container carries its own scheduler. entrypoint.sh first recovers any job the schedule
+    # missed while the container was down — restoring systemd's Persistent=true, which plain cron
+    # has no equivalent for — then execs supercronic, so PID 1 is still the scheduler.
+    entrypoint: ["/app/ops/docker/entrypoint.sh"]
+    command: []
 
     # uid/gid 1001 = the host `ubuntu` that owns data/, so journals stay host-readable.
     user: "1001:1001"
@@ -33,6 +34,11 @@ services:
       TZ: UTC
       # Explicit default: the code also defaults to demo, prod jobs set it per-line in the crontab.
       CONVEXITY_VENUE: demo
+      # Missed-job recovery at start. A fire older than MAX_AGE_H is reported and skipped rather
+      # than run: recovering Saturday's rebalance on Sunday is right, recovering it on Wednesday
+      # would re-risk the book mid-week off a stale schedule and is an operator decision.
+      CONVEXITY_CATCHUP: "1"
+      CONVEXITY_CATCHUP_MAX_AGE_H: "48"
 
     volumes:
       # State + lake. MUST be a bind mount: 24 GB, and the per-venue flock only serialises

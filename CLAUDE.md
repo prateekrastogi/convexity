@@ -67,13 +67,19 @@ Do NOT add competing engines (freqtrade/hummingbot/vectorbt/zipline), raw python
 3. **Point-in-time universe** (no survivorship, no delist-gap holds). Signals strictly BEFORE the
    rebalance stamp; weights held forward one week.
 4. **Report winner-robustness** — DSR, PBO/CPCV, purged-WF, drop-top-N, per-regime. Deploy the BAND.
-5. Pin deps with **uv**; run with `.venv/bin/python` (or `uv run --no-sync`). NEVER commit secrets
+5. Pin deps with **uv**; run everything in the container — there is NO host `.venv` (removed
+   in the Docker migration): `docker compose run --rm --entrypoint /app/.venv/bin/python fleet
+   -m convexity.paper <cmd>`. NEVER commit secrets
    (`.env` gitignored). Commit/push only when explicitly asked.
 6. Repo hygiene: hatchling build, ruff line-length 100, pytest, `uv.lock` committed. Keep
    **`.python-version` = 3.12** (the cp312 manylinux aarch64 wheel is what makes `uv sync` resolve
    a binary).
 7. **Two-layer altitude discipline**: lean pandas/numpy for the research engine; escalate to
-   Nautilus ONLY for the eventual paper/live rebalancer. Don't drag the engine into research.
+   Nautilus ONLY for the live rebalancer (LIVE on real money since 2026-07-11 — three books,
+   crypto/commodity/equity at 40/30/30). Don't drag the engine into research.
+8. **Tests gate the image.** `docker build` runs the suite and produces nothing if it is red.
+   The equity parity gate needs the 24 GB lake, so it self-skips in-image and runs against
+   mounted data in `ops/deploy/autodeploy.sh` before any image is promoted.
 
 ## Data lake (load-bearing)
 - `data/` is the 137-instrument 1-min lake (gitignored, ~15G). The xsec panel is built from it via

@@ -1022,7 +1022,6 @@ def cmd_finalize(args: argparse.Namespace) -> None:
         # journaled orderIds — an unfilled RESIZE maker is crossed too, not only the
         # opens-from-flat the v1 zero-share heuristic could see. v1 remains the fallback for
         # journals predating submission_ids.
-        from convexity.paper.gateway import fetch_order
         from convexity.paper.manual import book_share_qty, load_reserve
         _reserve = load_reserve()
         # ALL our batches for this cycle: rebalance submissions + every reprice pass +

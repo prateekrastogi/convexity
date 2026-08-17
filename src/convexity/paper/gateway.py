@@ -43,7 +43,6 @@ def _build_api():
     try:
         from nautilus_trader.adapters.binance.common.enums import (
             BinanceAccountType,
-            BinanceEnvironment,
         )
         from nautilus_trader.adapters.binance.common.urls import get_http_base_url
         from nautilus_trader.adapters.binance.futures.http.account import (

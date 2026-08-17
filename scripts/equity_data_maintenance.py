@@ -33,7 +33,6 @@ import datetime as dt
 import importlib.util
 import json
 import pathlib
-import re
 import sys
 import time
 

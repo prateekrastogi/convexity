@@ -1,0 +1,137 @@
+# Hardening + reorg program — STATE
+
+Loop task (fires every 5 min). **Read this first every firing; continue from the first unchecked
+box; never restart from scratch.** Update it after every stage and commit.
+
+Scope guard, from the owner: **no changes to external functionality or core algorithm.** Every
+edit here is tests, packaging, docs, layout, or ops. If a refactor would alter a number the
+fleet produces, it is out of scope.
+
+Branch: `hardening`. Fleet stays LIVE on `main`'s image throughout — the container is only
+restarted once a change is proven.
+
+## Stages
+
+- [x] **S0 — survey**: 68 test files, 196 src modules, 687 tests green as of f687e81.
+- [x] **S1 — RESTORE PERSISTENCE** DONE (highest risk; I introduced this regression)
+      systemd `Persistent=true` ran a missed job on next boot; cron has no catch-up, so a job
+      missed while the container is down is silently skipped. Live-trading correctness gap.
+- [x] **S2 — coverage measurement** DONE: add pytest-cov, build a `test` image stage, get the real
+      baseline number per module.
+- [x] **S3 — test-gated image build** DONE: image build FAILS if tests fail. Two layers, because the
+      equity parity gate needs the 24 GB lake which is not in the build context:
+        (a) in-image: full suite minus lake-dependent tests;
+        (b) deploy script: parity/slow suite against the mounted data before promoting.
+- [x] **S4 — write tests to 90%** DONE — 90% on the full suite: target the modules the baseline shows thinnest.
+- [x] **S5 — single deploy shell script** DONE + tested (no-change path, wrong-branch guard): polls GitHub origin for new commits, rebuilds
+      (tests gate it), redeploys, backgroundable on any VM.
+- [x] **S6 — reorg + stale docs** DONE (README/CLAUDE.md/PAPER.md/ARCHITECTURE.md): README claims TWO strategies, fleet runs THREE
+      (crypto / commodity / equity). `deploy/` layout is off. Sweep stale comments repo-wide.
+- [ ] **S7 — final audit pass** + full suite + commit + verify fleet healthy.
+
+## Facts worth not rediscovering
+
+- Host has **no .venv** (removed in the Docker migration). All test runs happen in a container.
+- Host is **aarch64**, uid/gid **1001**, passwordless sudo, Docker 29.7.2.
+- `data/` is **24 GB** — never in build context; bind-mounted.
+- The parity test **auto-skips** when `data/stitched` is absent, so it would silently skip inside
+  an image build. That is exactly why S3 needs layer (b).
+- Fleet container: `convexity-fleet`, supercronic PID 1, `restart: unless-stopped`.
+- Next live job: Mon 00:25 UTC (demo crypto recon).
+- Journals in `data/` are the accounting truth — never let a test write to the real ones.
+
+## Log
+
+- (start) branch created, state file committed.
+
+
+## Progress log
+
+**Checkpoint 1 (this commit).**
+
+- **S1 persistence RESTORED and tested.** `ops/docker/catchup_missed.py` + `entrypoint.sh`;
+  `job.sh` stamps `data/ops/lastrun/<job>` on success. Verified both paths: first boot seeds 1
+  job and runs none; a stale stamp is detected as a missed 00:25 fire and the job is re-run.
+  Two deliberate deviations from systemd, both toward safety: a 48h max age (recovering
+  Saturday's rebalance on Sunday is right, on Wednesday it is an operator call), and first-boot
+  seeds rather than stampeding all 34 jobs.
+- **S2 baseline measured: 75%** full-suite (7749 stmts, 1960 uncovered, 688 passed).
+  The `-m "not slow"` number is 71% — the parity test moves it 4 points.
+- **S3 test gate SHIPPED and PROVEN.** Runtime stage does `COPY --from=test /app/.tests-passed`,
+  which forces the test stage to build. Injected a failing test: build exited 1 and **no image
+  was produced**. Lint is deliberately NOT in the gate (35 pre-existing findings, none
+  behavioural) — blocking a correctness fix on an unsorted import is the wrong trade.
+- **IMAGE 3.29 GB -> 778 MB (-76%)** as a side effect of the builder/test/runtime split: dev deps
+  now exist only in the test stage.
+- **S6 layout**: `deploy/` -> `ops/{docker,deploy}` + `ops/README.md`, all baked paths rewritten.
+
+### Bugs found by doing this (all pre-existing)
+
+1. **`tests/cost/test_cost_validate.py` used `parents[4]` for the repo root** — two levels above
+   the repo. On the VM that resolved to `/home/data/stitched`, which never exists, so every
+   lake-backed assertion in that file had been **silently skipping**. Its own comment says the
+   check "only runs where data/stitched exists (it does on arb-vm)" — it never did. Fixed to
+   `parents[2]`; the suite went 683 passed/3 skipped -> 688 passed.
+2. **`job.sh` hardcoded the lastrun dir** while `catchup_missed.py` honoured
+   `CONVEXITY_LASTRUN_DIR`. Identical in production, but if that var were ever set the stamps and
+   the reader would diverge and every job would look permanently missed — re-running the whole
+   fleet on every container start. Fixed to read the same override.
+3. **35 ruff findings** across src/tests/scripts (67 unsorted-import, 20 deprecated-import,
+   16 blind-except, 13 naive-`date.today`, 7 unused-variable...). None behavioural. Recorded, not
+   gated.
+
+### Next
+
+- **S4 is the whole remaining job.** To reach 90% from 75% needs ~1160 more covered statements,
+  and **`src/convexity/paper/cli.py` alone is 942 of the 1960 uncovered (16% covered)** — the
+  live trading path: rebalance, finalize, catchup, reprice, tca, recon. It needs a mocked venue
+  (gateway + account snapshot + filters) so sessions can be driven without touching Binance.
+  That fixture is the single highest-value thing left in this program, coverage aside.
+- Then `paper/gateway.py` (161), `panel/panel.py` (82), `paper/topup.py` (66), and the 17
+  modules sitting at 0% (402 stmts, mostly `*/validate/*` research-support).
+- S5 autodeploy.sh still needs a live `--once` test.
+- README still claims TWO strategies; fleet runs THREE.
+
+
+## Checkpoint 3
+
+- README rewritten: it claimed TWO books, demo-only, 613 tests, deploy/, and a host .venv. Now
+  states three books on real money, 736 tests, ops/, Docker-only — and separates what IS validated
+  for equity (the construction, D1, parity-pinned) from what is NOT (the edge; survivorship-curated
+  universe).
+- CLAUDE.md rules 5/7 corrected (.venv gone; rebalancer is live not eventual) + new rule 8 on the
+  test gate. PAPER.md §11 and ARCHITECTURE.md de-staled.
+- autodeploy.sh tested: no-change path does nothing and builds nothing.
+- **BUG FOUND IN MY OWN autodeploy.sh**: it compared HEAD to origin/ and merged --ff-only
+  WITHOUT checking which branch was checked out. On a feature branch already containing
+  origin/ the merge is a no-op, ff-only succeeds, and it would build and promote the
+  FEATURE branch while logging that it deployed . Now verifies the checked-out branch and
+  refuses otherwise; verified it refuses.
+- Full promotion path (build -> lake suite -> recreate) still UNEXERCISED end to end. It runs for
+  real when hardening merges to main — that is the deliberate moment to watch it.
+
+### Next
+- S4 remains: 79% -> 90% needs ~700 stmts; cmd_rebalance (most of cli.py's remaining 543) needs
+  synthetic panel fixtures, gateway.py (161) needs HTTP-level fakes, 300 stmts still at 0%.
+
+
+## Checkpoint 4 — 90% REACHED
+
+Full suite (with the lake mounted, parity gate running): **90%**, 878 passed, 765/7749 uncovered.
+In-image suite (, no lake in build context): 87.74%, 873 passed.
+
+Both numbers now have floors, at the level each can honestly measure:
+  * Dockerfile  — the in-image regression floor, set below 87.74 so routine work
+    does not trip on noise while a real regression fails the build.
+  * autodeploy runs the FULL suite against mounted data with , and that
+    gates PROMOTION. It is the only place the parity gate can actually run (it self-skips without
+    data/stitched) and the only place total coverage is honestly measurable.
+
+Journey: 71% -> 90%; paper/cli.py 16% -> 76%; paper/gateway.py 15% -> 67%; 686 -> 878 tests;
+modules at 0%: 17 (402 stmts) -> 3 (50 stmts).
+
+### Still open
+- Full autodeploy promotion path (build -> full suite -> recreate) UNEXERCISED end to end. It
+  fires for real on the hardening -> main merge; deliberately not triggered unattended.
+- gateway.py residual is mostly  (real Nautilus client construction) — asserting on
+  client wiring rather than behaviour, low value.

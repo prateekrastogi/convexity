@@ -44,3 +44,7 @@ def simple_panel() -> Panel:
     funding[:, 2] = -0.0001  # C credits longs -> carry says LONG C
     funding[:, 3] = 0.0
     return make_panel(close, funding, listed, syms)
+
+# The venue double used by tests/paper/test_cli_*.py. pytest requires plugin registration in
+# the TOP-LEVEL conftest — declaring it in tests/paper/conftest.py breaks whole-suite collection.
+pytest_plugins = ["tests.paper.fakevenue"]
