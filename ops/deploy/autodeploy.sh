@@ -60,10 +60,22 @@ fleet_busy() {
 deploy() {
     local sha_short="$1"
     local tag_new="${IMAGE}:candidate-${sha_short}"
+    local tag_test="${IMAGE}:candidate-test-${sha_short}"
 
-    log "building $tag_new (test suite gates this build)"
-    if ! docker build -t "$tag_new" "$REPO" >/tmp/convexity-build.log 2>&1; then
-        alert "BUILD FAILED at $sha_short — fleet left running on the previous image. $(tail -3 /tmp/convexity-build.log | tr '\n' ' ')"
+    # The TEST stage carries the dev dependencies; the runtime stage deliberately does not. Build
+    # and tag it explicitly so the full suite below has an image that can actually run pytest.
+    # This is not extra work: the runtime build forces the test stage anyway (COPY --from=test),
+    # so this is the same cached layers, just addressable.
+    log "building $tag_test (in-image suite gates this build)"
+    if ! docker build --target test -t "$tag_test" "$REPO" >/tmp/convexity-build.log 2>&1; then
+        alert "BUILD/TESTS FAILED at $sha_short — fleet left running on the previous image. $(tail -3 /tmp/convexity-build.log | tr '\n' ' ')"
+        return 1
+    fi
+
+    log "building $tag_new (runtime)"
+    if ! docker build -t "$tag_new" "$REPO" >>/tmp/convexity-build.log 2>&1; then
+        alert "RUNTIME BUILD FAILED at $sha_short — fleet left running on the previous image. $(tail -3 /tmp/convexity-build.log | tr '\n' ' ')"
+        docker rmi -f "$tag_test" >/dev/null 2>&1 || true
         return 1
     fi
 
@@ -76,14 +88,15 @@ deploy() {
     log "running FULL suite + 90% coverage floor against mounted data"
     if ! docker run --rm --user 1001:1001 \
             -v "$REPO/data:/app/data" -e PYTHONPATH=/app -e COVERAGE_FILE=/tmp/.cov \
-            --entrypoint /app/.venv/bin/python "$tag_new" \
+            --entrypoint /app/.venv/bin/python "$tag_test" \
             -m pytest -q -p no:cacheprovider \
             --cov=convexity --cov-report=term --cov-fail-under=90 \
             >/tmp/convexity-slow.log 2>&1; then
         alert "FULL SUITE OR COVERAGE FLOOR FAILED at $sha_short — NOT deployed. $(tail -3 /tmp/convexity-slow.log | tr '\n' ' ')"
-        docker rmi -f "$tag_new" >/dev/null 2>&1 || true
+        docker rmi -f "$tag_new" "$tag_test" >/dev/null 2>&1 || true
         return 1
     fi
+    docker rmi -f "$tag_test" >/dev/null 2>&1 || true
 
     if fleet_busy; then
         log "a fleet job is running — deferring promotion to the next poll"
