@@ -50,8 +50,11 @@ alert() {
 # A fleet job in flight holds the account lock and may have resting orders on the venue.
 # Restarting the container underneath it is the one thing this script must never do.
 fleet_busy() {
-    docker exec "$CONTAINER" bash -c \
-        'pgrep -f "convexity.paper" >/dev/null || pgrep -f "job.sh" >/dev/null' 2>/dev/null
+    # Asks the HOST for the container's process list. The previous version ran `pgrep` INSIDE the
+    # container, but python:3.12-slim has no procps: the command exited 127, the caller read that
+    # as "not busy", and the one guard whose entire purpose is to avoid restarting mid-trade was
+    # inert. Caught in pre-flight on the first real deployment.
+    docker top "$CONTAINER" 2>/dev/null | grep -qE 'convexity\.paper|job\.sh'
 }
 
 deploy() {
